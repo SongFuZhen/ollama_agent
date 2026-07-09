@@ -51,6 +51,7 @@ http://localhost:3000
 | `MODEL_DEBUG` | `deepseek-r1:8b` | 排查场景模型 |
 | `MODEL_GENERAL` | `llama3.1:8b` | 通用场景模型 |
 | `MODEL_VISION` | `gemma3:4b` | 图片识别场景模型 |
+| `OLLAMA_TIMEOUT_MS` | `120000` | Ollama 调用超时（毫秒），防止进程假死挂起 |
 | `PORT` | `3000` | 服务端口 |
 
 **示例 / Example** — 指向局域网另一台机器的 Ollama：
