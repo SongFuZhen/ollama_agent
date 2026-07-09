@@ -100,13 +100,22 @@ const TOOLS = {
   },
 };
 
-// 工具白名单：V1 三场景均仅开放只读工具，write_file 不在白名单
+// 工具白名单：V1 场景仅开放只读工具，write_file 不在白名单
 const READONLY_TOOLS = ['read_file', 'list_dir', 'search_files'];
+
+// 各场景可用工具集（共享实现，运行时按白名单开放）
+// vision 为纯多模态看图，不挂任何文件工具
+const SCENARIO_TOOLS = {
+  coder: READONLY_TOOLS,
+  debug: READONLY_TOOLS,
+  general: READONLY_TOOLS,
+  vision: [],
+};
 
 // 按场景裁剪可用工具集（共享实现，运行时按白名单开放）
 function allowedFor(scenarioKey) {
-  // V1：所有场景只读。V2 可在白名单中加入 write_file（仅专属场景）
-  return READONLY_TOOLS.slice();
+  // V2 可在白名单中加入 write_file（仅专属场景）
+  return (SCENARIO_TOOLS[scenarioKey] || []).slice();
 }
 
 function specsFor(scenarioKey) {

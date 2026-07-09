@@ -20,6 +20,7 @@
 | 代码补全 / 解释 | `qwen2.5-coder:7b` | 读代码、解释函数 |
 | 逻辑排查 / 找 bug | `deepseek-r1:8b` | 读日志、追栈、定位异常 |
 | 通用对话 | `llama3.1:8b` | 文档总结、报告起草 |
+| 图片识别 | `gemma3:4b` | 粘贴/拖拽图片，多模态看图回答（不挂文件工具） |
 
 > 模型名可在 `src/config.js` 或环境变量中覆盖。
 > Model names can be overridden in `src/config.js` or via env vars.
@@ -49,6 +50,7 @@ http://localhost:3000
 | `MODEL_CODER` | `qwen2.5-coder:7b` | 代码场景模型 |
 | `MODEL_DEBUG` | `deepseek-r1:8b` | 排查场景模型 |
 | `MODEL_GENERAL` | `llama3.1:8b` | 通用场景模型 |
+| `MODEL_VISION` | `gemma3:4b` | 图片识别场景模型 |
 | `PORT` | `3000` | 服务端口 |
 
 **示例 / Example** — 指向局域网另一台机器的 Ollama：

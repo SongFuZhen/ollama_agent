@@ -33,6 +33,13 @@ const SCENARIOS = {
     desc: '文档总结、报告起草、闲聊',
     agent: true,
   },
+  vision: {
+    key: 'vision',
+    label: '图片识别',
+    model: process.env.MODEL_VISION || 'gemma3:4b',
+    desc: '粘贴图片，多模态看图回答',
+    agent: false, // 纯多模态对话，不挂文件工具
+  },
 };
 
 const MAX_STEPS = 6;          // 7B 循环步数上限，防空转

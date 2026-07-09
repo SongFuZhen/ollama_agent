@@ -31,6 +31,10 @@ function systemPrompt(specs) {
   const specStr = specs
     .map((t) => `- ${t.name}(${Object.keys(t.params).join(', ')}) : ${t.desc}`)
     .join('\n');
+  if (!specs.length) {
+    // 无工具场景（如 vision 纯多模态）：用中性系统提示
+    return '你是一个本地多模态助手，请基于用户提供的图片和文字如实回答，不要编造。';
+  }
   return [
     '你是一个受约束的本地助手。规则：',
     '1. 不要凭空编造，所有结论必须基于工具返回的真实数据。',
@@ -44,13 +48,20 @@ function systemPrompt(specs) {
 }
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
-// opts: { model, scenarioKey, confirm }
-async function runAgent(userInput, { model, scenarioKey, confirm } = {}, emitInput) {
+// opts: { model, scenarioKey, confirm, images }
+async function runAgent(userInput, { model, scenarioKey, confirm, images } = {}, emitInput) {
   const emit = emitInput || (() => {});
   const specs = specsFor(scenarioKey);
+  const hasTools = specs.length > 0;
+
+  // 构造首条 user 消息：有图片时改用 Ollama 多模态格式（content + images 数组）
+  const userMessage = (images && images.length)
+    ? { role: 'user', content: userInput, images: images.slice() }
+    : { role: 'user', content: userInput };
+
   const messages = [
     { role: 'system', content: systemPrompt(specs) },
-    { role: 'user', content: userInput },
+    userMessage,
   ];
 
   for (let step = 1; step <= MAX_STEPS; step++) {
@@ -69,6 +80,12 @@ async function runAgent(userInput, { model, scenarioKey, confirm } = {}, emitInp
     const { think, rest } = stripThink(raw);
     if (think) emit({ type: 'thought', step, think: true, content: think });
     const text = rest || raw;
+
+    // 无工具的场景（如 vision 纯多模态）直接回答，不解析工具调用
+    if (!hasTools) {
+      emit({ type: 'answer', content: text.trim() });
+      return text.trim();
+    }
 
     // 优先从 rest 解析工具调用；若模型把 JSON 包在 <think:6124c78e> 内，则回退用 raw 解析一次
     let call = parseToolCall(text);

@@ -32,7 +32,11 @@ main { flex: 1; overflow-y: auto; padding: 16px; }
 .confirm-card button { margin-right: 8px; padding: 4px 14px; border: none; border-radius: 6px; cursor: pointer; }
 .confirm-card .yes { background: #8b5cf6; color: #fff; }
 .confirm-card .no { background: #e5e7eb; }
-footer { display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #e5e7eb; }
+footer { display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #e5e7eb; flex-wrap: wrap; }
 #input { flex: 1; resize: none; height: 52px; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; }
 #send { padding: 0 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
 #send:disabled { background: #9ca3af; }
+.img-thumbs { display: flex; gap: 6px; width: 100%; flex-wrap: wrap; }
+.img-thumbs .thumb { position: relative; width: 56px; height: 56px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+.img-thumbs .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.img-thumbs .thumb .x { position: absolute; top: 0; right: 0; background: rgba(0,0,0,.6); color: #fff; width: 16px; height: 16px; line-height: 16px; text-align: center; font-size: 12px; cursor: pointer; border-radius: 0 0 0 6px; }

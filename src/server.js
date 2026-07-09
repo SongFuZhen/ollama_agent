@@ -103,9 +103,9 @@ function handleChat(req, res) {
   let currentConfirmId = null;
 
   readBody(req).then((body) => {
-    const { message, scenario } = body;
+    const { message, scenario, images } = body;
     const sc = SCENARIOS[scenario] || SCENARIOS.general;
-    if (!message) { send({ type: 'error', msg: '缺少 message' }); res.end(); return; }
+    if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
     const confirm = (reqInfo) =>
       new Promise((resolve) => {
@@ -120,7 +120,7 @@ function handleChat(req, res) {
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model: sc.model, scenarioKey: sc.key, confirm }, send)
+    runAgent(message, { model: sc.model, scenarioKey: sc.key, confirm, images: images || [] }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {

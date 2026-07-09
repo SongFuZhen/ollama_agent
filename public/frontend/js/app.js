@@ -151,20 +151,82 @@ function handleEvent(ev) {
   }
 }
 
+// ---------- 图片粘贴 / 拖拽（仅随消息发送，不落工作目录） ----------
+const pendingImages = []; // [{ name, dataUrl, b64 }]
+
+function addImage(dataUrl, name) {
+  const b64 = dataUrl.split(',')[1];
+  if (!b64) return;
+  pendingImages.push({ name: name || 'image.png', dataUrl, b64 });
+  renderImageThumbs();
+}
+
+function renderImageThumbs() {
+  let box = document.getElementById('img-thumbs');
+  if (!box) {
+    box = el('div', 'img-thumbs');
+    box.id = 'img-thumbs';
+    inputEl.parentNode.insertBefore(box, inputEl);
+  }
+  box.innerHTML = '';
+  pendingImages.forEach((img, i) => {
+    const wrap = el('div', 'thumb');
+    const im = el('img'); im.src = img.dataUrl;
+    const x = el('span', 'x', '×');
+    x.onclick = () => { pendingImages.splice(i, 1); renderImageThumbs(); };
+    wrap.appendChild(im); wrap.appendChild(x);
+    box.appendChild(wrap);
+  });
+}
+
+// 粘贴图片（剪贴板含图片时拦截）
+inputEl.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type && it.type.startsWith('image/')) {
+      const f = it.getAsFile();
+      const r = new FileReader();
+      r.onload = () => addImage(r.result, f.name);
+      r.readAsDataURL(f);
+      e.preventDefault();
+    }
+  }
+});
+
+// 拖拽图片到输入框
+inputEl.addEventListener('dragover', (e) => e.preventDefault());
+inputEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (!files) return;
+  for (const f of files) {
+    if (f.type.startsWith('image/')) {
+      const r = new FileReader();
+      r.onload = () => addImage(r.result, f.name);
+      r.readAsDataURL(f);
+    }
+  }
+});
+
 // ---------- 发送请求（SSE 流式读取） ----------
 async function send() {
   const text = inputEl.value.trim();
-  if (!text || state.busy) return;
+  if (state.busy) return;
+  if (!text && pendingImages.length === 0) return; // 文+图至少一项
 
+  const imgs = pendingImages.slice();
   inputEl.value = '';
-  appendUser(text);
+  pendingImages.length = 0;
+  renderImageThumbs();
+  appendUser(text || '（图片）');
   setBusy(true);
 
   const scenario = state.activeScenario;
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text, scenario }),
+    body: JSON.stringify({ message: text, scenario, images: imgs.map((i) => i.b64) }),
   });
 
   const reader = res.body.getReader();
@@ -249,6 +311,7 @@ const SCENARIO_LABELS = {
   coder: '代码补全 / 解释',
   debug: '逻辑排查 / 找 bug',
   general: '通用对话',
+  vision: '图片识别',
 };
 
 // ---------- 绑定事件 ----------
