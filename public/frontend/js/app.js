@@ -209,6 +209,101 @@ inputEl.addEventListener('drop', (e) => {
   }
 });
 
+// ---------- 设置（存 localStorage，随请求下发，不碰后端常量） ----------
+const SETTINGS_KEY = 'local-agent-settings';
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+// 取某场景的模型名（前端覆盖优先，否则用后端默认）
+function modelFor(scenarioKey) {
+  const s = loadSettings();
+  const map = { coder: s.coder, debug: s.debug, general: s.general, vision: s.vision };
+  const v = map[scenarioKey];
+  return v && v.trim() ? v.trim() : null; // null => 用后端默认
+}
+const DEFAULT_OLLAMA_HOST = 'http://192.168.0.101:11434';
+function ollamaHost() {
+  const s = loadSettings();
+  return s.ollama && s.ollama.trim() ? s.ollama.trim() : DEFAULT_OLLAMA_HOST;
+}
+
+const settingsBtn = $('#settings-btn');
+const settingsModal = $('#settings-modal');
+const settingsClose = $('#settings-close');
+const settingsSave = $('#settings-save');
+settingsBtn.onclick = () => {
+  const s = loadSettings();
+  $('#set-ollama').value = s.ollama || DEFAULT_OLLAMA_HOST;
+  $('#set-coder').value = s.coder || '';
+  $('#set-debug').value = s.debug || '';
+  $('#set-general').value = s.general || '';
+  $('#set-vision').value = s.vision || '';
+  settingsModal.classList.remove('hidden');
+};
+settingsClose.onclick = () => settingsModal.classList.add('hidden');
+settingsSave.onclick = () => {
+  const s = {
+    ollama: $('#set-ollama').value,
+    coder: $('#set-coder').value,
+    debug: $('#set-debug').value,
+    general: $('#set-general').value,
+    vision: $('#set-vision').value,
+  };
+  saveSettings(s);
+  $('#settings-msg').textContent = '已保存（浏览器本地）';
+  setTimeout(() => (settingsModal.classList.add('hidden')), 600);
+};
+
+// ---------- 文件浏览器（左栏，沙箱内） ----------
+const fileTreeEl = $('#file-tree');
+const fsRefresh = $('#fs-refresh');
+
+async function loadFileTree(sub) {
+  fileTreeEl.textContent = '加载中…';
+  try {
+    const q = sub ? ('?path=' + encodeURIComponent(sub)) : '';
+    const r = await fetch('/api/fs/list' + q);
+    const d = await r.json();
+    if (d.error) { fileTreeEl.textContent = '⚠ ' + d.error; return; }
+    renderFileTree(d.items, sub || '');
+  } catch (e) {
+    fileTreeEl.textContent = '⚠ ' + e.message;
+  }
+}
+
+function renderFileTree(items, base) {
+  fileTreeEl.innerHTML = '';
+  // 返回上级（非根时）
+  if (base) {
+    const up = el('div', 'node dir', '..');
+    up.onclick = () => loadFileTree(base.split('/').slice(0, -1).join('/'));
+    fileTreeEl.appendChild(up);
+  }
+  for (const it of items) {
+    const full = (base ? base + '/' : '') + it.name;
+    const node = el('div', 'node ' + (it.type === 'dir' ? 'dir' : 'file'), (it.type === 'dir' ? '📁 ' : '📄 ') + it.name);
+    if (it.type === 'dir') {
+      node.onclick = () => loadFileTree(full);
+    } else {
+      node.onclick = () => insertPath(full);
+    }
+    fileTreeEl.appendChild(node);
+  }
+}
+
+// 点文件：把相对路径插入输入框（供用户发送时引用，或交给模型读取）
+function insertPath(rel) {
+  const cur = inputEl.value;
+  inputEl.value = (cur ? cur + ' ' : '') + '文件: ' + rel;
+  inputEl.focus();
+}
+
+fsRefresh.onclick = () => loadFileTree('');
+
 // ---------- 发送请求（SSE 流式读取） ----------
 async function send() {
   const text = inputEl.value.trim();
@@ -223,10 +318,13 @@ async function send() {
   setBusy(true);
 
   const scenario = state.activeScenario;
+  const body = { message: text, scenario, images: imgs.map((i) => i.b64) };
+  const m = modelFor(scenario); if (m) body.model = m;       // 前端覆盖模型名
+  const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text, scenario, images: imgs.map((i) => i.b64) }),
+    body: JSON.stringify(body),
   });
 
   const reader = res.body.getReader();
@@ -301,6 +399,7 @@ async function preflight() {
     state.activeScenario = firstReady || Object.keys(state.scenarios)[0];
     renderTabs();
     mountSession(state.activeScenario);
+    loadFileTree(''); // 启动即加载项目文件树
   } catch (e) {
     statusEl.textContent = '⚠ 无法连接服务: ' + e.message;
   }

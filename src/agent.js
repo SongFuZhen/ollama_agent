@@ -49,10 +49,11 @@ function systemPrompt(specs) {
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, scenarioKey, confirm, images }
-async function runAgent(userInput, { model, scenarioKey, confirm, images } = {}, emitInput) {
+async function runAgent(userInput, { model, scenarioKey, confirm, images, ollamaHost } = {}, emitInput) {
   const emit = emitInput || (() => {});
   const specs = specsFor(scenarioKey);
   const hasTools = specs.length > 0;
+  const chatOpts = ollamaHost ? { ollamaHost } : {};
 
   // 构造首条 user 消息：有图片时改用 Ollama 多模态格式（content + images 数组）
   const userMessage = (images && images.length)
@@ -68,7 +69,7 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images } = {},
     let raw = '';
     for (let r = 0; r <= JSON_RETRY; r++) {
       try {
-        raw = await chat(model, messages);
+        raw = await chat(model, messages, chatOpts);
         break;
       } catch (e) {
         if (r === JSON_RETRY) throw e;

@@ -7,17 +7,19 @@ const { OLLAMA_HOST, STEP_TIMEOUT_MS } = require('./config');
 // 可通过环境变量 OLLAMA_TIMEOUT_MS 覆盖（毫秒），否则用 config 默认
 const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || STEP_TIMEOUT_MS;
 
-function hostParts() {
+function hostParts(hostStr) {
+  const src = hostStr || OLLAMA_HOST;
   // 支持 http://host:port
-  const m = OLLAMA_HOST.match(/^https?:\/\/([^:]+):(\d+)$/);
-  if (!m) throw new Error('OLLAMA_HOST 格式应为 http://host:port');
+  const m = src.match(/^https?:\/\/([^:]+):(\d+)$/);
+  if (!m) throw new Error('OLLAMA_HOST 格式应为 http://host:port，当前: ' + src);
   return { host: m[1], port: parseInt(m[2], 10) };
 }
 
 // 非流式调用，返回完整文本
-function chat(model, messages) {
+// opts.ollamaHost 可选，覆盖默认 OLLAMA_HOST（前端设置面板可下发）
+function chat(model, messages, opts = {}) {
   return new Promise((resolve, reject) => {
-    const { host, port } = hostParts();
+    const { host, port } = hostParts(opts.ollamaHost);
     const body = JSON.stringify({ model, messages, stream: false });
     const req = http.request(
       { host, port, path: '/api/chat', method: 'POST',
@@ -44,7 +46,7 @@ function chat(model, messages) {
       if (/超时/.test(e.message)) {
         reject(new Error(e.message)); // 超时信息已自解释，不再套连接前缀
       } else {
-        reject(new Error('无法连接 Ollama (' + OLLAMA_HOST + ')：' + (e.code || e.message)));
+        reject(new Error('无法连接 Ollama (' + (opts.ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
       }
     });
     req.write(body);

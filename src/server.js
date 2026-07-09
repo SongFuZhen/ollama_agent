@@ -2,9 +2,11 @@
 
 const http = require('http');
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 const { runAgent } = require('./agent');
 const { listModels } = require('./ollama');
+const { safeResolve } = require('./tools');
 const { PROJECT_ROOT, PORT, SCENARIOS, OLLAMA_HOST } = require('./config');
 
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public', 'frontend');
@@ -103,8 +105,9 @@ function handleChat(req, res) {
   let currentConfirmId = null;
 
   readBody(req).then((body) => {
-    const { message, scenario, images } = body;
+    const { message, scenario, images, model: bodyModel, ollamaHost } = body;
     const sc = SCENARIOS[scenario] || SCENARIOS.general;
+    const model = bodyModel || sc.model; // 前端可覆盖模型名
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
     const confirm = (reqInfo) =>
@@ -120,7 +123,7 @@ function handleChat(req, res) {
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model: sc.model, scenarioKey: sc.key, confirm, images: images || [] }, send)
+    runAgent(message, { model, scenarioKey: sc.key, confirm, images: images || [], ollamaHost }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
@@ -164,11 +167,47 @@ function handlePreflight(res) {
     }));
 }
 
+// 列出目录内容（受沙箱限制，仅 PROJECT_ROOT 内）
+async function handleFsList(req, res) {
+  const urlPath = new URL(req.url, 'http://x').searchParams.get('path') || '';
+  try {
+    const abs = await safeResolve(urlPath || '.');
+    const entries = await fsp.readdir(abs, { withFileTypes: true });
+    const list = entries
+      .filter((e) => !e.name.startsWith('.'))
+      .map((e) => ({
+        name: e.name,
+        type: e.isDirectory() ? 'dir' : 'file',
+        path: path.relative(PROJECT_ROOT, path.join(abs, e.name)),
+      }))
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+    sendJSON(res, 200, { path: path.relative(PROJECT_ROOT, abs), items: list });
+  } catch (e) {
+    sendJSON(res, 400, { error: e.message });
+  }
+}
+
+// 读取文件内容（受沙箱限制，仅 PROJECT_ROOT 内）
+async function handleFsRead(req, res) {
+  const urlPath = new URL(req.url, 'http://x').searchParams.get('path') || '';
+  try {
+    const abs = await safeResolve(urlPath);
+    const stat = await fsp.stat(abs);
+    if (stat.isDirectory()) return sendJSON(res, 400, { error: '目标是目录，不是文件' });
+    const content = await fsp.readFile(abs, 'utf8');
+    sendJSON(res, 200, { path: path.relative(PROJECT_ROOT, abs), content });
+  } catch (e) {
+    sendJSON(res, 400, { error: e.message });
+  }
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (req.method === 'GET' && url === '/api/preflight') return handlePreflight(res);
   if (req.method === 'POST' && url === '/api/chat') return handleChat(req, res);
   if (req.method === 'POST' && url === '/api/confirm') return handleConfirm(req, res);
+  if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
+  if (req.method === 'GET' && url === '/api/fs/read') return handleFsRead(req, res);
   if (req.method === 'GET') return serveStatic(req, res);
   res.writeHead(405); res.end('method not allowed');
 });
