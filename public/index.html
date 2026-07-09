@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本地 Agent 客户端</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>本地 Agent 客户端</h1>
+    <div id="status">启动中…</div>
+  </header>
+
+  <!-- 三个场景标签页：代码 / 排查 / 通用 -->
+  <nav id="tabs"></nav>
+
+  <main>
+    <div id="messages"></div>
+  </main>
+
+  <footer>
+    <textarea id="input" placeholder="输入任务，例如：读取 src/server.js 并解释它的作用"></textarea>
+    <button id="send">发送</button>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

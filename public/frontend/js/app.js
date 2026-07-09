@@ -1,0 +1,260 @@
+'use strict';
+
+/* =========================================================================
+ * 本地 Agent 客户端 — 前端
+ * 三个场景标签页（代码 / 排查 / 通用），各自独立会话，共享同一沙箱工具箱。
+ * 通过 SSE 接收后端的 Agent 执行过程并实时渲染。
+ * ========================================================================= */
+
+// ---------- DOM 引用 ----------
+const $ = (sel) => document.querySelector(sel);
+const tabsEl = $('#tabs');
+const messagesEl = $('#messages');
+const inputEl = $('#input');
+const sendBtn = $('#send');
+const statusEl = $('#status');
+
+// ---------- 全局状态 ----------
+const state = {
+  scenarios: {},            // 后端下发的场景配置 { key: {label, model} }
+  activeScenario: null,     // 当前选中的场景 key
+  sessions: {},             // 每个场景独立的消息 DOM 容器 { key: HTMLElement }
+  busy: false,              // 是否有请求进行中
+};
+
+// ---------- 小工具：创建元素 ----------
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+// ---------- 消息流渲染 ----------
+// 切换场景时，把对应会话的 DOM 挂回主区域
+function mountSession(key) {
+  messagesEl.innerHTML = '';
+  if (!state.sessions[key]) {
+    state.sessions[key] = el('div', 'session');
+  }
+  messagesEl.appendChild(state.sessions[key]);
+  scrollDown();
+}
+
+function scrollDown() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendToActive(node) {
+  const box = state.sessions[state.activeScenario] || messagesEl;
+  box.appendChild(node);
+  scrollDown();
+}
+
+// 用户气泡
+function appendUser(text) {
+  const m = el('div', 'msg user');
+  m.appendChild(el('div', 'bubble', text));
+  appendToActive(m);
+}
+
+// Agent 最终回答气泡
+function appendAnswer(text) {
+  const m = el('div', 'msg agent');
+  m.appendChild(el('div', 'bubble', text));
+  appendToActive(m);
+}
+
+// 过程步骤（思考链 / 工具调用 / 错误等）
+function appendStep(type, text) {
+  const s = el('div', 'step ' + type, text);
+  appendToActive(s);
+  return s;
+}
+
+// R1 推理块：默认折叠，可点击展开
+function appendThink(text) {
+  const wrap = el('div', 'step thought');
+  const toggle = el('div', 'think-toggle', '推理过程（点击展开）');
+  const body = el('div', 'think-body', text);
+  toggle.onclick = () => {
+    toggle.classList.toggle('open');
+    body.classList.toggle('open');
+  };
+  wrap.appendChild(toggle);
+  wrap.appendChild(body);
+  appendToActive(wrap);
+}
+
+// ---------- 写操作确认卡片（每次单独确认） ----------
+function showConfirm(card) {
+  const { id, action, params } = card;
+  const c = el('div', 'confirm-card');
+  c.appendChild(el('div', 'step confirm', `写操作确认 [${action}]`));
+  const pre = el('pre');
+  pre.textContent = JSON.stringify(params, null, 2);
+  c.appendChild(pre);
+
+  const btns = el('div', 'btns');
+  const yes = el('button', 'yes', '确认写入');
+  const no = el('button', 'no', '拒绝');
+  yes.onclick = () => {
+    fetch('/api/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ok: true }),
+    });
+    c.remove();
+  };
+  no.onclick = () => {
+    fetch('/api/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ok: false }),
+    });
+    c.remove();
+  };
+  btns.appendChild(yes);
+  btns.appendChild(no);
+  c.appendChild(btns);
+  appendToActive(c);
+}
+
+// ---------- SSE 事件分发 ----------
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'meta':
+      state.scenarios = ev.scenarios || {};
+      break;
+    case 'thought':
+      if (ev.think) appendThink(ev.content);
+      else appendStep('thought', `[思考#${ev.step}]\n${ev.content}`);
+      break;
+    case 'tool':
+      appendStep('tool', `→ 调用工具: ${ev.action}(${JSON.stringify(ev.params)})`);
+      break;
+    case 'tool_result':
+      appendStep('tool', `← 结果: ${ev.result}`);
+      break;
+    case 'confirm_request':
+      showConfirm(ev);
+      break;
+    case 'confirm_result':
+      appendStep('confirm', ev.ok ? '✓ 用户已确认写入' : '✗ 用户拒绝写入');
+      break;
+    case 'error':
+      appendStep('error', '⚠ ' + ev.msg + (ev.content ? '\n' + ev.content : ''));
+      break;
+    case 'answer':
+      appendAnswer(ev.content);
+      break;
+  }
+}
+
+// ---------- 发送请求（SSE 流式读取） ----------
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text || state.busy) return;
+
+  inputEl.value = '';
+  appendUser(text);
+  setBusy(true);
+
+  const scenario = state.activeScenario;
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text, scenario }),
+  });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const chunks = buf.split('\n\n');
+    buf = chunks.pop();
+    for (const chunk of chunks) {
+      if (!chunk.startsWith('data: ')) continue;
+      let ev;
+      try { ev = JSON.parse(chunk.slice(6)); } catch (e) { continue; }
+      handleEvent(ev);
+    }
+  }
+  setBusy(false);
+}
+
+function setBusy(flag) {
+  state.busy = flag;
+  sendBtn.disabled = flag;
+  inputEl.disabled = flag;
+}
+
+// ---------- 场景标签栏 ----------
+function renderTabs() {
+  tabsEl.innerHTML = '';
+  for (const key of Object.keys(state.scenarios)) {
+    const sc = state.scenarios[key];
+    // 模型未就绪的标签置灰并提示，不可点击
+    const disabled = sc.ready === false;
+    const cls = 'tab' + (key === state.activeScenario ? ' active' : '') + (disabled ? ' disabled' : '');
+    const tab = el('div', cls);
+    tab.appendChild(el('div', 'label', sc.label));
+    tab.appendChild(el('div', 'm', sc.model + (disabled ? ' （未安装）' : '')));
+    if (!disabled) tab.onclick = () => selectScenario(key);
+    tabsEl.appendChild(tab);
+  }
+}
+
+function selectScenario(key) {
+  if (state.busy) return; // 请求进行中不允许切换
+  state.activeScenario = key;
+  renderTabs();
+  mountSession(key);
+}
+
+// ---------- 启动自检 ----------
+async function preflight() {
+  try {
+    const r = await fetch('/api/preflight');
+    const d = await r.json();
+    if (d.ollama !== 'ok') {
+      statusEl.textContent = '⚠ Ollama 不可达 (' + (d.ollamaHost || '') + '): ' + (d.error || '');
+      return;
+    }
+    // 用后端下发的场景配置初始化标签（带就绪状态）
+    state.scenarios = {};
+    for (const k of Object.keys(d.scenarios || {})) {
+      const s = d.scenarios[k];
+      state.scenarios[k] = { label: SCENARIO_LABELS[k] || k, model: s.model, ready: s.ready };
+    }
+    const readyList = Object.entries(state.scenarios)
+      .filter(([, v]) => v.ready).map(([, v]) => v.model);
+    statusEl.textContent = `就绪 | Node ${d.node} | Ollama: ${d.ollamaHost || '?'} | 已装: ${readyList.join(', ') || '无'} | 根: ${d.projectRoot}`;
+
+    // 默认选中第一个就绪的场景
+    const firstReady = Object.keys(state.scenarios).find((k) => state.scenarios[k].ready);
+    state.activeScenario = firstReady || Object.keys(state.scenarios)[0];
+    renderTabs();
+    mountSession(state.activeScenario);
+  } catch (e) {
+    statusEl.textContent = '⚠ 无法连接服务: ' + e.message;
+  }
+}
+
+// 场景 key -> 中文标签（后端也下发 label，这里作兜底）
+const SCENARIO_LABELS = {
+  coder: '代码补全 / 解释',
+  debug: '逻辑排查 / 找 bug',
+  general: '通用对话',
+};
+
+// ---------- 绑定事件 ----------
+sendBtn.onclick = send;
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+preflight();
