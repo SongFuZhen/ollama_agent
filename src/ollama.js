@@ -55,9 +55,10 @@ function chat(model, messages, opts = {}) {
 }
 
 // 检查 Ollama 可用的模型列表
-function listModels() {
+// ollamaHost 可选，覆盖默认 OLLAMA_HOST（前端设置面板可下发）
+function listModels(ollamaHost) {
   return new Promise((resolve, reject) => {
-    const { host, port } = hostParts();
+    const { host, port } = hostParts(ollamaHost);
     const req = http.request({ host, port, path: '/api/tags', method: 'GET' }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
@@ -75,11 +76,94 @@ function listModels() {
       if (/超时/.test(e.message)) {
         reject(new Error(e.message)); // 超时信息已自解释，不再套连接前缀
       } else {
-        reject(new Error('无法连接 Ollama (' + OLLAMA_HOST + ')：' + (e.code || e.message)));
+        reject(new Error('无法连接 Ollama (' + (ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
       }
     });
     req.end();
   });
 }
 
-module.exports = { chat, listModels };
+// 流式调用，每次 yield 一个 token
+// opts.onToken(token) 每收到一个 token 时回调
+// opts.onStats({ ttft, total }) 连接统计回调
+async function chatStream(model, messages, opts = {}) {
+  const { host, port } = hostParts(opts.ollamaHost);
+  const body = JSON.stringify({ model, messages, stream: true });
+  const startTime = Date.now();
+  let firstTokenTime = null;
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host, port, path: '/api/chat', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+      (res) => {
+        let buffer = '';
+        let fullText = '';
+
+        res.on('data', (chunk) => {
+          buffer += chunk.toString();
+          // Ollama 流式响应每行是一个 JSON 对象
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // 保留不完整的行
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const json = JSON.parse(line);
+              if (json.error) {
+                reject(new Error(json.error));
+                return;
+              }
+              if (json.message && json.message.content) {
+                const token = json.message.content;
+                fullText += token;
+                if (!firstTokenTime) firstTokenTime = Date.now();
+                if (opts.onToken) opts.onToken(token);
+              }
+            } catch (e) {
+              // 忽略解析错误，可能是不完整的行
+            }
+          }
+        });
+
+        res.on('end', () => {
+          clearTimeout(timer);
+          // 处理缓冲区中剩余的数据
+          if (buffer.trim()) {
+            try {
+              const json = JSON.parse(buffer);
+              if (json.message && json.message.content) {
+                const token = json.message.content;
+                fullText += token;
+                if (!firstTokenTime) firstTokenTime = Date.now();
+                if (opts.onToken) opts.onToken(token);
+              }
+            } catch (e) {}
+          }
+          const total = Date.now() - startTime;
+          const ttft = firstTokenTime ? firstTokenTime - startTime : total;
+          if (opts.onStats) opts.onStats({ ttft, total });
+          resolve(fullText);
+        });
+      }
+    );
+
+    const timer = setTimeout(() => {
+      req.destroy(new Error('Ollama 流式调用超时（>' + TIMEOUT_MS + 'ms）'));
+    }, TIMEOUT_MS);
+
+    req.on('error', (e) => {
+      clearTimeout(timer);
+      if (/超时/.test(e.message)) {
+        reject(new Error(e.message));
+      } else {
+        reject(new Error('无法连接 Ollama (' + (opts.ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
+      }
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+module.exports = { chat, chatStream, listModels };

@@ -4,7 +4,8 @@
   "description": "内网断网环境的本地 Agent 客户端（零依赖，纯 Node 内置模块）",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test test/"
   },
   "engines": {
     "node": ">=16"

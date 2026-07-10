@@ -7,46 +7,117 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <header>
-    <h1>本地 Agent 客户端</h1>
-    <div id="status">启动中…</div>
-    <button id="settings-btn" class="hdr-btn">设置</button>
+  <!-- ===== 顶栏 ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <h1>本地 Agent 客户端</h1>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite">
+      <span class="status-dot"></span>
+      <span class="status-text">启动中…</span>
+    </div>
+
+    <div class="actions">
+      <button id="theme-btn" class="icon-btn" title="切换主题" aria-label="切换主题">🌙</button>
+      <button id="settings-btn" class="icon-btn" title="设置" aria-label="设置">⚙ 设置</button>
+    </div>
   </header>
 
-  <nav id="tabs"></nav>
+  <!-- ===== 场景分段控件 ===== -->
+  <nav id="tabs" class="tabs" role="tablist" aria-label="场景切换"></nav>
 
-  <div id="layout">
-    <!-- 文件浏览器（左栏） -->
-    <aside id="file-panel">
+  <!-- ===== 主体 ===== -->
+  <div id="layout" class="layout">
+    <!-- 文件浏览器（左栏，可折叠） -->
+    <aside id="file-panel" class="file-panel">
       <div class="panel-head">
-        <span>项目文件</span>
-        <button id="fs-refresh" class="mini">刷新</button>
+        <span class="panel-title">
+          <img src="/icons/folder.svg" alt="" class="panel-icon"> 项目文件
+        </span>
+        <span class="panel-btns">
+          <button id="fs-pick" class="chip">
+            <img src="/icons/folder-plus.svg" alt="" class="btn-icon"> 选择目录
+          </button>
+          <button id="fs-refresh" class="chip ghost" aria-label="刷新">
+            <img src="/icons/refresh.svg" alt="" class="btn-icon">
+          </button>
+        </span>
       </div>
-      <div id="file-tree">加载中…</div>
-      <div class="panel-hint">点文件：插入路径到输入框</div>
+      <div id="file-tree" class="file-tree">加载中…</div>
+      <div class="panel-hint">点文件：插入路径 · 点「选择目录」可浏览任意本地文件夹</div>
+      <input id="dir-input" type="file" webkitdirectory directory multiple hidden>
     </aside>
 
-    <main>
-      <div id="messages"></div>
-    </main>
+    <!-- 右栏：工具栏 + 对话 + 输入 -->
+    <section class="right-col">
+      <div class="chat-toolbar">
+        <span id="scene-name" class="scene-name">对话</span>
+        <button id="new-chat" class="ghost-btn" title="清空当前对话">＋ 新对话</button>
+      </div>
+
+      <main class="chat">
+        <!-- 空状态 -->
+        <div id="empty" class="empty">
+          <div class="empty-logo">◆</div>
+          <h2>开始一个新任务</h2>
+          <p class="empty-sub">选择一个场景，描述你要做的事，或粘贴截图交给模型识别。</p>
+          <div class="empty-cards">
+            <button class="eg-card" data-prompt="阅读 src/server.js，解释它的路由结构">
+              <img src="/icons/code.svg" alt="" class="eg-icon"> 解释一段代码
+            </button>
+            <button class="eg-card" data-prompt="为什么 agent 在调用工具后没有返回答案？帮我排查">
+              <img src="/icons/bug.svg" alt="" class="eg-icon"> 排查一个 bug
+            </button>
+            <button class="eg-card" data-prompt="用一句话概括当前项目在做什么">
+              <img src="/icons/chat.svg" alt="" class="eg-icon"> 通用问答
+            </button>
+          </div>
+        </div>
+        <div id="messages" class="messages"></div>
+        <div id="thinking" class="thinking hidden" role="status" aria-live="polite">
+          <span class="thinking-dot"></span>思考中… <span id="think-secs">0</span>s
+        </div>
+      </main>
+
+      <footer class="composer">
+        <div class="input-wrap">
+          <textarea id="input" placeholder="输入任务，或 Ctrl+V 粘贴图片。也可从左侧点文件插入路径"></textarea>
+        </div>
+        <div class="composer-actions">
+          <button id="img-btn" class="icon-btn attach-btn" title="选择图片" aria-label="选择图片">＋ 图片</button>
+          <button id="send" class="send-btn">发送</button>
+        </div>
+        <input id="img-input" type="file" accept="image/*" multiple hidden>
+      </footer>
+    </section>
   </div>
 
-  <footer>
-    <textarea id="input" placeholder="输入任务，或 Ctrl+V 粘贴图片（图片识别页）。也可从左侧点文件插入路径"></textarea>
-    <button id="send">发送</button>
-  </footer>
-
-  <!-- 设置弹窗 -->
-  <div id="settings-modal" class="modal hidden">
+  <!-- ===== 设置弹窗 ===== -->
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="设置">
     <div class="modal-box">
-      <div class="modal-head"><span>设置（存于浏览器本地）</span><button id="settings-close" class="mini">关闭</button></div>
-      <label>Ollama 地址<input id="set-ollama" type="text" placeholder="http://localhost:11434"></label>
-      <label>代码模型<input id="set-coder" type="text"></label>
-      <label>排查模型<input id="set-debug" type="text"></label>
-      <label>通用模型<input id="set-general" type="text"></label>
-      <label>图片模型<input id="set-vision" type="text"></label>
+      <div class="modal-head">
+        <span>设置</span>
+        <button id="settings-close" class="icon-btn sm" aria-label="关闭">✕</button>
+      </div>
+      <div class="field">
+        <label for="set-ollama">Ollama 地址</label>
+        <input id="set-ollama" type="text" placeholder="http://localhost:11434">
+      </div>
+      <div class="field">
+        <label for="set-root">项目目录（绝对路径，留空用默认沙箱）</label>
+        <input id="set-root" type="text" placeholder="/abs/path/to/your/project">
+      </div>
+      <details class="field-group">
+        <summary>模型配置</summary>
+        <div class="field"><label for="set-coder">代码模型</label><input id="set-coder" type="text" placeholder="qwen2.5-coder:7b"></div>
+        <div class="field"><label for="set-debug">排查模型</label><input id="set-debug" type="text" placeholder="deepseek-r1:8b"></div>
+        <div class="field"><label for="set-general">通用模型</label><input id="set-general" type="text" placeholder="llama3.1:8b"></div>
+        <div class="field"><label for="set-vision">图片模型</label><input id="set-vision" type="text" placeholder="gemma3:4b"></div>
+      </details>
       <div class="modal-actions">
-        <button id="settings-save" class="hdr-btn">保存</button>
+        <button id="settings-save" class="primary-btn">保存</button>
         <span id="settings-msg" class="hint"></span>
       </div>
     </div>

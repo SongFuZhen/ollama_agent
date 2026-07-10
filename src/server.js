@@ -7,6 +7,7 @@ const path = require('path');
 const { runAgent } = require('./agent');
 const { listModels } = require('./ollama');
 const { safeResolve } = require('./tools');
+const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./rootstore');
 const { PROJECT_ROOT, PORT, SCENARIOS, OLLAMA_HOST } = require('./config');
 
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public', 'frontend');
@@ -17,6 +18,9 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
 };
 
 // 待确认的写操作请求：key=reqId -> resolve
@@ -82,6 +86,7 @@ function handleChat(req, res) {
 
   // 客户端断开标志：用于中断 Agent 循环、避免向已关闭连接写入
   let aborted = false;
+  let currentConfirmId = null;
   const onClose = () => {
     aborted = true;
     // 清理本连接等待中的确认项，避免 pendingConfirm 泄漏
@@ -92,7 +97,10 @@ function handleChat(req, res) {
       }
     }
   };
-  req.on('close', onClose);
+  // 注意：必须用 res（响应）的 close，而不是 req（请求体）的 close。
+  // req 在请求体读完即触发 close，会误把正常请求判为「客户端断开」，
+  // 导致答案已生成却因 aborted=true 而不下发、连接挂起（前端收不到响应）。
+  res.on('close', onClose);
 
   // 向已关闭连接写入会抛错，统一拦截
   const send = (obj) => {
@@ -102,13 +110,16 @@ function handleChat(req, res) {
   };
   send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, scenarios: SCENARIOS });
 
-  let currentConfirmId = null;
-
-  readBody(req).then((body) => {
-    const { message, scenario, images, model: bodyModel, ollamaHost } = body;
+  readBody(req).then(async (body) => {
+    const { message, scenario, images, model: bodyModel, ollamaHost, projectRoot } = body;
     const sc = SCENARIOS[scenario] || SCENARIOS.general;
     const model = bodyModel || sc.model; // 前端可覆盖模型名
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
+
+    // 解析生效的项目根：前端下发的绝对路径优先（校验有效才用），否则用持久化/默认沙箱
+    let effectiveRoot = PROJECT_ROOT;
+    if (projectRoot && (await validateRoot(projectRoot))) effectiveRoot = await validateRoot(projectRoot);
+    else effectiveRoot = await getProjectRoot();
 
     const confirm = (reqInfo) =>
       new Promise((resolve) => {
@@ -123,7 +134,7 @@ function handleChat(req, res) {
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model, scenarioKey: sc.key, confirm, images: images || [], ollamaHost }, send)
+    runAgent(message, { model, scenarioKey: sc.key, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
@@ -140,19 +151,24 @@ function handleConfirm(req, res) {
   }).catch((e) => sendJSON(res, 400, { ok: false, msg: e.message }));
 }
 
-function handlePreflight(res) {
-  listModels()
+function handlePreflight(res, userHost) {
+  const host = userHost || OLLAMA_HOST;
+  // 预先构造场景状态；即使 Ollama 不可达，也要把默认模型名下发给前端
+  const scenarioStatus = {};
+  for (const k of Object.keys(SCENARIOS)) {
+    scenarioStatus[k] = { model: SCENARIOS[k].model, ready: false };
+  }
+  listModels(host)
     .then((models) => {
       const names = models.map((m) => m.name);
       // 逐个场景报告模型是否就绪
-      const scenarioStatus = {};
       for (const k of Object.keys(SCENARIOS)) {
-        scenarioStatus[k] = { model: SCENARIOS[k].model, ready: names.includes(SCENARIOS[k].model) };
+        scenarioStatus[k].ready = names.includes(SCENARIOS[k].model);
       }
       sendJSON(res, 200, {
         node: process.version,
         ollama: 'ok',
-        ollamaHost: OLLAMA_HOST,
+        ollamaHost: host,
         models: names,
         scenarios: scenarioStatus,
         projectRoot: PROJECT_ROOT,
@@ -161,41 +177,62 @@ function handlePreflight(res) {
     .catch((e) => sendJSON(res, 200, {
       node: process.version,
       ollama: 'unreachable',
-      ollamaHost: OLLAMA_HOST,
+      ollamaHost: host,
       error: e.message,
+      scenarios: scenarioStatus,
       projectRoot: PROJECT_ROOT,
     }));
 }
 
-// 列出目录内容（受沙箱限制，仅 PROJECT_ROOT 内）
+function handleConfig(res) {
+  sendJSON(res, 200, { scenarios: SCENARIOS, ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT });
+}
+
+// 项目根目录：GET 返回当前生效的根（含是否持久化有效）；POST 校验并持久化
+async function handleRootGet(res) {
+  const root = await getProjectRoot();
+  sendJSON(res, 200, { root, persisted: await isRootPersisted(root), default: PROJECT_ROOT });
+}
+async function handleRootSave(req, res) {
+  let body = {};
+  try { body = await readBody(req); } catch (e) {}
+  const r = await saveProjectRoot(body.root || '');
+  sendJSON(res, r.ok ? 200 : 400, r);
+}
+
+// 列出目录内容（受沙箱限制，仅 root 内；root 优先级：前端参数 > 持久化/默认沙箱）
 async function handleFsList(req, res) {
-  const urlPath = new URL(req.url, 'http://x').searchParams.get('path') || '';
+  const params = new URL(req.url, 'http://x').searchParams;
+  const urlPath = params.get('path') || '';
+  const root = params.get('root') || (await getProjectRoot());
   try {
-    const abs = await safeResolve(urlPath || '.');
+    const abs = await safeResolve(urlPath || '.', root);
     const entries = await fsp.readdir(abs, { withFileTypes: true });
     const list = entries
       .filter((e) => !e.name.startsWith('.'))
       .map((e) => ({
         name: e.name,
         type: e.isDirectory() ? 'dir' : 'file',
-        path: path.relative(PROJECT_ROOT, path.join(abs, e.name)),
+        path: path.relative(root, path.join(abs, e.name)),
       }))
       .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
-    sendJSON(res, 200, { path: path.relative(PROJECT_ROOT, abs), items: list });
+    sendJSON(res, 200, { path: path.relative(root, abs), items: list, root });
   } catch (e) {
     sendJSON(res, 400, { error: e.message });
   }
 }
 
-// 读取文件内容（受沙箱限制，仅 PROJECT_ROOT 内）
+// 读取文件内容（受沙箱限制，仅 root 内）
 async function handleFsRead(req, res) {
-  const urlPath = new URL(req.url, 'http://x').searchParams.get('path') || '';
+  const params = new URL(req.url, 'http://x').searchParams;
+  const urlPath = params.get('path') || '';
+  const root = params.get('root') || (await getProjectRoot());
   try {
-    const abs = await safeResolve(urlPath);
+    const abs = await safeResolve(urlPath, root);
     const stat = await fsp.stat(abs);
     if (stat.isDirectory()) return sendJSON(res, 400, { error: '目标是目录，不是文件' });
     const content = await fsp.readFile(abs, 'utf8');
-    sendJSON(res, 200, { path: path.relative(PROJECT_ROOT, abs), content });
+    sendJSON(res, 200, { path: path.relative(root, abs), content });
   } catch (e) {
     sendJSON(res, 400, { error: e.message });
   }
@@ -203,7 +240,14 @@ async function handleFsRead(req, res) {
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  if (req.method === 'GET' && url === '/api/preflight') return handlePreflight(res);
+  if (req.method === 'GET' && url === '/api/preflight') {
+    const ollamaHost = new URL(req.url, 'http://x').searchParams.get('ollamaHost') || '';
+    return handlePreflight(res, ollamaHost);
+  }
+  if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
+  if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
+  if (req.method === 'GET' && url === '/api/root') return handleRootGet(res);
+  if (req.method === 'POST' && url === '/api/root') return handleRootSave(req, res);
   if (req.method === 'POST' && url === '/api/chat') return handleChat(req, res);
   if (req.method === 'POST' && url === '/api/confirm') return handleConfirm(req, res);
   if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
@@ -212,10 +256,42 @@ const server = http.createServer((req, res) => {
   res.writeHead(405); res.end('method not allowed');
 });
 
+// ---------- 热重载（前端开发便利） ----------
+// 浏览器通过 EventSource 连接 /api/hotreload，public/ 下文件变更时收到 reload 指令
+const hotClients = new Set();
+function handleHotreload(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.write('retry: 2000\n\n');
+  hotClients.add(res);
+  req.on('close', () => hotClients.delete(res));
+}
+function broadcastHotreload() {
+  for (const res of hotClients) {
+    try { res.write('event: reload\ndata: 1\n\n'); } catch (e) { hotClients.delete(res); }
+  }
+}
+// 监听 public/ 目录（仅文件内容变更，忽略子目录深层以减少开销）
+let hotTimer = null;
+function startHotwatch() {
+  const watchDir = path.resolve(__dirname, '..', 'public');
+  fs.watch(watchDir, { recursive: true }, (eventType, filename) => {
+    if (!filename) return;
+    // 跳过持久化数据文件与临时文件
+    if (filename.includes('project-root.json')) return;
+    clearTimeout(hotTimer);
+    hotTimer = setTimeout(broadcastHotreload, 120); // 去抖，避免编辑器多次写触发多次刷新
+  });
+}
+
 server.listen(PORT, () => {
   console.log('本地 Agent 客户端已启动: http://localhost:' + PORT);
   console.log('项目根目录(沙箱): ' + PROJECT_ROOT);
   for (const k of Object.keys(SCENARIOS)) {
     console.log('场景[' + SCENARIOS[k].label + '] -> ' + SCENARIOS[k].model);
   }
+  startHotwatch();
 });

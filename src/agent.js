@@ -1,6 +1,6 @@
 'use strict';
 
-const { chat } = require('./ollama');
+const { chat, chatStream } = require('./ollama');
 const { TOOLS, specsFor, isAllowed } = require('./tools');
 const { MAX_STEPS, JSON_RETRY } = require('./config');
 
@@ -49,11 +49,18 @@ function systemPrompt(specs) {
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, scenarioKey, confirm, images }
-async function runAgent(userInput, { model, scenarioKey, confirm, images, ollamaHost } = {}, emitInput) {
+async function runAgent(userInput, { model, scenarioKey, confirm, images, ollamaHost, projectRoot } = {}, emitInput) {
   const emit = emitInput || (() => {});
   const specs = specsFor(scenarioKey);
   const hasTools = specs.length > 0;
   const chatOpts = ollamaHost ? { ollamaHost } : {};
+  // 沙箱根：用户「选择目录」下发的目录，否则默认 PROJECT_ROOT
+  const toolCtx = { root: projectRoot || PROJECT_ROOT };
+
+  // 整体墙钟超时：即使模型在 Agent 循环里反复调工具不收敛，也强制收尾，
+  // 避免前端一直 setBusy(true) 卡死、输入框停用。默认 90s，可用 AGENT_TIMEOUT_MS 覆盖。
+  const WALL_MS = Number(process.env.AGENT_TIMEOUT_MS) || 90000;
+  const deadline = Date.now() + WALL_MS;
 
   // 构造首条 user 消息：有图片时改用 Ollama 多模态格式（content + images 数组）
   const userMessage = (images && images.length)
@@ -65,11 +72,48 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
     userMessage,
   ];
 
+  let lastAnswer = '';
   for (let step = 1; step <= MAX_STEPS; step++) {
+    if (Date.now() > deadline) {
+      emit({ type: 'error', step, msg: `已达整体超时（${WALL_MS / 1000}s），强制收尾` });
+      break;
+    }
     let raw = '';
+    let inThinkBlock = false;
+    let thinkBuffer = '';
+    let answerBuffer = '';
+
     for (let r = 0; r <= JSON_RETRY; r++) {
       try {
-        raw = await chat(model, messages, chatOpts);
+        raw = await chatStream(model, messages, {
+          ...chatOpts,
+          onToken: (token) => {
+            // 检测 think 块的开始和结束
+            if (!inThinkBlock) {
+              // 检查是否进入 think 块
+              if (token.includes('<think>')) {
+                inThinkBlock = true;
+                thinkBuffer = token;
+                emit({ type: 'thinking_start', step });
+              } else {
+                answerBuffer += token;
+                emit({ type: 'token', step, content: token });
+              }
+            } else {
+              thinkBuffer += token;
+              // 检查是否离开 think 块
+              if (token.includes('</think>')) {
+                inThinkBlock = false;
+                const { think } = stripThink(thinkBuffer);
+                if (think) emit({ type: 'thought', step, think: true, content: think });
+                thinkBuffer = '';
+              }
+            }
+          },
+          onStats: (stats) => {
+            emit({ type: 'stats', step, ttft: stats.ttft, total: stats.total });
+          }
+        });
         break;
       } catch (e) {
         if (r === JSON_RETRY) throw e;
@@ -77,10 +121,14 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
       }
     }
 
-    // R1 推理模型：剥离 think 块，思考内容单独推送（前端默认折叠）
-    const { think, rest } = stripThink(raw);
-    if (think) emit({ type: 'thought', step, think: true, content: think });
-    const text = rest || raw;
+    // think 块已经在流式输出中处理，这里直接使用 answerBuffer
+    // 对于非流式回退或特殊情况，仍然从 raw 解析
+    let text = answerBuffer || raw;
+    // 如果 answerBuffer 为空或只有空格，可能是模型没有输出最终答案
+    if (!text.trim() && raw) {
+      const { rest } = stripThink(raw);
+      text = rest || raw;
+    }
 
     // 无工具的场景（如 vision 纯多模态）直接回答，不解析工具调用
     if (!hasTools) {
@@ -88,14 +136,18 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
       return text.trim();
     }
 
-    // 优先从 rest 解析工具调用；若模型把 JSON 包在 <think:6124c78e> 内，则回退用 raw 解析一次
+    // 优先从 rest 解析工具调用；若模型把 JSON 包在 <think> 内，则回退用 raw 解析一次
     let call = parseToolCall(text);
-    if ((!call || !call.action) && think) {
-      call = parseToolCall(raw);
+    if (!call || !call.action) {
+      const { think } = stripThink(raw);
+      if (think) {
+        call = parseToolCall(raw);
+      }
     }
     if (!call || !call.action) {
-      emit({ type: 'answer', content: text.trim() });
-      return text.trim();
+      lastAnswer = text.trim();
+      emit({ type: 'answer', content: lastAnswer });
+      return lastAnswer;
     }
 
     emit({ type: 'thought', step, content: text.trim() });
@@ -125,7 +177,7 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
     emit({ type: 'tool', step, action: call.action, params: call.params });
     let result;
     try {
-      result = await tool.run(call.params);
+      result = await tool.run(call.params, toolCtx);
     } catch (e) {
       result = '工具执行错误: ' + e.message;
     }
@@ -138,8 +190,14 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
     messages.push({ role: 'user', content: `工具 ${call.action} 返回:\n${resultStr.slice(0, RESULT_MAX)}` });
   }
 
-  emit({ type: 'answer', content: `（已达最大步数 ${MAX_STEPS}，强制收尾）请参考上述过程。` });
-  return '（已达最大步数）';
+  // 循环结束（达最大步数或整体超时）：若过程中模型曾给出过纯文本回答则回显，否则提示收尾
+  if (lastAnswer) {
+    emit({ type: 'answer', content: lastAnswer });
+    return lastAnswer;
+  }
+  const reason = Date.now() > deadline ? '超时' : '最大步数 ' + MAX_STEPS;
+  emit({ type: 'answer', content: `（已达${reason}，强制收尾）请参考上述工具调用过程，或换用更擅长工具调用的模型。` });
+  return lastAnswer || '（强制收尾）';
 }
 
 module.exports = { runAgent, systemPrompt };
