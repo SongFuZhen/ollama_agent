@@ -366,6 +366,7 @@ function handleEvent(ev) {
       break;
     case 'thinking_start':
       // 开始新的思考块
+      toggleThinking(true, '模型思考中');
       appendThink('');
       break;
     case 'thought':
@@ -380,6 +381,7 @@ function handleEvent(ev) {
       break;
     case 'token':
       // 流式输出 token
+      toggleThinking(false); // 开始输出时隐藏思考提示
       if (!state.streamingAnswer) {
         // 创建新的答案元素
         const m = el('div', 'msg agent answer-card');
@@ -410,6 +412,7 @@ function handleEvent(ev) {
       scrollDown();
       break;
     case 'tool':
+      toggleThinking(true, '执行工具');
       // 创建工具调用块并添加到当前气泡
       if (!state.streamingAnswer) {
         const m = el('div', 'msg agent answer-card');
@@ -863,6 +866,7 @@ async function send() {
   const signal = currentAbortController.signal;
 
   try {
+    toggleThinking(true, '正在连接');
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -931,11 +935,14 @@ const thinkingEl = $('#thinking');
 const thinkSecsEl = $('#think-secs');
 let thinkTimer = null;
 let thinkStart = 0;
-function toggleThinking(on) {
+function toggleThinking(on, msg) {
   if (on) {
     thinkStart = Date.now();
     thinkingEl.classList.remove('hidden');
     thinkSecsEl.textContent = '0';
+    // 更新提示文字
+    const label = thinkingEl.querySelector('.thinking-label');
+    if (label) label.textContent = msg || '思考中';
     scrollDown();
     thinkTimer = setInterval(() => {
       thinkSecsEl.textContent = String(Math.floor((Date.now() - thinkStart) / 1000));
