@@ -172,25 +172,20 @@ function appendAnswer(text) {
 
 // 简单的 Markdown 渲染器（仅处理代码块）
 function renderMarkdown(text) {
-  // 转义 HTML 特殊字符
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  if (!text) return '';
   
-  // 处理代码围栏（```language\ncode\n```）
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-    const language = lang ? ` data-lang="${lang}"` : '';
-    return `<pre class="code-block"${language}><code>${code.trim()}</code></pre>`;
-  });
+  // 使用 marked 库渲染 markdown
+  if (typeof marked !== 'undefined') {
+    // 配置 marked
+    marked.setOptions({
+      breaks: true,  // 换行符转换为 <br>
+      gfm: true,     // 启用 GitHub 风格 markdown
+    });
+    return marked.parse(text);
+  }
   
-  // 处理行内代码（`code`）
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-  
-  // 处理换行
-  html = html.replace(/\n/g, '<br>');
-  
-  return html;
+  // 降级处理：简单换行
+  return text.replace(/\n/g, '<br>');
 }
 
 // 过程步骤（思考链 / 工具调用 / 错误等）
@@ -228,15 +223,25 @@ function appendThink(text) {
       };
     }
 
-    // 创建思考块并添加到当前气泡
+    // 创建折叠的思考块
     const thinkWrap = el('div', 'think-block');
-    const toggle = el('div', 'think-toggle', '推理过程（点击展开）');
+    thinkWrap.setAttribute('data-collapsed', 'true');
+    
+    const header = el('div', 'think-header');
+    const arrow = el('span', 'think-arrow', '▶');
+    const label = el('span', 'think-label', '思考过程');
+    header.appendChild(arrow);
+    header.appendChild(label);
+    
     const body = el('div', 'think-body');
-    toggle.onclick = () => {
-      toggle.classList.toggle('open');
-      body.classList.toggle('open');
+    
+    header.onclick = () => {
+      const isCollapsed = thinkWrap.getAttribute('data-collapsed') === 'true';
+      thinkWrap.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
+      arrow.textContent = isCollapsed ? '▼' : '▶';
     };
-    thinkWrap.appendChild(toggle);
+    
+    thinkWrap.appendChild(header);
     thinkWrap.appendChild(body);
     state.streamingAnswer.appendChild(thinkWrap);
     state.streamingThink = body;
