@@ -195,104 +195,41 @@ function appendStep(type, text) {
   return s;
 }
 
-// R1 推理块：默认折叠，可点击展开，放在对话气泡内部
-function appendThink(text) {
-  // 如果是空文本，创建新的思考元素
-  if (!text && !state.streamingThink) {
-    // 确保有对话气泡
-    if (!state.streamingAnswer) {
-      const m = el('div', 'msg agent answer-card');
-      const head = el('div', 'answer-head');
-      head.appendChild(el('span', 'role', 'Agent'));
-      const stats = el('span', 'stats');
-      head.appendChild(stats);
-      const copy = el('button', 'copy', '复制');
-      head.appendChild(copy);
-      const bubble = el('div', 'bubble');
-      m.appendChild(head);
-      m.appendChild(bubble);
-      appendToActive(m);
-      state.streamingAnswer = bubble;
-      state.streamingText = '';
-      state.streamingHead = head;
-      copy.onclick = () => {
-        navigator.clipboard?.writeText(state.streamingText).then(() => {
-          copy.textContent = '已复制';
-          setTimeout(() => (copy.textContent = '复制'), 1200);
-        });
-      };
-    }
+// R1 推理块：默认折叠，可点击展开
+function appendThinkBlock() {
+  const thinkWrap = el('div', 'think-block');
+  thinkWrap.setAttribute('data-collapsed', 'true');
+  
+  const header = el('div', 'think-header');
+  const arrow = el('span', 'think-arrow', '▶');
+  const label = el('span', 'think-label', '思考过程');
+  header.appendChild(arrow);
+  header.appendChild(label);
+  
+  const body = el('div', 'think-body');
+  
+  header.onclick = () => {
+    const isCollapsed = thinkWrap.getAttribute('data-collapsed') === 'true';
+    thinkWrap.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
+    arrow.textContent = isCollapsed ? '▼' : '▶';
+  };
+  
+  thinkWrap.appendChild(header);
+  thinkWrap.appendChild(body);
+  state.streamingAnswer.appendChild(thinkWrap);
+  state.streamingThink = body;
+  state.streamingThinkText = '';
+}
 
-    // 创建折叠的思考块
-    const thinkWrap = el('div', 'think-block');
-    thinkWrap.setAttribute('data-collapsed', 'true');
-    
-    const header = el('div', 'think-header');
-    const arrow = el('span', 'think-arrow', '▶');
-    const label = el('span', 'think-label', '思考过程');
-    header.appendChild(arrow);
-    header.appendChild(label);
-    
-    const body = el('div', 'think-body');
-    
-    header.onclick = () => {
-      const isCollapsed = thinkWrap.getAttribute('data-collapsed') === 'true';
-      thinkWrap.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
-      arrow.textContent = isCollapsed ? '▼' : '▶';
-    };
-    
-    thinkWrap.appendChild(header);
-    thinkWrap.appendChild(body);
-    state.streamingAnswer.appendChild(thinkWrap);
-    state.streamingThink = body;
-    state.streamingThinkText = '';
-    return;
-  }
-
-  // 如果是流式输出，更新当前思考元素
+// 更新思考内容
+function updateThinkContent(text) {
   if (state.streamingThink) {
     state.streamingThinkText += text;
     state.streamingThink.textContent = state.streamingThinkText;
-    return;
   }
-
-  // 如果是最终文本，创建新的思考元素
-  if (!state.streamingAnswer) {
-    const m = el('div', 'msg agent answer-card');
-    const head = el('div', 'answer-head');
-    head.appendChild(el('span', 'role', 'Agent'));
-    const stats = el('span', 'stats');
-    head.appendChild(stats);
-    const copy = el('button', 'copy', '复制');
-    head.appendChild(copy);
-    const bubble = el('div', 'bubble');
-    m.appendChild(head);
-    m.appendChild(bubble);
-    appendToActive(m);
-    state.streamingAnswer = bubble;
-    state.streamingText = '';
-    state.streamingHead = head;
-    copy.onclick = () => {
-      navigator.clipboard?.writeText(state.streamingText).then(() => {
-        copy.textContent = '已复制';
-        setTimeout(() => (copy.textContent = '复制'), 1200);
-      });
-    };
-  }
-
-  const thinkWrap = el('div', 'think-block');
-  const toggle = el('div', 'think-toggle', '推理过程（点击展开）');
-  const body = el('div', 'think-body', text);
-  toggle.onclick = () => {
-    toggle.classList.toggle('open');
-    body.classList.toggle('open');
-  };
-  thinkWrap.appendChild(toggle);
-  thinkWrap.appendChild(body);
-  state.streamingAnswer.insertBefore(thinkWrap, state.streamingAnswer.firstChild);
 }
 
-// 工具调用块：可折叠，放在对话气泡内部
+// 工具调用块：可折叠，追加到当前消息容器
 function appendToolCall(action, params, result) {
   const toolWrap = el('div', 'tool-block');
   const toggle = el('div', 'tool-toggle');
@@ -364,95 +301,64 @@ function showConfirm(card) {
 }
 
 // ---------- SSE 事件分发 ----------
+// 流程：user -> thinking_start -> thought* -> (tool -> tool_result)* -> token* -> answer
+// 每个环节按顺序追加到当前消息容器中
 function handleEvent(ev) {
   switch (ev.type) {
     case 'meta':
       state.scenarios = ev.scenarios || {};
       break;
+      
     case 'thinking_start':
-      // 开始新的思考块
+      // 开始新的思考块，创建消息容器
       toggleThinking(true, '模型思考中');
-      appendThink('');
+      ensureMessageContainer();
+      appendThinkBlock();
       break;
+      
     case 'thought':
+      // 更新思考内容
       if (ev.think) {
-        // 流式思考完成，重置状态
+        // 流式思考完成
         state.streamingThink = null;
         state.streamingThinkText = '';
-        appendThink(ev.content);
       } else {
-        appendStep('thought', `[思考#${ev.step}]\n${ev.content}`);
+        updateThinkContent(ev.content);
       }
       break;
-    case 'token':
-      // 流式输出 token
-      toggleThinking(false); // 开始输出时隐藏思考提示
-      if (!state.streamingAnswer) {
-        // 创建新的答案元素
-        const m = el('div', 'msg agent answer-card');
-        const head = el('div', 'answer-head');
-        head.appendChild(el('span', 'role', 'Agent'));
-        const stats = el('span', 'stats');
-        head.appendChild(stats);
-        const copy = el('button', 'copy', '复制');
-        head.appendChild(copy);
-        const bubble = el('div', 'bubble');
-        m.appendChild(head);
-        m.appendChild(bubble);
-        appendToActive(m);
-        state.streamingAnswer = bubble;
-        state.streamingText = '';
-        state.streamingHead = head;
-        // 更新复制按钮功能
-        copy.onclick = () => {
-          navigator.clipboard?.writeText(state.streamingText).then(() => {
-            copy.textContent = '已复制';
-            setTimeout(() => (copy.textContent = '复制'), 1200);
-          });
-        };
-      }
-      // 追加 token 到当前答案
-      state.streamingText += ev.content;
-      state.streamingAnswer.innerHTML = renderMarkdown(state.streamingText);
-      scrollDown();
-      break;
+      
     case 'tool':
+      // 工具调用，追加到当前消息容器
       toggleThinking(true, '执行工具');
-      // 创建工具调用块并添加到当前气泡
-      if (!state.streamingAnswer) {
-        const m = el('div', 'msg agent answer-card');
-        const head = el('div', 'answer-head');
-        head.appendChild(el('span', 'role', 'Agent'));
-        const stats = el('span', 'stats');
-        head.appendChild(stats);
-        const copy = el('button', 'copy', '复制');
-        head.appendChild(copy);
-        const bubble = el('div', 'bubble');
-        m.appendChild(head);
-        m.appendChild(bubble);
-        appendToActive(m);
-        state.streamingAnswer = bubble;
-        state.streamingText = '';
-        state.streamingHead = head;
-        copy.onclick = () => {
-          navigator.clipboard?.writeText(state.streamingText).then(() => {
-            copy.textContent = '已复制';
-            setTimeout(() => (copy.textContent = '复制'), 1200);
-          });
-        };
-      }
+      ensureMessageContainer();
       appendToolCall(ev.action, ev.params, null);
       break;
+      
     case 'tool_result':
-      // 更新最后一个工具调用块的结果
+      // 更新最后一个工具调用的结果
       updateToolResult(ev.result);
       break;
+      
+    case 'token':
+      // 流式输出 token，开始输出最终答案
+      toggleThinking(false);
+      ensureMessageContainer();
+      appendToken(ev.content);
+      break;
+      
+    case 'answer':
+      // 最终答案
+      finalizeAnswer(ev.content);
+      break;
+      
     case 'confirm_request':
       showConfirm(ev);
       break;
+      
     case 'confirm_result':
       appendStep('confirm', ev.ok ? '✓ 用户已确认写入' : '✗ 用户拒绝写入');
       break;
+      
     case 'stats':
       // 显示连接统计
       if (state.streamingHead) {
@@ -462,21 +368,63 @@ function handleEvent(ev) {
         }
       }
       break;
+      
     case 'error':
       appendStep('error', '⚠ ' + ev.msg + (ev.content ? '\n' + ev.content : ''));
       break;
-    case 'answer':
-      // 最终答案：如果已经有流式输出，更新最终内容；否则创建新的答案元素
-      if (state.streamingAnswer) {
-        state.streamingAnswer.innerHTML = renderMarkdown(ev.content);
-        state.streamingAnswer = null;
-        state.streamingText = '';
-        state.streamingHead = null;
-      } else {
-        appendAnswer(ev.content);
-      }
-      break;
   }
+}
+
+// 确保当前消息容器存在
+function ensureMessageContainer() {
+  if (state.streamingAnswer) return;
+  
+  const m = el('div', 'msg agent answer-card');
+  const head = el('div', 'answer-head');
+  head.appendChild(el('span', 'role', 'Agent'));
+  const stats = el('span', 'stats');
+  head.appendChild(stats);
+  const copy = el('button', 'copy', '复制');
+  head.appendChild(copy);
+  const bubble = el('div', 'bubble');
+  m.appendChild(head);
+  m.appendChild(bubble);
+  appendToActive(m);
+  
+  state.streamingAnswer = bubble;
+  state.streamingText = '';
+  state.streamingHead = head;
+  
+  copy.onclick = () => {
+    navigator.clipboard?.writeText(state.streamingText).then(() => {
+      copy.textContent = '已复制';
+      setTimeout(() => (copy.textContent = '复制'), 1200);
+    });
+  };
+}
+
+// 追加 token 到当前答案
+function appendToken(token) {
+  state.streamingText += token;
+  state.streamingAnswer.innerHTML = renderMarkdown(state.streamingText);
+  scrollDown();
+}
+
+// 最终确定答案
+function finalizeAnswer(content) {
+  if (state.streamingAnswer) {
+    // 已有流式输出，更新为最终内容
+    state.streamingAnswer.innerHTML = renderMarkdown(content);
+  } else {
+    // 没有流式输出，创建新的答案元素
+    ensureMessageContainer();
+    state.streamingAnswer.innerHTML = renderMarkdown(content);
+  }
+  
+  // 清理状态
+  state.streamingAnswer = null;
+  state.streamingText = '';
+  state.streamingHead = null;
 }
 
 // ---------- 图片粘贴 / 拖拽（仅随消息发送，不落工作目录） ----------
