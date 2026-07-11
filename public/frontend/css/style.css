@@ -641,37 +641,48 @@ body {
 .tool-toggle {
   cursor: pointer;
   color: var(--cyan);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   user-select: none;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.tool-toggle:hover {
+  background: rgba(56, 189, 248, 0.1);
 }
 .tool-toggle::before { content: '▸ '; }
 .tool-toggle.open::before { content: '▾ '; }
 .tool-icon {
-  font-size: 14px;
+  font-size: 12px;
   filter: invert(0.8);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 .tool-title {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
-  word-break: break-all;
+  font-size: 12px;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 .tool-body {
   display: none;
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: 8px;
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
   max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
+  word-break: break-word;
   word-break: break-word;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
