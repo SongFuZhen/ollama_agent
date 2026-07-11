@@ -229,26 +229,24 @@ function updateThinkContent(text) {
   }
 }
 
-// 工具调用块：可折叠，追加到当前消息容器
+// 工具调用块：直接显示结果
 function appendToolCall(action, params, result) {
   const toolWrap = el('div', 'tool-block');
-  const toggle = el('div', 'tool-toggle');
+  
+  // 工具调用标题
+  const header = el('div', 'tool-toggle');
   const icon = el('span', 'tool-icon', '→');
   const title = el('span', 'tool-title', `${action}(${JSON.stringify(params)})`);
-  toggle.appendChild(icon);
-  toggle.appendChild(title);
-
+  header.appendChild(icon);
+  header.appendChild(title);
+  
+  // 工具结果
   const body = el('div', 'tool-body');
   if (result !== null) {
     body.textContent = result;
   }
-
-  toggle.onclick = () => {
-    toggle.classList.toggle('open');
-    body.classList.toggle('open');
-  };
-
-  toolWrap.appendChild(toggle);
+  
+  toolWrap.appendChild(header);
   toolWrap.appendChild(body);
   state.streamingAnswer.appendChild(toolWrap);
   scrollDown();
