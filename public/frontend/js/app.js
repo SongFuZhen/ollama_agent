@@ -178,8 +178,8 @@ function renderMarkdown(text) {
   if (typeof marked !== 'undefined') {
     // 配置 marked
     marked.setOptions({
-      breaks: true,  // 换行符转换为 <br>
-      gfm: true,     // 启用 GitHub 风格 markdown
+      breaks: false,  // 不转换换行符，保持 markdown 格式
+      gfm: true,      // 启用 GitHub 风格 markdown
     });
     return marked.parse(text);
   }
