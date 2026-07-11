@@ -440,9 +440,8 @@ body {
 }
 .msg.agent.answer-card .bubble {
   position: relative;
-  border-left: 3px solid var(--green);
   padding: 14px 18px;
-  border-radius: 4px 18px 18px 18px;
+  border-radius: 18px 18px 18px 4px;
   min-height: auto;
   align-items: flex-start;
 }
@@ -520,18 +519,14 @@ body {
 
 /* 思考块样式（在气泡内部） */
 .think-block {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px dashed var(--border);
-  border-radius: 8px;
-  background: rgba(245, 165, 36, 0.05);
-  padding: 10px 12px;
   margin: 0 0 10px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(245, 165, 36, 0.08);
+  border: 1px solid rgba(245, 165, 36, 0.2);
 }
 .think-block:last-child {
   margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
 }
 .think-toggle {
   cursor: pointer;
@@ -557,18 +552,14 @@ body {
 
 /* 工具调用块样式（在气泡内部） */
 .tool-block {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-  border-radius: 8px;
-  background: rgba(56, 189, 248, 0.05);
-  padding: 10px 12px;
   margin: 10px 0 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 .tool-block:first-child {
   margin-top: 0;
-  padding-top: 0;
-  border-top: none;
 }
 .tool-toggle {
   cursor: pointer;

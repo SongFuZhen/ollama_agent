@@ -238,7 +238,7 @@ function appendThink(text) {
     };
     thinkWrap.appendChild(toggle);
     thinkWrap.appendChild(body);
-    state.streamingAnswer.insertBefore(thinkWrap, state.streamingAnswer.firstChild);
+    state.streamingAnswer.appendChild(thinkWrap);
     state.streamingThink = body;
     state.streamingThinkText = '';
     return;
