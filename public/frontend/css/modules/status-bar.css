@@ -25,6 +25,23 @@
   color: var(--simpui-text-light);
 }
 
+#ss-model,
+#ss-tools,
+#ss-skills {
+  cursor: pointer;
+  user-select: none;
+}
+
+#ss-model {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#ss-tools:hover,
+#ss-skills:hover {
+  color: var(--accent);
+}
+
 .status-ready {
   color: var(--green);
   display: flex;
