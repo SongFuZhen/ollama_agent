@@ -70,7 +70,7 @@
 .session-actions .divider {
   width: 1px;
   height: 16px;
-  background: var(--simpui-input-border);
+  background: var(--divider);
 }
 
 #new-chat {

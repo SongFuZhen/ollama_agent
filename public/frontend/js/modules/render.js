@@ -435,7 +435,7 @@ function appendToolCall(action, params, result, root) {
 
 // 更新最后一个工具调用块的结果
 function updateToolResult(result) {
-  const toolBlocks = state.streamingAnswer?.querySelectorAll('.tool-block');
+  const toolBlocks = state.streamingSteps?.querySelectorAll('.tool-block');
   if (toolBlocks && toolBlocks.length > 0) {
     const lastBlock = toolBlocks[toolBlocks.length - 1];
     const resultEl = lastBlock.querySelector('.tool-result');

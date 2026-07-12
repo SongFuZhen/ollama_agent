@@ -25,7 +25,7 @@
 .topbar-divider {
   width: 1px;
   height: 100%;
-  background: var(--simpui-input-border);
+  background: var(--divider);
 }
 
 .brand-logo {
@@ -48,7 +48,7 @@
 .topbar-divider {
   width: 1px;
   height: 100%;
-  background: var(--simpui-input-border);
+  background: var(--divider);
   margin-left: 0;
   margin-right: 16px;
 }
@@ -105,7 +105,7 @@
 .topbar-actions .divider {
   width: 1px;
   height: 16px;
-  background: var(--simpui-input-border);
+  background: var(--divider);
 }
 
 /* 用户下拉菜单 */
@@ -182,6 +182,6 @@
 
 .dropdown-divider {
   height: 1px;
-  background: var(--simpui-input-border);
+  background: var(--divider);
   margin: 4px 0;
 }

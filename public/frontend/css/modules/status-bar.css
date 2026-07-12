@@ -55,7 +55,7 @@
 }
 
 .status-sep {
-  color: var(--simpui-input-border);
+  color: var(--divider);
 }
 
 .status-more {
