@@ -31,7 +31,7 @@
 /* 气泡 */
 .bubble {
   max-width: 80%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
   font-size: 14px;
   line-height: 1.7;
@@ -64,7 +64,11 @@
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--simpui-text-light);
+  margin-top: calc(-1 * var(--space-1));
 }
+
+.answer-footer { padding-left: var(--space-1); }
+.user-footer { padding-right: var(--space-1); }
 
 .answer-footer .role {
   font-weight: 600;
@@ -86,6 +90,7 @@
   width: 13px;
   height: 13px;
   flex-shrink: 0;
+  color: var(--simpui-text-light);
 }
 
 /* 用户发送的图片网格 */
