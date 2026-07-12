@@ -31,6 +31,8 @@ function createIcon(pascalName) {
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '1em');
+  svg.setAttribute('height', '1em');
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
   svg.setAttribute('stroke-width', '2');
@@ -63,19 +65,17 @@ function renderMarkdown(text) {
     return renderMarkdownIt(text);
   }
 
-  // 默认：marked 库渲染 markdown（保留原版）
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({
-      breaks: false,
-      gfm: true,
-    });
-    const html = marked.parse(text);
-    // DOMPurify 净化 AI 输出，阻断 XSS（模型可能返回 <script>/onerror 等）
-    return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
-  }
+  return renderWithMarked(text);
+}
 
-  // 降级处理：简单换行
-  return text.replace(/\n/g, '<br>');
+// 用 marked 渲染（DOMPurify 净化，阻断 XSS）
+function renderWithMarked(text) {
+  if (typeof marked === 'undefined') {
+    return text.replace(/\n/g, '<br>');
+  }
+  marked.setOptions({ breaks: false, gfm: true });
+  const html = marked.parse(text);
+  return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
 }
 
 // 渲染引擎二：markdown-it + highlight.js（气泡风格、代码高亮、默认 XSS 安全）
@@ -84,7 +84,7 @@ function getMarkdownIt() {
   if (_mdit) return _mdit;
   if (typeof window.markdownit === 'undefined') return null;
   _mdit = window.markdownit({
-    html: false,          // 不允许原始 HTML，防 XSS
+    html: true,           // 允许原始 HTML（随后由 DOMPurify 净化，仍安全）
     linkify: true,        // 自动识别链接
     breaks: true,         // 单换行视为 <br>，更贴聊天
     typographer: true,
@@ -107,11 +107,11 @@ function getMarkdownIt() {
 function renderMarkdownIt(text) {
   const md = getMarkdownIt();
   if (!md) {
-    // markdown-it 未加载：降级到纯文本转义
-    return text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    // markdown-it 未加载：降级到 marked（仍渲染，不转义）
+    return renderWithMarked(text);
   }
   const html = md.render(text);
-  // markdown-it 默认已禁用 html + 转义，再用 DOMPurify 兜底净化
+  // markdown-it 输出已由 DOMPurify 兜底净化，阻断 XSS
   return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
 }
 
@@ -192,13 +192,13 @@ function appendUser(text, images) {
   
   // 底部：复制 + 时间
   const footer = el('div', 'user-footer');
-  const copy = el('button', 'copy');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+  const copy = el('button', 'copy lightbtn sm');
+  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   copy.onclick = () => {
     navigator.clipboard?.writeText(text).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>已复制</span>`;
+      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
       }, 1200);
     });
   };
@@ -222,13 +222,13 @@ function appendAnswer(text) {
   const modelName = state.activeModel || state.defaultModel || 'Agent';
   footer.appendChild(el('span', 'role', modelName));
   footer.appendChild(timeSpan());
-  const copy = el('button', 'copy');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+  const copy = el('button', 'copy lightbtn sm');
+  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   copy.onclick = () => {
     navigator.clipboard?.writeText(text).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>已复制</span>`;
+      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
       }, 1200);
     });
   };
@@ -377,8 +377,8 @@ function ensureMessageContainer() {
   footer.appendChild(timeSpan());
   const stats = el('span', 'stats');
   footer.appendChild(stats);
-  const copy = el('button', 'copy');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+  const copy = el('button', 'copy lightbtn sm');
+  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   footer.appendChild(copy);
   
   m.appendChild(steps);
@@ -393,9 +393,9 @@ function ensureMessageContainer() {
   
   copy.onclick = () => {
     navigator.clipboard?.writeText(state.streamingText).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>已复制</span>`;
+      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
       setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>复制</span>`;
+        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
       }, 1200);
     });
   };

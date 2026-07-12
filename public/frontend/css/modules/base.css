@@ -73,6 +73,32 @@
   font-size: 14px;
 }
 
+/* 在 simpui 令牌之外补充的少量语义色（simpui 未提供次级表面与状态色）。
+   沿用 simpui 的明暗机制：浅色写在 :root，暗色写在 .dark，与 theme.js 对齐。 */
+:root {
+  --accent: #3b6cf6;
+  --accent-dim: rgba(59, 108, 246, .18);
+  --surface-2: #eef1f6;        /* 代码块 / 工具块底色 */
+  --border-soft: #e2e6ee;      /* 分割线 / 边框 */
+  --danger: #dc2626;
+  --warning: #b45309;
+  --warning-dim: rgba(180, 83, 9, .12);
+  --info: #0891b2;
+  --info-dim: rgba(8, 145, 178, .12);
+}
+
+.dark {
+  --accent: #3b82f6;
+  --accent-dim: rgba(59, 130, 246, .25);
+  --surface-2: #151515;
+  --border-soft: #2a2f3a;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --warning-dim: rgba(251, 191, 36, .15);
+  --info: #22d3ee;
+  --info-dim: rgba(34, 211, 238, .15);
+}
+
 /* Reset */
 *, *::before, *::after {
   box-sizing: border-box;

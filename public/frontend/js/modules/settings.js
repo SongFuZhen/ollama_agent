@@ -25,10 +25,10 @@ function settingsRoot() {
   return local || serverRootCache || null;
 }
 
-// Markdown 渲染引擎：'marked' | 'markdownit'（缺省 marked，保留原版）
+// Markdown 渲染引擎：'marked' | 'markdownit'（缺省 markdown-it，带代码高亮）
 function mdEngine() {
   const s = loadSettings();
-  return s.mdEngine === 'markdownit' ? 'markdownit' : 'marked';
+  return s.mdEngine === 'marked' ? 'marked' : 'markdownit';
 }
 
 // 设置弹窗

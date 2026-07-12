@@ -22,8 +22,8 @@
 
 /* 弹窗容器 */
 .dialog {
-  background: var(--panel);
-  border: 1px solid var(--panel-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   width: 100%;
   max-width: 480px;
@@ -40,7 +40,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--panel-3);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .dialog-title {
@@ -49,7 +49,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ash);
+  color: var(--simpui-text-dim);
 }
 
 .dialog-close {
@@ -61,14 +61,14 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--mist);
+  color: var(--simpui-text-light);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease);
 }
 
 .dialog-close:hover {
-  background: var(--panel-2);
-  color: var(--chalk);
+  background: var(--surface-2);
+  color: var(--simpui-heading-color);
 }
 
 /* 弹窗内容 */
@@ -85,7 +85,7 @@
   justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--panel-3);
+  border-top: 1px solid var(--border-soft);
 }
 
 /* 动画 */
@@ -144,9 +144,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--amber-dim);
+  background: var(--warning-dim);
   border-radius: var(--radius-full);
-  color: var(--amber);
+  color: var(--warning);
 }
 
 .confirm-icon svg {
@@ -160,13 +160,13 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ash);
+  color: var(--simpui-text-dim);
   margin-bottom: var(--space-2);
 }
 
 .confirm-message {
   font-size: 14px;
-  color: var(--ash);
+  color: var(--simpui-text-dim);
 }
 
 .confirm-actions {

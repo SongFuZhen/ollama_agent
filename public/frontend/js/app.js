@@ -262,7 +262,7 @@ function setStatus(kind, text) {
     ollamaStatusEl.textContent = text;
   }
   if (debugIconEl) {
-    debugIconEl.className = 'debug-icon';
+    debugIconEl.setAttribute('class', 'debug-icon');
     if (kind === 'ok') {
       debugIconEl.classList.add('ready');
     } else if (kind === 'error') {
@@ -602,15 +602,14 @@ function handleEvent(ev) {
       appendStep('confirm', ev.ok ? '✓ 用户已确认写入' : '✗ 用户拒绝写入');
       break;
       
-    case 'stats':
-      // 显示连接统计
-      if (state.streamingHead) {
-        const statsEl = state.streamingHead.querySelector('.stats');
-        if (statsEl) {
-          statsEl.textContent = `TTFT: ${ev.ttft}ms | 总耗时: ${ev.total}ms`;
-        }
-      }
+    case 'stats': {
+      // 显示连接统计（直接定位当前答案气泡底部，避免依赖已被清空的 streamingHead）
+      const fmt = `TTFT: ${ev.ttft}ms | 总耗时: ${ev.total}ms`;
+      const footer = document.querySelector('.msg.agent.answer-card:last-of-type .answer-footer');
+      const statsEl = footer && footer.querySelector('.stats');
+      if (statsEl) statsEl.textContent = fmt;
       break;
+    }
       
     case 'error':
       appendStep('error', '⚠ ' + ev.msg + (ev.content ? '\n' + ev.content : ''));

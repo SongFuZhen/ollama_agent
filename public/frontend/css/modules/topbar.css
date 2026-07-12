@@ -150,10 +150,19 @@
   transition: background 0.15s;
 }
 
+/* 用户按钮整体最大宽度，过长截断 */
+#user-btn {
+  display: inline-flex;
+  align-items: center;
+  max-width: 88px;
+  overflow: hidden;
+}
+
 /* 用户名（真实电脑名）过长截断，点击按钮展开下拉 */
 #user-name {
   display: inline-block;
-  max-width: 120px;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

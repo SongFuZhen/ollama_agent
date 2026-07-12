@@ -1,5 +1,4 @@
-/* file-tree.css - 文件树组件（Terminal 风格） */
-/* 设计方向：Technical Laboratory - 终端美学 */
+/* file-tree.css - 文件树组件 */
 
 .file-tree {
   flex: 1;
@@ -10,6 +9,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
+  color: var(--simpui-text-dim);
 }
 
 /* 滚动条 */
@@ -18,17 +18,17 @@
 }
 
 .file-tree::-webkit-scrollbar-thumb {
-  background: var(--panel-3);
+  background: var(--simpui-text-light);
   border-radius: 3px;
 }
 
 .file-tree::-webkit-scrollbar-thumb:hover {
-  background: var(--mist);
+  background: var(--simpui-text-dim);
 }
 
 .file-tree {
   scrollbar-width: thin;
-  scrollbar-color: var(--panel-3) transparent;
+  scrollbar-color: var(--simpui-text-light) transparent;
 }
 
 /* 树节点 */
@@ -57,34 +57,34 @@
 }
 
 .file-tree .node:hover {
-  background: var(--panel-2);
+  background: var(--simpui-focus);
 }
 
 .file-tree .node:hover::before {
-  background: var(--volt);
+  background: var(--accent);
 }
 
 .file-tree .node:active {
-  background: var(--panel-3);
+  background: var(--simpui-text-light);
 }
 
 /* 目录 */
 .file-tree .dir {
-  color: var(--chalk);
+  color: var(--simpui-text-dim);
   font-weight: 500;
 }
 
 .file-tree .dir .tree-icon {
-  color: var(--volt);
+  color: var(--accent);
 }
 
 /* 文件 */
 .file-tree .file {
-  color: var(--ash);
+  color: var(--simpui-text-light);
 }
 
 .file-tree .file .tree-icon {
-  color: var(--mist);
+  color: var(--simpui-text-light);
 }
 
 /* 图标 */
@@ -101,7 +101,7 @@
   position: relative;
 }
 
-/* 连接线（终端风格） */
+/* 连接线 */
 .file-tree .local-children::before {
   content: '';
   position: absolute;
@@ -109,12 +109,12 @@
   top: 0;
   bottom: 8px;
   width: 1px;
-  background: var(--panel-3);
+  background: var(--simpui-text-light);
 }
 
 /* 加载状态 */
 .file-tree .node.loading {
-  color: var(--mist);
+  color: var(--simpui-text-light);
   font-style: italic;
   cursor: default;
 }
@@ -123,8 +123,8 @@
 .file-tree-empty {
   padding: var(--space-6) var(--space-4);
   text-align: center;
-  color: var(--mist);
-  font-family: var(--font-body);
+  color: var(--simpui-text-light);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -133,9 +133,9 @@
   display: block;
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--panel-2);
-  border: 1px solid var(--panel-3);
+  background: var(--simpui-focus);
+  border: 1px solid var(--simpui-input-border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  color: var(--ash);
+  color: var(--simpui-text-dim);
 }

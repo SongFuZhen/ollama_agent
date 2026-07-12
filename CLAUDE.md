@@ -32,6 +32,12 @@
 
 自定义样式只能覆盖 simpui 变量或添加布局样式，不能重写组件本身。
 
+### CSS 令牌（变量）规范
+
+- 组件优先复用 simpui 令牌（`--simpui-bg`、`--simpui-focus`、`--simpui-input-border`、`--simpui-heading-color`、`--simpui-text-dim`、`--simpui-text-light` 等），禁止另起一套同名主题变量。
+- 仅当 simpui 确实缺失（如次级表面、状态色 danger/warning/info）时，才在 `base.css` 补充**极少**语义色，且按 simpui 的明暗机制定义：浅色写 `:root`、暗色写 `.dark`，与 `theme.js` 对齐。
+- 禁止用 `[data-theme="light"]` 等自建主题选择器覆盖 simpui 机制。
+
 ## 前端开发规范
 
 ### 命名规范
