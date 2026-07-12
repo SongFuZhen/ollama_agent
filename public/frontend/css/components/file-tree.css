@@ -1,0 +1,131 @@
+/* file-tree.css - 文件树组件（Terminal/Markdown 风格） */
+
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 滚动条 */
+.file-tree::-webkit-scrollbar { width: 6px; }
+.file-tree::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.file-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+.file-tree { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+/* 树节点 */
+.file-tree .node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.file-tree .node::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.1s;
+}
+
+.file-tree .node:hover {
+  background: var(--surface-2);
+}
+
+.file-tree .node:hover::before {
+  background: var(--accent);
+}
+
+.file-tree .node:active {
+  background: var(--surface-3);
+}
+
+/* 目录 */
+.file-tree .dir {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.file-tree .dir .tree-icon {
+  color: var(--accent);
+}
+
+/* 文件 */
+.file-tree .file {
+  color: var(--text-secondary);
+}
+
+.file-tree .file .tree-icon {
+  color: var(--text-muted);
+}
+
+/* 图标 */
+.tree-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* 子目录容器 */
+.file-tree .local-children {
+  padding-left: 16px;
+  position: relative;
+}
+
+/* 连接线（Markdown 树风格） */
+.file-tree .local-children::before {
+  content: '';
+  position: absolute;
+  left: 23px;
+  top: 0;
+  bottom: 8px;
+  width: 1px;
+  background: var(--border);
+}
+
+/* 加载状态 */
+.file-tree .node.loading {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+/* 空状态提示 */
+.file-tree-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.file-tree-empty code {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  font-family: inherit;
+  color: var(--text-secondary);
+}

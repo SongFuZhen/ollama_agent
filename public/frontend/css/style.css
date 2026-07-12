@@ -923,19 +923,6 @@ body {
   font-size: 13px;
   color: var(--text-dim);
 }
-.scenario-select-inline {
-  padding: 4px 8px;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 12px;
-  outline: none;
-  cursor: pointer;
-}
-.scenario-select-inline:focus {
-  border-color: var(--accent);
-}
 .toolbar-btn {
   display: flex;
   align-items: center;
@@ -1164,7 +1151,6 @@ body {
   
   /* 窄屏下输入区调整 */
   .composer { padding: 8px 10px; gap: 6px; }
-  .scenario-select { width: 90px; padding: 10px 8px; font-size: 12px; }
   #input { padding: 10px 12px; font-size: 13px; }
   .send-btn { padding: 0 16px; font-size: 13px; }
 }
