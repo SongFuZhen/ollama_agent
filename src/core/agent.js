@@ -49,10 +49,10 @@ function systemPrompt(specs) {
 }
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
-// opts: { model, scenarioKey, confirm, images }
-async function runAgent(userInput, { model, scenarioKey, confirm, images, ollamaHost, projectRoot } = {}, emitInput) {
+// opts: { model, confirm, images }
+async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot } = {}, emitInput) {
   const emit = emitInput || (() => {});
-  const specs = specsFor(scenarioKey);
+  const specs = specsFor();
   const hasTools = specs.length > 0;
   const chatOpts = ollamaHost ? { ollamaHost } : {};
   // 沙箱根：用户「选择目录」下发的目录，否则默认 PROJECT_ROOT
@@ -171,9 +171,9 @@ async function runAgent(userInput, { model, scenarioKey, confirm, images, ollama
 
     emit({ type: 'thought', step, content: text.trim() });
 
-    // 白名单校验：越权工具直接拒绝
-    if (!isAllowed(scenarioKey, call.action)) {
-      emit({ type: 'error', step, msg: '工具不在本场景白名单，已拒绝: ' + call.action });
+    // 白名单校验：未知工具直接拒绝
+    if (!isAllowed(call.action)) {
+      emit({ type: 'error', step, msg: '工具不存在，已拒绝: ' + call.action });
       messages.push({ role: 'assistant', content: text });
       messages.push({ role: 'user', content: `工具 ${call.action} 不可用，请改用可用工具或回答。` });
       continue;

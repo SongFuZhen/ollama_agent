@@ -217,12 +217,9 @@ function appendAnswer(text) {
   bindImagePreview(bubble); // markdown 内图片点击预览
   
   // 底部：模型名 + 时间 + 复制
-  // 模型名优先使用设置里的覆盖值，与状态栏保持一致
+  // 模型名优先使用下拉选中的模型，否则用后端默认
   const footer = el('div', 'answer-footer');
-  const scenario = state.activeScenario;
-  const scModel = state.scenarios[scenario]?.model;
-  const override = state.activeModel;
-  const modelName = override || (typeof modelFor === 'function' ? modelFor(scenario) : null) || scModel || 'Agent';
+  const modelName = state.activeModel || state.defaultModel || 'Agent';
   footer.appendChild(el('span', 'role', modelName));
   footer.appendChild(timeSpan());
   const copy = el('button', 'copy');
@@ -373,12 +370,9 @@ function ensureMessageContainer() {
   const bubble = elMarkdownBubble();
   
   // 底部：模型名 + 时间 + 统计 + 复制
-  // 模型名优先使用设置里的覆盖值，与状态栏保持一致
+  // 模型名优先使用下拉选中的模型，否则用后端默认
   const footer = el('div', 'answer-footer');
-  const scenario2 = state.activeScenario;
-  const scModel2 = state.scenarios[scenario2]?.model;
-  const override2 = state.activeModel;
-  const modelName = override2 || (typeof modelFor === 'function' ? modelFor(scenario2) : null) || scModel2 || 'Agent';
+  const modelName = state.activeModel || state.defaultModel || 'Agent';
   footer.appendChild(el('span', 'role', modelName));
   footer.appendChild(timeSpan());
   const stats = el('span', 'stats');
@@ -438,9 +432,7 @@ function finalizeAnswer(content) {
   clearToolLoading();
   
   // 保存对话到数据库
-  if (state.activeScenario) {
-    saveConversation(state.activeScenario);
-  }
+  saveConversation();
 }
 
 // ---------- 写操作确认卡片（每次单独确认） ----------

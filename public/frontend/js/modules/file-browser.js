@@ -201,21 +201,19 @@ function loadLocalTree(fileList) {
   // 本地浏览仅用于插入路径；浏览器无法获取本地目录绝对路径，
   // 故不覆盖 state.currentProjectRoot（那是模型沙箱的绝对根）。
   // 若已有绝对沙箱根，同步刷新对话绑定的 project_root
-  const scenario = state.activeScenario;
-  const convId = state.conversationIds[scenario];
+  const convId = state.conversationId;
   if (convId && state.currentProjectRoot && isAbs(state.currentProjectRoot)) {
     fetch('/api/conversation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: convId,
-        scenario: scenario,
         projectRoot: state.currentProjectRoot,
       }),
     }).catch(e => console.error('更新对话目录失败:', e));
   } else if (!convId) {
     // 新对话，生成新 ID
-    state.conversationIds[scenario] = generateConvId();
+    state.conversationId = generateConvId();
   }
   
   const tree = buildLocalTree(fileList);
@@ -297,13 +295,12 @@ async function bindAbsoluteRoot(raw) {
     // 绑定成功：作为当前会话沙箱根（绝对路径，可持久化）
     state.currentProjectRoot = path;
     browseRoot = null; // 退出本地浏览模式
-    const scenario = state.activeScenario;
-    const convId = state.conversationIds[scenario];
+    const convId = state.conversationId;
     if (convId) {
       fetch('/api/conversation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: convId, scenario, projectRoot: path }),
+        body: JSON.stringify({ id: convId, projectRoot: path }),
       }).catch(e => console.error('绑定目录保存失败:', e));
     }
     fileTreeEl.dataset.empty = '';

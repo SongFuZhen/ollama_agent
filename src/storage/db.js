@@ -29,7 +29,6 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       device_id TEXT,
-      scenario TEXT NOT NULL,
       title TEXT DEFAULT '',
       project_root TEXT DEFAULT '',
       created_at INTEGER NOT NULL,
@@ -47,7 +46,6 @@ async function initDB() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_conversations_scenario ON conversations(scenario);
     CREATE INDEX IF NOT EXISTS idx_conversations_device ON conversations(device_id);
   `);
 
@@ -56,6 +54,12 @@ async function initDB() {
   const hasProjectRoot = columns.some(c => c.name === 'project_root');
   if (!hasProjectRoot) {
     db.exec("ALTER TABLE conversations ADD COLUMN project_root TEXT DEFAULT ''");
+  }
+
+  // 迁移：移除已废弃的 scenario 字段（若尚未清理）
+  if (columns.some(c => c.name === 'scenario')) {
+    db.exec("DROP INDEX IF EXISTS idx_conversations_scenario");
+    db.exec("ALTER TABLE conversations DROP COLUMN scenario");
   }
 
   // 迁移：添加 tools 字段到 messages 表（如果不存在）
@@ -86,12 +90,12 @@ function getDB() {
 }
 
 // 创建对话
-function createConversation(id, scenario, title = '', projectRoot = '') {
+function createConversation(id, title = '', projectRoot = '') {
   const now = Date.now();
   return getDB().prepare(`
-    INSERT INTO conversations (id, scenario, title, project_root, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, scenario, title, projectRoot, now, now);
+    INSERT INTO conversations (id, title, project_root, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, title, projectRoot, now, now);
 }
 
 // 更新对话标题
@@ -136,14 +140,13 @@ function getMessages(conversationId) {
   }));
 }
 
-// 获取场景下的所有对话
-function getConversations(scenario) {
+// 获取全部对话
+function getConversations() {
   return getDB().prepare(`
-    SELECT id, scenario, title, project_root, created_at, updated_at
+    SELECT id, title, project_root, created_at, updated_at
     FROM conversations
-    WHERE scenario = ?
     ORDER BY updated_at DESC
-  `).all(scenario);
+  `).all();
 }
 
 // 删除对话
@@ -155,7 +158,7 @@ function deleteConversation(id) {
 // 获取单个对话
 function getConversation(id) {
   return getDB().prepare(`
-    SELECT id, scenario, title, project_root, created_at, updated_at
+    SELECT id, title, project_root, created_at, updated_at
     FROM conversations WHERE id = ?
   `).get(id);
 }

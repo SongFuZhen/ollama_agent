@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/css/modules/input.css">
   <link rel="stylesheet" href="/css/modules/modal.css">
   <link rel="stylesheet" href="/css/modules/responsive.css">
+  <link rel="stylesheet" href="/css/components/file-tree.css">
   <link rel="stylesheet" href="/lib/typeset/typeset.css">
   <link rel="stylesheet" href="/lib/simpui/css/simpui.css">
   <link rel="stylesheet" href="/lib/simpui/css/simpicker.css">
@@ -104,7 +105,7 @@
         <!-- 空状态 -->
         <div id="empty" class="empty">
           <h2>开始一个新任务</h2>
-          <p class="empty-sub">第一步：选择沙箱目录并绑定到本次对话，模型只能读取该目录下的文件。</p>
+          <p class="empty-sub">选择沙箱目录并绑定到本次对话，模型只能读取该目录下的文件。</p>
           <div class="empty-root">
             <div class="empty-root-row">
               <input id="empty-root-input" class="simpui-input" type="text" placeholder="粘贴绝对路径，或点击右侧选择目录">
@@ -134,18 +135,6 @@
                 <button class="simpui-btn" type="button" data-close>取消</button>
               </div>
             </div>
-          </div>
-          <p class="empty-sub">第二步：选择一个示例快速开始，或直接在下方输入问题。</p>
-          <div class="empty-cards">
-            <button class="simpui-btn" data-prompt="阅读 src/server.js，解释它的路由结构">
-              <i data-lucide="code" class="eg-icon"></i> 解释一段代码
-            </button>
-            <button class="simpui-btn" data-prompt="为什么 agent 在调用工具后没有返回答案？帮我排查">
-              <i data-lucide="bug" class="eg-icon"></i> 排查一个 bug
-            </button>
-            <button class="simpui-btn" data-prompt="用一句话概括当前项目在做什么">
-              <i data-lucide="message-circle" class="eg-icon"></i> 通用问答
-            </button>
           </div>
         </div>
         <div id="messages" class="messages"></div>

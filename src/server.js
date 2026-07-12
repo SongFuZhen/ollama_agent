@@ -9,7 +9,7 @@ const { runAgent } = require('./core/agent');
 const { listModels } = require('./core/ollama');
 const { safeResolve, allSpecs } = require('./tools/index');
 const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./storage/rootstore');
-const { PROJECT_ROOT, PORT, SCENARIOS, OLLAMA_HOST } = require('./config');
+const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST } = require('./config');
 const db = require('./storage/db');
 const { getDeviceId, getDevice } = require('./device/device');
 
@@ -153,12 +153,11 @@ function handleChat(req, res) {
     try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); }
     catch (e) { aborted = true; }
   };
-  send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, scenarios: SCENARIOS, tools: allSpecs() });
+  send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs() });
 
   readBody(req).then(async (body) => {
-    const { message, scenario, images, model: bodyModel, ollamaHost, projectRoot } = body;
-    const sc = SCENARIOS[scenario] || SCENARIOS.general;
-    const model = bodyModel || sc.model; // 前端可覆盖模型名
+    const { message, images, model: bodyModel, ollamaHost, projectRoot } = body;
+    const model = bodyModel || DEFAULT_MODEL; // 前端可覆盖模型名
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
     // 解析生效的项目根：前端下发的绝对路径优先（校验有效才用），否则用持久化/默认沙箱
@@ -179,7 +178,7 @@ function handleChat(req, res) {
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model, scenarioKey: sc.key, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot }, send)
+    runAgent(message, { model, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
@@ -198,24 +197,15 @@ function handleConfirm(req, res) {
 
 function handlePreflight(res, userHost) {
   const host = userHost || OLLAMA_HOST;
-  // 预先构造场景状态；即使 Ollama 不可达，也要把默认模型名下发给前端
-  const scenarioStatus = {};
-  for (const k of Object.keys(SCENARIOS)) {
-    scenarioStatus[k] = { model: SCENARIOS[k].model, ready: false };
-  }
   listModels(host)
     .then((models) => {
       const names = models.map((m) => m.name);
-      // 逐个场景报告模型是否就绪
-      for (const k of Object.keys(SCENARIOS)) {
-        scenarioStatus[k].ready = names.includes(SCENARIOS[k].model);
-      }
       sendJSON(res, 200, {
         node: process.version,
         ollama: 'ok',
         ollamaHost: host,
         models: names,
-        scenarios: scenarioStatus,
+        defaultModel: DEFAULT_MODEL,
         projectRoot: PROJECT_ROOT,
       });
     })
@@ -224,13 +214,13 @@ function handlePreflight(res, userHost) {
       ollama: 'unreachable',
       ollamaHost: host,
       error: e.message,
-      scenarios: scenarioStatus,
+      defaultModel: DEFAULT_MODEL,
       projectRoot: PROJECT_ROOT,
     }));
 }
 
 function handleConfig(res) {
-  sendJSON(res, 200, { scenarios: SCENARIOS, ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT, tools: allSpecs() });
+  sendJSON(res, 200, { ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT, tools: allSpecs() });
 }
 
 // 项目根目录：GET 返回当前生效的根（含是否持久化有效）；POST 校验并持久化
@@ -478,10 +468,7 @@ function parseBody(req) {
 }
 
 async function handleGetConversations(req, res) {
-  const urlObj = new URL(req.url, 'http://x');
-  const scenario = urlObj.searchParams.get('scenario');
-  if (!scenario) return sendJSON(res, 400, { error: 'scenario required' });
-  const conversations = db.getConversations(scenario);
+  const conversations = db.getConversations();
   sendJSON(res, 200, conversations);
 }
 
@@ -496,12 +483,12 @@ async function handleGetConversation(req, res) {
 
 async function handleSaveConversation(req, res) {
   try {
-    const { id, scenario, title, projectRoot, messages } = await parseBody(req);
-    if (!id || !scenario) return sendJSON(res, 400, { error: 'id and scenario required' });
+    const { id, title, projectRoot, messages } = await parseBody(req);
+    if (!id) return sendJSON(res, 400, { error: 'id required' });
     
     const existing = db.getConversation(id);
     if (!existing) {
-      db.createConversation(id, scenario, title || '', projectRoot || '');
+      db.createConversation(id, title || '', projectRoot || '');
     } else {
       if (title) db.updateConversationTitle(id, title);
       // 更新 project_root（如果提供了新值）
@@ -557,10 +544,8 @@ db.initDB().then(() => {
     console.log('设备 ID: ' + deviceId);
     console.log('设备信息: ' + deviceInfo.username + '@' + deviceInfo.hostname);
     console.log('项目根目录(沙箱): ' + PROJECT_ROOT);
+    console.log('默认模型: ' + DEFAULT_MODEL);
     console.log('数据库: 已连接');
-    for (const k of Object.keys(SCENARIOS)) {
-      console.log('场景[' + SCENARIOS[k].label + '] -> ' + SCENARIOS[k].model);
-    }
     startHotwatch();
   });
 }).catch(err => {

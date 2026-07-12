@@ -3,11 +3,11 @@
 /* api.js - API 调用和数据存储 */
 
 // ---------- 对话存储 API ----------
-async function saveConversation(scenarioKey) {
-  const session = state.sessions[scenarioKey];
+async function saveConversation() {
+  const session = state.session;
   if (!session) return;
   
-  const convId = state.conversationIds[scenarioKey];
+  const convId = state.conversationId;
   if (!convId) return;
   
   // 收集消息（包含思考链、工具调用、图片）
@@ -69,7 +69,7 @@ async function saveConversation(scenarioKey) {
   if (messages.length === 0) return;
   
   // 标题优先用用户编辑过的对话名称，否则从首条用户消息截取
-  const editedTitle = state.conversationTitles[scenarioKey];
+  const editedTitle = state.conversationTitle;
   const firstUserMsg = messages.find(m => m.role === 'user');
   const autoTitle = firstUserMsg ? firstUserMsg.content.slice(0, 50) : '';
   const title = (editedTitle && editedTitle.trim()) ? editedTitle.trim() : autoTitle;
@@ -84,7 +84,6 @@ async function saveConversation(scenarioKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: convId,
-        scenario: scenarioKey,
         title,
         projectRoot,
         messages,
@@ -95,9 +94,9 @@ async function saveConversation(scenarioKey) {
   }
 }
 
-async function loadConversations(scenarioKey) {
+async function loadConversations() {
   try {
-    const res = await fetch(`/api/conversations?scenario=${scenarioKey}`);
+    const res = await fetch('/api/conversations');
     return await res.json();
   } catch (e) {
     console.error('加载对话列表失败:', e);
@@ -120,21 +119,7 @@ async function loadConfig() {
   try {
     const r = await fetch('/api/config');
     const d = await r.json();
-    state.scenarios = {};
-    for (const k of Object.keys(d.scenarios || {})) {
-      const sc = d.scenarios[k];
-      const saved = modelFor(k);
-      state.scenarios[k] = {
-        label: SCENARIO_LABELS[k] || sc.label || k,
-        model: saved || sc.model,
-        ready: null,
-      };
-    }
-    // 设置模型输入框的占位提示
-    $('#set-coder').placeholder = scenarioDefault('coder');
-    $('#set-debug').placeholder = scenarioDefault('debug');
-    $('#set-general').placeholder = scenarioDefault('general');
-    $('#set-vision').placeholder = scenarioDefault('vision');
+    state.defaultModel = d.defaultModel || null;
     state.tools = Array.isArray(d.tools) ? d.tools : [];
   } catch (e) { console.error('loadConfig failed', e); }
 }
@@ -151,35 +136,26 @@ async function preflight() {
     const oh = ollamaHost();
     const r = await fetch('/api/preflight' + (oh ? '?ollamaHost=' + encodeURIComponent(oh) : ''));
     const d = await r.json();
-    // 用后端下发的场景配置初始化标签（带就绪状态），即使 Ollama 不可达也要渲染标签
-    // 模型名优先用用户在设置里保存的值（modelFor），否则用后端默认；就绪状态以后端为准
-    state.scenarios = {};
+    
     const installed = Array.isArray(d.models) ? d.models : [];
     state.installedModels = installed;
-    const isInstalled = (m) => installed.some((n) => n === m || n === m + ':latest' || n === 'latest');
-    for (const k of Object.keys(d.scenarios || {})) {
-      const s = d.scenarios[k];
-      const saved = modelFor(k);
-      const model = saved || s.model;
-      // 就绪状态以「已安装列表」为准：后端默认或用户自定义模型都行
-      const ready = installed.length ? isInstalled(model) : s.ready;
-      state.scenarios[k] = {
-        label: SCENARIO_LABELS[k] || k,
-        model,
-        ready,
-      };
-    }
-    if (!state.activeScenario) {
-      const firstReady = Object.keys(state.scenarios).find((k) => state.scenarios[k].ready);
-      state.activeScenario = firstReady || Object.keys(state.scenarios)[0];
+    state.defaultModel = d.defaultModel || null;
+    
+    // 初始化会话
+    if (!state.session) {
+      mountSession();
     }
     renderModelDropdown();
-    updateSceneName();
-    mountSession(state.activeScenario);
 
     // 记录服务端默认沙箱根用于顶栏显示
     if (d.projectRoot) state.serverDefaultRoot = d.projectRoot;
     if (typeof updateProjectRootUI === 'function') updateProjectRootUI();
+
+    // 把默认沙箱地址填入空状态的输入框
+    const emptyRootInput = document.getElementById('empty-root-input');
+    if (emptyRootInput && d.projectRoot && !emptyRootInput.value) {
+      emptyRootInput.value = d.projectRoot;
+    }
 
     if (typeof updateFilePanelState === 'function') updateFilePanelState(); // 按是否有根决定加载树或显示提示
 
@@ -187,8 +163,6 @@ async function preflight() {
       setStatus('warn', '⚠ Ollama 不可达 (' + (d.ollamaHost || '') + '): ' + (d.error || ''));
       return;
     }
-    const readyList = Object.entries(state.scenarios)
-      .filter(([, v]) => v.ready).map(([, v]) => v.model);
     // 优先用左侧文件面板实际绑定的项目目录（currentProjectRoot），与文件树保持一致
     const root = state.currentProjectRoot || (typeof effectiveRoot === 'function' ? effectiveRoot() : null) || d.projectRoot || '';
     setStatus('ok', `就绪 | Node ${d.node} | Ollama: ${d.ollamaHost || '?'} | 根: ${root || '未绑定'}`);

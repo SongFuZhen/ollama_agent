@@ -2,7 +2,6 @@
 
 /* =========================================================================
  * Ason Agent — 前端主入口
- * 三个场景标签页（代码 / 排查 / 通用），各自独立会话，共享同一沙箱工具箱。
  * 通过 SSE 接收后端的 Agent 执行过程并实时渲染。
  * ========================================================================= */
 
@@ -13,7 +12,6 @@ const sendBtn = $('#send');
 const statusEl = $('#status');
 const statusTextEl = statusEl.querySelector('.status-text');
 const emptyEl = $('#empty');
-const sceneNameEl = $('#scene-name');
 const convNameEl = $('#conv-name');
 const sessionStateEl = $('#session-state');
 const userNameEl = $('#user-name');
@@ -62,11 +60,9 @@ function closeDrawer() {
 }
 
 async function loadHistoryList() {
-  if (!state.activeScenario) return;
-
   historyList.innerHTML = '<div class="history-loading"><span class="spin"></span>加载中…</div>';
   try {
-    const res = await fetch(`/api/conversations?scenario=${state.activeScenario}`);
+    const res = await fetch('/api/conversations');
     const conversations = await res.json();
 
     if (conversations.length === 0) {
@@ -107,8 +103,7 @@ async function loadHistoryList() {
 async function loadHistoryConversation(convId) {
   // 加载中：在会话区显示占位，避免空白或旧内容闪烁
   emptyEl.style.display = 'none';
-  const session = state.sessions[state.activeScenario];
-  if (session) session.innerHTML = '<div class="history-conv-loading"><span class="spin"></span>加载对话中…</div>';
+  if (state.session) state.session.innerHTML = '<div class="history-conv-loading"><span class="spin"></span>加载对话中…</div>';
   closeDrawer();
   try {
     const res = await fetch(`/api/conversation/${convId}`);
@@ -120,18 +115,16 @@ async function loadHistoryConversation(convId) {
     }
 
     // 清空当前会话
-    const scenario = state.activeScenario;
-    const sess = state.sessions[scenario];
-    if (sess) sess.innerHTML = '';
+    if (state.session) state.session.innerHTML = '';
 
     // 设置对话 ID
-    state.conversationIds[scenario] = convId;
+    state.conversationId = convId;
     syncUrl();
 
     // 恢复对话名称（历史中保存的标题）
     const savedTitle = data.title || '';
-    state.conversationTitles[scenario] = savedTitle;
-    if (convNameEl && scenario === state.activeScenario) {
+    state.conversationTitle = savedTitle;
+    if (convNameEl) {
       convNameEl.value = savedTitle;
     }
 
@@ -242,10 +235,9 @@ if (deleteConfirmBtn) {
     closeDeleteConfirm();
     if (!id) return;
     // 若正在查看该对话，先清空当前会话
-    if (state.conversationIds[state.activeScenario] === id) {
-      const sess = state.sessions[state.activeScenario];
-      if (sess) sess.innerHTML = '';
-      state.conversationIds[state.activeScenario] = generateConvId();
+    if (state.conversationId === id) {
+      if (state.session) state.session.innerHTML = '';
+      state.conversationId = generateConvId();
       showEmptyIfEmpty();
     }
     try {
@@ -269,16 +261,15 @@ function setStatus(kind, text) {
 // ---------- 空状态 ----------
 function hideEmpty() { emptyEl.style.display = 'none'; }
 function showEmptyIfEmpty() {
-  const session = state.sessions[state.activeScenario];
-  const has = session && session.childElementCount > 0;
+  const has = state.session && state.session.childElementCount > 0;
   emptyEl.style.display = has ? 'none' : 'flex';
 }
 
 // ---------- 对话名称（可编辑，保存到历史） ----------
-// 更新当前场景的对话名称（仅更新 UI 与状态，落库由 save/blur 触发）
-function setConvName(key, title) {
-  state.conversationTitles[key] = title || '';
-  if (key === state.activeScenario && convNameEl && document.activeElement !== convNameEl) {
+// 更新当前对话名称（仅更新 UI 与状态，落库由 save/blur 触发）
+function setConvName(title) {
+  state.conversationTitle = title || '';
+  if (convNameEl && document.activeElement !== convNameEl) {
     convNameEl.value = title || '';
   }
 }
@@ -293,10 +284,9 @@ function renameConversation(id, title) {
 }
 if (convNameEl) {
   const commit = () => {
-    const key = state.activeScenario;
     const val = convNameEl.value.trim();
-    setConvName(key, val);
-    renameConversation(state.conversationIds[key], val);
+    setConvName(val);
+    renameConversation(state.conversationId, val);
   };
   // 失焦时保存
   convNameEl.addEventListener('blur', commit);
@@ -307,10 +297,10 @@ if (convNameEl) {
 }
 
 // ---------- URL 会话持久化（刷新/分享不丢失） ----------
-// 把当前激活场景的对话 ID 写进 hash：#/session/<id>
+// 把当前对话 ID 写进 hash：#/session/<id>
 let _urlSyncLock = false;
 function syncUrl() {
-  const id = state.conversationIds[state.activeScenario];
+  const id = state.conversationId;
   if (!id) return;
   const target = '#/session/' + id;
   if (location.hash === target) return;
@@ -336,25 +326,20 @@ async function openSessionById(id) {
     return false;
   }
 }
-// 示例卡点击即填入输入框
-document.querySelectorAll('.eg-card').forEach((c) => {
-  c.onclick = () => { inputEl.value = c.dataset.prompt; inputEl.focus(); autoResizeInput(); };
-});
-// 新对话：清空当前场景会话
+// 新对话：清空当前会话
 $('#new-chat').onclick = () => {
   // 中止进行中的请求并复位忙碌态，避免输入框/发送按钮卡死
   abortCurrentRequest();
   setBusy(false);
 
-  const s = state.sessions[state.activeScenario];
-  if (s) s.innerHTML = '';
+  if (state.session) state.session.innerHTML = '';
   messagesEl.innerHTML = '';
-  if (s) messagesEl.appendChild(s);
+  if (state.session) messagesEl.appendChild(state.session);
   // 清除项目目录绑定，生成新对话 ID（新对话回退到默认沙箱根）
   state.currentProjectRoot = effectiveRoot();
-  state.conversationIds[state.activeScenario] = generateConvId();
-  state.conversationTitles[state.activeScenario] = '';
-  setConvName(state.activeScenario, '');
+  state.conversationId = generateConvId();
+  state.conversationTitle = '';
+  setConvName('');
   updateProjectRootUI();
   syncUrl();
   resetSessionStats();
@@ -363,27 +348,24 @@ $('#new-chat').onclick = () => {
 };
 
 // ---------- 消息流渲染 ----------
-// 切换场景时，把对应会话的 DOM 挂回主区域
-function mountSession(key) {
+function mountSession() {
   messagesEl.innerHTML = '';
-  if (!state.sessions[key]) {
-    state.sessions[key] = el('div', 'session');
+  if (!state.session) {
+    state.session = el('div', 'session');
   }
   // 确保有对话 ID
-  if (!state.conversationIds[key]) {
-    state.conversationIds[key] = generateConvId();
+  if (!state.conversationId) {
+    state.conversationId = generateConvId();
   }
-  // 启动阶段由 hash 恢复接管，避免覆盖 URL；启动完成后切换场景时同步
   if (state.bootDone) syncUrl();
-  messagesEl.appendChild(state.sessions[key]);
-  if (sceneNameEl) sceneNameEl.textContent = state.scenarios[key]?.label || '对话';
+  messagesEl.appendChild(state.session);
   // 同步可编辑的对话名称
   if (convNameEl) {
-    convNameEl.value = state.conversationTitles[key] || '';
+    convNameEl.value = state.conversationTitle || '';
     convNameEl.placeholder = '新对话';
   }
   // 已有消息的历史会话：以当前时间为起点近似计时
-  const hasMsgs = state.sessions[key] && state.sessions[key].querySelectorAll('.msg').length > 0;
+  const hasMsgs = state.session && state.session.querySelectorAll('.msg').length > 0;
   state.sessionStats.startTs = hasMsgs ? Date.now() : null;
   renderSessionState();
   showEmptyIfEmpty();
@@ -413,7 +395,7 @@ if (scrollBottomBtn) {
 }
 
 function appendToActive(node) {
-  const box = state.sessions[state.activeScenario] || messagesEl;
+  const box = state.session || messagesEl;
   box.appendChild(node);
   hideEmpty();
   scrollDown();
@@ -482,19 +464,17 @@ function formatElapsed(ms) {
 // 渲染对话框下方的会话状态栏
 function renderSessionState() {
   if (!sessionStateEl) return;
-  const sc = state.scenarios[state.activeScenario] || {};
-  const model = state.activeModel || modelFor(state.activeScenario) || sc.model || '—';
+  const model = state.activeModel || state.defaultModel || '—';
   const root = effectiveRoot();
   const dirName = root ? lastSeg(root) : '默认沙箱';
   const branch = state.gitBranch ? ` <em>git:(${escapeHtml(state.gitBranch)})</em>` : '';
-  const id = (state.conversationIds[state.activeScenario] || '').slice(0, 12) || '—';
+  const id = (state.conversationId || '').slice(0, 12) || '—';
   const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
   const counts = state.sessionStats.toolCounts || {};
   const toolStr = Object.keys(counts).length
     ? Object.entries(counts).map(([k, v]) => `✓ ${escapeHtml(k)} ×${v}`).join('  ')
     : '无工具调用';
-  const sess = state.sessions[state.activeScenario];
-  const msgCount = sess ? sess.querySelectorAll('.msg').length : 0;
+  const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
 
   sessionStateEl.innerHTML = `
     <div class="ss-line">
@@ -516,17 +496,15 @@ function renderSessionState() {
 
 // 组装状态详情文本（用于弹框展示）
 function buildStateDetail() {
-  const sc = state.scenarios[state.activeScenario] || {};
-  const model = state.activeModel || modelFor(state.activeScenario) || sc.model || '—';
+  const model = state.activeModel || state.defaultModel || '—';
   const root = effectiveRoot();
-  const id = state.conversationIds[state.activeScenario] || '—';
+  const id = state.conversationId || '—';
   const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
   const counts = state.sessionStats.toolCounts || {};
   const toolLines = Object.keys(counts).length
     ? Object.entries(counts).map(([k, v]) => `  ${k} ×${v}`).join('\n')
     : '  无';
-  const sess = state.sessions[state.activeScenario];
-  const msgCount = sess ? sess.querySelectorAll('.msg').length : 0;
+  const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
   return `模型: ${model}
 目录: ${root || '默认沙箱'}${state.gitBranch ? '\n分支: ' + state.gitBranch : ''}
 会话 ID: ${id}
@@ -572,7 +550,6 @@ async function fetchGitBranch(root) {
 function handleEvent(ev) {
   switch (ev.type) {
     case 'meta':
-      state.scenarios = ev.scenarios || {};
       state.tools = Array.isArray(ev.tools) ? ev.tools : [];
       break;
       
@@ -726,8 +703,7 @@ async function send() {
   if (state.busy) return;
   if (!text && pendingImages.length === 0) return; // 文+图至少一项
 
-  const scenario = state.activeScenario;
-  const convId = state.conversationIds[scenario];
+  const convId = state.conversationId;
 
   const imgs = pendingImages.slice();
   inputEl.value = '';
@@ -755,14 +731,13 @@ async function send() {
   setBusy(true);
 
   // 首次输入时保存对话
-  const session = state.sessions[scenario];
-  const msgCount = session ? session.querySelectorAll('.msg').length : 0;
+  const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
   if (msgCount <= 1) {
     // 第一条用户消息，保存对话
-    await saveConversation(scenario);
+    await saveConversation();
   }
 
-  const body = { message: text, scenario, images: imgs.map((i) => i.b64) };
+  const body = { message: text, images: imgs.map((i) => i.b64) };
   if (state.activeModel) body.model = state.activeModel;    // 下拉选中的模型
   const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
 
@@ -905,12 +880,7 @@ function setActiveModel(model) {
   renderSessionState();
 }
 
-function updateSceneName() {
-  const sc = state.scenarios[state.activeScenario];
-  if (sceneNameEl && sc) {
-    sceneNameEl.textContent = sc.label;
-  }
-}
+
 
 // ---------- 输入框自适应高度（最多约 4 行，超出滚动） ----------
 function autoResizeInput() {
@@ -968,7 +938,7 @@ async function afterBoot() {
   window.addEventListener('hashchange', async () => {
     if (_urlSyncLock) { _urlSyncLock = false; return; } // 忽略自身写入触发的 hashchange
     const hid = parseSessionIdFromHash();
-    if (hid && hid !== state.conversationIds[state.activeScenario]) {
+    if (hid && hid !== state.conversationId) {
       const ok = await openSessionById(hid);
       if (!ok) history.replaceState(null, '', location.pathname + location.search);
     } else if (!hid) {

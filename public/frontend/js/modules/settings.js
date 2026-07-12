@@ -14,14 +14,6 @@ function saveSettings(s) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
 }
 
-// 取某场景的模型名（前端覆盖优先，否则用后端默认）
-function modelFor(scenarioKey) {
-  const s = loadSettings();
-  const map = { coder: s.coder, debug: s.debug, general: s.general, vision: s.vision };
-  const v = map[scenarioKey];
-  return v && v.trim() ? v.trim() : null; // null => 用后端默认
-}
-
 function ollamaHost() {
   const s = loadSettings();
   return s.ollama && s.ollama.trim() ? s.ollama.trim() : DEFAULT_OLLAMA_HOST;
@@ -39,10 +31,6 @@ function mdEngine() {
   return s.mdEngine === 'markdownit' ? 'markdownit' : 'marked';
 }
 
-function scenarioDefault(key) {
-  return state.scenarios[key]?.model || '';
-}
-
 // 设置弹窗
 const settingsBtn = $('#settings-btn');
 const settingsModal = $('#settings-modal');
@@ -54,10 +42,6 @@ settingsBtn.onclick = () => {
   $('#set-ollama').value = s.ollama || DEFAULT_OLLAMA_HOST;
   $('#set-root').value = s.root || serverRootCache || '';
   $('#set-md-engine').value = mdEngine();
-  $('#set-coder').value = s.coder || scenarioDefault('coder');
-  $('#set-debug').value = s.debug || scenarioDefault('debug');
-  $('#set-general').value = s.general || scenarioDefault('general');
-  $('#set-vision').value = s.vision || scenarioDefault('vision');
   settingsModal.classList.remove('hidden');
 };
 
@@ -69,13 +53,9 @@ settingsSave.onclick = async () => {
     ollama: $('#set-ollama').value,
     root: rootVal,
     mdEngine: $('#set-md-engine').value,
-    coder: $('#set-coder').value,
-    debug: $('#set-debug').value,
-    general: $('#set-general').value,
-    vision: $('#set-vision').value,
   };
   saveSettings(s);
-  // 模型下拉由 Ollama 已安装列表驱动，不随设置页的模型覆盖变动，这里仅刷新状态栏
+  // 刷新状态栏
   if (typeof renderSessionState === 'function') renderSessionState();
   // 服务端持久化 + 校验项目根目录
   let serverMsg = '';
@@ -88,6 +68,6 @@ settingsSave.onclick = async () => {
   setTimeout(() => {
     settingsModal.classList.add('hidden');
     $('#settings-msg').textContent = '';
-    preflight(); // 地址/模型变更后刷新状态栏（以服务端就绪状态为准）
+    preflight(); // 地址变更后刷新状态栏（以服务端就绪状态为准）
   }, 600);
 };
