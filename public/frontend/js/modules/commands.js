@@ -303,3 +303,7 @@ function clearChat() {
   if (newChatBtn) newChatBtn.click();
   showSimpuiToast('已清空', '当前对话已清空');
 }
+
+// 导出供状态栏点击使用
+window.showTools = showTools;
+window.showSkills = showSkills;

@@ -22,7 +22,20 @@ const ssModelEl = $('#ss-model');
 const ssCharsEl = $('#ss-chars');
 const ssDirEl = $('#ss-dir');
 const ssToolsEl = $('#ss-tools');
+const ssSkillsEl = $('#ss-skills');
 const ssMoreEl = $('#ss-more');
+
+// 状态栏点击事件：打开工具/技能列表
+if (ssToolsEl) {
+  ssToolsEl.addEventListener('click', () => {
+    if (typeof showTools === 'function') showTools();
+  });
+}
+if (ssSkillsEl) {
+  ssSkillsEl.addEventListener('click', () => {
+    if (typeof showSkills === 'function') showSkills();
+  });
+}
 
 // 下拉菜单切换
 if (userDropdown) {
@@ -492,13 +505,19 @@ function renderSessionState() {
   const dirName = root ? lastSeg(root) : '默认沙箱';
   const counts = state.sessionStats.toolCounts || {};
   const toolCount = Object.keys(counts).length;
+  const skillCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'skill').length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
 
   if (ssModelEl) ssModelEl.textContent = model;
   if (ssCharsEl) ssCharsEl.textContent = msgCount + ' 字';
   if (ssDirEl) ssDirEl.textContent = dirName;
   if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
+  if (ssSkillsEl) ssSkillsEl.textContent = 'Skills: ' + skillCount;
 }
+
+// 状态栏点击事件
+if (ssToolsEl) ssToolsEl.addEventListener('click', showTools);
+if (ssSkillsEl) ssSkillsEl.addEventListener('click', showSkills);
 
 // 组装状态详情文本（用于弹框展示）
 function buildStateDetail() {
@@ -916,6 +935,13 @@ renderSessionState();
 // 状态栏：点击弹出详情弹框
 if (ssMoreEl) {
   ssMoreEl.onclick = openStateModal;
+}
+// 状态栏：点击模型名称打开模型切换弹框（效果同 /models）
+if (ssModelEl) {
+  ssModelEl.style.cursor = 'pointer';
+  ssModelEl.onclick = () => {
+    if (typeof showModels === 'function') showModels();
+  };
 }
 // 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
 const stateModalClose = $('#state-modal-close');
