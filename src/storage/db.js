@@ -81,6 +81,12 @@ async function initDB() {
     db.exec("ALTER TABLE messages ADD COLUMN images TEXT DEFAULT NULL");
   }
 
+  // 迁移：添加 stats 字段到 messages 表（TTFT / 总耗时，如果不存在）
+  const hasStats = msgColumns.some(c => c.name === 'stats');
+  if (!hasStats) {
+    db.exec("ALTER TABLE messages ADD COLUMN stats TEXT DEFAULT NULL");
+  }
+
   return db;
 }
 
@@ -106,15 +112,16 @@ function updateConversationTitle(id, title) {
 }
 
 // 添加消息
-function addMessage(conversationId, role, content, tools = null, thinks = null, images = null) {
+function addMessage(conversationId, role, content, tools = null, thinks = null, images = null, stats = null) {
   return getDB().prepare(`
-    INSERT INTO messages (conversation_id, role, content, tools, thinks, images, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO messages (conversation_id, role, content, tools, thinks, images, stats, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     conversationId, role, content,
     tools ? JSON.stringify(tools) : null,
     thinks ? JSON.stringify(thinks) : null,
     images ? JSON.stringify(images) : null,
+    stats ? JSON.stringify(stats) : null,
     Date.now()
   );
 }
@@ -127,16 +134,17 @@ function deleteMessages(conversationId) {
 // 获取对话的所有消息
 function getMessages(conversationId) {
   const rows = getDB().prepare(`
-    SELECT role, content, tools, thinks, images, timestamp FROM messages
+    SELECT role, content, tools, thinks, images, stats, timestamp FROM messages
     WHERE conversation_id = ?
     ORDER BY timestamp ASC
   `).all(conversationId);
-  // 解析 tools / thinks / images JSON
+  // 解析 tools / thinks / images / stats JSON
   return rows.map(r => ({
     ...r,
     tools: r.tools ? JSON.parse(r.tools) : null,
     thinks: r.thinks ? JSON.parse(r.thinks) : null,
-    images: r.images ? JSON.parse(r.images) : null
+    images: r.images ? JSON.parse(r.images) : null,
+    stats: r.stats ? JSON.parse(r.stats) : null
   }));
 }
 

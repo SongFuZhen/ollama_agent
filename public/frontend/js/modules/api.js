@@ -56,12 +56,22 @@ async function saveConversation() {
     });
 
     if (content || tools.length > 0 || thinks.length > 0 || images.length > 0) {
+      // 收集该条助手消息的耗时统计（TTFT / 总耗时），随消息持久化
+      let stats = null;
+      const statsEl = msg.querySelector('.answer-footer .stats');
+      if (statsEl && (statsEl.dataset.ttft || statsEl.dataset.total)) {
+        stats = {
+          ttft: statsEl.dataset.ttft || null,
+          total: statsEl.dataset.total || null,
+        };
+      }
       messages.push({
         role,
         content,
         tools: tools.length > 0 ? tools : undefined,
         thinks: thinks.length > 0 ? thinks : undefined,
         images: images.length > 0 ? images : undefined,
+        stats: stats || undefined,
       });
     }
   });

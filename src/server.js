@@ -510,7 +510,7 @@ async function handleSaveConversation(req, res) {
       // 整体覆盖：先删除旧消息，再写入完整列表，避免重复累积
       db.deleteMessages(id);
       for (const msg of messages) {
-        db.addMessage(id, msg.role, msg.content, msg.tools || null, msg.thinks || null, msg.images || null);
+        db.addMessage(id, msg.role, msg.content, msg.tools || null, msg.thinks || null, msg.images || null, msg.stats || null);
       }
     }
     

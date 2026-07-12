@@ -448,8 +448,8 @@ function showConfirm(card) {
   c.appendChild(pre);
 
   const btns = el('div', 'btns');
-  const yes = el('button', 'yes', '确认写入');
-  const no = el('button', 'no', '拒绝');
+  const yes = el('button', 'yes simpui-btn primary sm', '确认写入');
+  const no = el('button', 'no simpui-btn danger sm', '拒绝');
   yes.onclick = () => {
     fetch('/api/confirm', {
       method: 'POST',

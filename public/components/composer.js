@@ -8,7 +8,7 @@ function renderComposer() {
         <button id="img-btn" class="toolbar-btn" title="选择图片" aria-label="选择图片">
           <i data-lucide="paperclip" class="toolbar-icon"></i>
         </button>
-        <button id="send" class="send-btn-round" title="发送">
+        <button id="send" class="send-btn-round simpui-btn primary sm" title="发送">
           <i data-lucide="send" class="send-icon"></i>
         </button>
       </div>

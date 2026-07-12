@@ -185,6 +185,15 @@ async function loadHistoryConversation(convId) {
         if (msg.content) {
           state.streamingAnswer.innerHTML = renderMarkdown(msg.content);
         }
+        // 恢复耗时统计（TTFT / 总耗时）
+        if (msg.stats && state.streamingHead) {
+          const statsEl = state.streamingHead.querySelector('.stats');
+          if (statsEl) {
+            statsEl.dataset.ttft = msg.stats.ttft;
+            statsEl.dataset.total = msg.stats.total;
+            statsEl.textContent = `TTFT: ${msg.stats.ttft}ms | 总耗时: ${msg.stats.total}ms`;
+          }
+        }
         state.streamingAnswer = null;
         state.streamingSteps = null;
       }
@@ -607,7 +616,14 @@ function handleEvent(ev) {
       const fmt = `TTFT: ${ev.ttft}ms | 总耗时: ${ev.total}ms`;
       const footer = document.querySelector('.msg.agent.answer-card:last-of-type .answer-footer');
       const statsEl = footer && footer.querySelector('.stats');
-      if (statsEl) statsEl.textContent = fmt;
+      if (statsEl) {
+        statsEl.textContent = fmt;
+        // 记录到 dataset，便于保存时随消息持久化
+        statsEl.dataset.ttft = ev.ttft;
+        statsEl.dataset.total = ev.total;
+        // 统计到达即落库，确保刷新/历史回放可恢复
+        saveConversation();
+      }
       break;
     }
       
@@ -729,6 +745,8 @@ async function send() {
   if (msgCount <= 1) {
     // 第一条用户消息，保存对话
     await saveConversation();
+    // 对话已落库，立即把 session id 写进 URL，刷新即可恢复
+    syncUrl();
   }
 
   const body = { message: text, images: imgs.map((i) => i.b64) };
@@ -802,16 +820,16 @@ function setBusy(flag) {
   toggleThinking(flag);
 
   if (flag) {
-    // 忙碌时：发送按钮变为中止按钮（方块图标表示停止）
-    sendBtn.innerHTML = '<i data-lucide="square" class="send-icon"></i>';
+    // 忙碌时：发送按钮变为中止按钮（方块图标 + 文字，simpui sm danger）
+    sendBtn.className = 'send-btn-round simpui-btn danger sm abort';
+    sendBtn.innerHTML = '<i data-lucide="square" class="send-icon"></i><span>中止</span>';
     sendBtn.title = '中止';
-    sendBtn.classList.add('abort');
     sendBtn.onclick = abortCurrentRequest;
   } else {
     // 空闲时：恢复发送按钮（纸飞机图标）
+    sendBtn.className = 'send-btn-round simpui-btn primary sm';
     sendBtn.innerHTML = '<i data-lucide="send" class="send-icon"></i>';
     sendBtn.title = '发送';
-    sendBtn.classList.remove('abort');
     sendBtn.onclick = send;
     currentAbortController = null;
   }
