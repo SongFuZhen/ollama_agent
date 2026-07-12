@@ -16,12 +16,12 @@ async function safeResolve(p, root = PROJECT_ROOT) {
 
   let abs;
   if (path.isAbsolute(p)) {
-    // 绝对路径：如果在沙箱内直接使用，否则去前导 / 后相对沙箱解析
+    // 绝对路径：如果在沙箱内直接使用，否则拒绝（不再静默 redirect 到不存在路径）
     const rel = path.relative(realRoot, p);
     if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
       abs = p;
     } else {
-      abs = path.resolve(realRoot, p.replace(/^\/+/, ''));
+      throw new Error('绝对路径超出沙箱，已阻止：' + p + '\n请使用相对路径（如 src/server.js），沙箱根为 ' + root);
     }
   } else {
     abs = path.resolve(realRoot, p);

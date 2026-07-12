@@ -9,6 +9,8 @@
 const messagesEl = $('#messages');
 const chatAreaEl = $('#chat-area');
 const inputEl = $('#input');
+const charCountEl = $('#char-count');
+const INPUT_MAX = 20000;
 const sendBtn = $('#send');
 const ollamaStatusEl = $('#ollama-status');
 const debugIconEl = $('#debug-icon');
@@ -229,11 +231,19 @@ async function loadHistoryConversation(convId) {
         state.streamingSteps = null;
       }
     }
-    
+
+    // 恢复上下文用量：promptTokens 是 Ollama 每次返回的累计值（含 system + 所有历史 + 当前用户），
+    // 遍历所有消息，最后一条有值的 promptTokens 即为当前上下文总量
+    for (const m of data.messages) {
+      if (m.stats && m.stats.promptTokens > 0) {
+        state.sessionStats.contextTokens = m.stats.promptTokens;
+      }
+    }
+
     closeDrawer();
     showEmptyIfEmpty();
     renderSessionState();
-    scrollDown();
+    scrollDown(true);
   } catch (e) {
     console.error('加载对话失败:', e);
   }
@@ -423,10 +433,13 @@ function mountSession() {
   state.sessionStats.startTs = hasMsgs ? Date.now() : null;
   renderSessionState();
   showEmptyIfEmpty();
-  scrollDown();
+  scrollDown(true);
 }
 
-function scrollDown() {
+let autoScroll = true;
+
+function scrollDown(force) {
+  if (!force && !autoScroll) return;
   const chatEl = chatAreaEl || messagesEl;
   chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
   updateScrollButton();
@@ -440,11 +453,17 @@ function updateScrollButton() {
   const distance = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
   if (distance > 80) scrollBottomBtn.classList.remove('hidden');
   else scrollBottomBtn.classList.add('hidden');
+  // 用户滚回底部时恢复自动滚动
+  if (distance <= 40) autoScroll = true;
 }
 if (scrollBottomBtn) {
-  scrollBottomBtn.onclick = () => scrollDown();
+  scrollBottomBtn.onclick = () => { autoScroll = true; scrollDown(true); };
   const chatEl = chatAreaEl || messagesEl;
   chatEl.addEventListener('scroll', updateScrollButton);
+  // 用户手动向上滚动时暂停自动滚动
+  chatEl.addEventListener('wheel', function(e) {
+    if (e.deltaY < 0) autoScroll = false;
+  });
   window.addEventListener('resize', updateScrollButton);
   window.addEventListener('load', updateScrollButton);
 }
@@ -453,7 +472,7 @@ function appendToActive(node) {
   const box = state.session || messagesEl;
   box.appendChild(node);
   hideEmpty();
-  scrollDown();
+  scrollDown(true);
 }
 
 // 当前生效的沙箱根（已绑定的绝对路径优先，其次设置页/服务端默认）
@@ -717,6 +736,8 @@ function handleEvent(ev) {
         // 记录到 dataset，便于保存时随消息持久化
         statsEl.dataset.ttft = ev.ttft;
         statsEl.dataset.total = ev.total;
+        if (typeof ev.promptTokens === 'number') statsEl.dataset.promptTokens = ev.promptTokens;
+        if (typeof ev.completionTokens === 'number') statsEl.dataset.completionTokens = ev.completionTokens;
         // 统计到达即落库，确保刷新/历史回放可恢复
         saveConversation();
       }
@@ -1035,13 +1056,23 @@ function setActiveModel(model) {
 function autoResizeInput() {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 104) + 'px';
+  updateCharCount();
+}
+function updateCharCount() {
+  if (!charCountEl) return;
+  const len = inputEl.value.length;
+  const pct = len / INPUT_MAX;
+  charCountEl.textContent = len + ' / ' + INPUT_MAX;
+  charCountEl.classList.remove('warn', 'danger');
+  if (pct >= 0.95) charCountEl.classList.add('danger');
+  else if (pct >= 0.8) charCountEl.classList.add('warn');
 }
 inputEl.addEventListener('input', autoResizeInput);
 
 // ---------- 绑定事件 ----------
 sendBtn.onclick = send;
 inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
 });
 
 // 初始化面板提示和按钮状态

@@ -15,6 +15,7 @@ const DEFAULT_MODEL = process.env.MODEL || 'qwen2.5-coder:7b';
 const MAX_STEPS = 6;          // 7B 循环步数上限，防空转
 const JSON_RETRY = 2;         // 工具调用 JSON 解析失败重试次数
 const STEP_TIMEOUT_MS = 90000; // 本地模型响应较慢，适当放宽超时
+const NUM_CTX = Number(process.env.NUM_CTX) || 16384; // context window，agent 循环需较大上下文
 
 module.exports = {
   PROJECT_ROOT,
@@ -23,5 +24,6 @@ module.exports = {
   MAX_STEPS,
   JSON_RETRY,
   STEP_TIMEOUT_MS,
+  NUM_CTX,
   PORT: process.env.PORT || 3000,
 };

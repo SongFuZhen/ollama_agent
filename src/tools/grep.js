@@ -4,7 +4,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const readline = require('readline');
 const { createReadStream } = require('fs');
-const { PROJECT_ROOT } = require('./utils');
+const { PROJECT_ROOT, safeResolve } = require('./utils');
 
 /**
  * 递归搜索文件内容
@@ -92,7 +92,7 @@ module.exports = {
   
   async run({ pattern, path: p, include }, ctx = {}) {
     const root = ctx.root || PROJECT_ROOT;
-    const searchDir = p ? path.resolve(root, p) : root;
+    const searchDir = p ? await safeResolve(p, root) : root;
     
     let regex;
     try {

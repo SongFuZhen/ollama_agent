@@ -137,6 +137,7 @@ function handleChat(req, res) {
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
   });
+  if (res.socket) res.socket.setNoDelay(true);
 
   // 客户端断开标志：用于中断 Agent 循环、避免向已关闭连接写入
   let aborted = false;

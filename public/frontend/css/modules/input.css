@@ -62,6 +62,18 @@
   border-radius: 3px;
 }
 
+.char-count {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  font-size: 11px;
+  color: var(--simpui-text-light);
+  pointer-events: none;
+  z-index: 11;
+}
+.char-count.warn { color: #d97706; }
+.char-count.danger { color: #dc2626; }
+
 /* 操作按钮区域 - 悬浮在输入框右下角 */
 .composer-actions {
   position: absolute;

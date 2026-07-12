@@ -2,7 +2,47 @@
 
 const { chat, chatStream } = require('./ollama');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
-const { MAX_STEPS, JSON_RETRY } = require('../config');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX } = require('../config');
+
+// 粗略 token 估算：中文约 1.5 字符/token，英文约 4 字符/token，取偏保守 2.5
+function estimateTokens(text) {
+  if (!text) return 0;
+  return Math.ceil(String(text).length / 2.5);
+}
+
+// 截断消息列表，保证总 token 数不超过 NUM_CTX - reserve（留给模型输出）
+function truncateMessages(messages, reserve = 2048) {
+  const limit = NUM_CTX - reserve;
+  let total = 0;
+  const kept = [];
+  // 从旧到新累加，超限时丢掉最旧的非 system 消息
+  for (const m of messages) {
+    const t = estimateTokens(m.content);
+    if (total + t <= limit || m.role === 'system') {
+      kept.push(m);
+      total += t;
+    } else if (m.role === 'user' && kept.length > 0) {
+      // 当前消息太大：截断 content 并加提示
+      const maxChars = Math.floor((limit - total) * 2.5);
+      if (maxChars > 200) {
+        m.content = m.content.slice(0, maxChars) + '\n\n[输入过长，已截断...]';
+        kept.push(m);
+      }
+      break;
+    }
+  }
+  // 如果第一条 user 消息都没放进去（system 太大或输入超大），至少保留 system + 截断后的 user
+  if (kept.length <= 1 && messages.length > 1) {
+    const sys = messages[0];
+    const user = messages[messages.length - 1];
+    const sysTokens = estimateTokens(sys.content);
+    const maxUserChars = Math.floor((limit - sysTokens) * 2.5);
+    if (maxUserChars > 100) {
+      return [sys, { role: 'user', content: user.content.slice(0, maxUserChars) + '\n\n[输入过长，已截断...]' }];
+    }
+  }
+  return kept;
+}
 
 // 剥离 deepseek-r1 的 <think:6124c78e>...</think:6124c78e> 推理块，返回 { think, rest }
 function stripThink(text) {
@@ -42,20 +82,13 @@ function systemPrompt(specs) {
   const specStr = specs
     .map((t) => `- ${t.name}(${Object.keys(t.params).join(', ')}) : ${t.desc}`)
     .join('\n');
-  if (!specs.length) {
-    // 无工具场景（如 vision 纯多模态）：用中性系统提示
-    return '你是一个本地多模态助手，请基于用户提供的图片和文字如实回答，不要编造。';
-  }
+  if (!specs.length) return '';
   return [
-    '你是一个受约束的本地助手。规则：',
-    '1. 不要凭空编造，所有结论必须基于工具返回的真实数据。',
-    '2. 需要文件内容时，必须先调用可用工具获取真实数据。',
-    '3. 可用工具（只能用以下这些）：',
+    '可用工具：',
     specStr,
-    '4. 如需读数据，输出纯 JSON（不要注释、不要多余文字）：{"action":"工具名","params":{...}}。',
-    '5. 若已掌握足够信息可回答，直接输出最终答案（不要 JSON）。',
-    '6. 一次只调用一个工具。',
-    '7. 回答时使用 markdown 格式，包括标题、列表、代码块等。',
+    '',
+    '需要读取数据时，输出纯JSON调用工具：{"action":"工具名","params":{}}',
+    '能直接回答时，用markdown格式输出答案。一次只调一个工具。',
   ].join('\n');
 }
 
@@ -83,11 +116,12 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   const validHistory = Array.isArray(history)
     ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())
     : [];
-  const messages = [
+  let messages = [
     { role: 'system', content: systemPrompt(specs) },
     ...validHistory,
     userMessage,
   ];
+  messages = truncateMessages(messages);
 
   let lastAnswer = '';
   let lastCallKey = '';
@@ -191,6 +225,13 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
 
     // 白名单校验：未知工具直接拒绝
     if (!isAllowed(call.action)) {
+      // 部分模型把直接回答包在 JSON 里（如 {"action":"chat","message":"你好"}），
+      // 取出 message/content/reply 字段当作纯文本答案，不再继续工具循环
+      const msgField = call.message || call.content || call.reply || call.text || call.response;
+      if (msgField && typeof msgField === 'string' && msgField.trim()) {
+        emit({ type: 'answer', content: msgField.trim() });
+        return msgField.trim();
+      }
       emit({ type: 'error', step, msg: '工具不存在，已拒绝: ' + call.action });
       messages.push({ role: 'assistant', content: text });
       messages.push({ role: 'user', content: `工具 ${call.action} 不可用，请改用可用工具或回答。` });

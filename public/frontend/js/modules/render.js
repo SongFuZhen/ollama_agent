@@ -22,6 +22,15 @@ const TOOL_ICONS = {
   read_lines: 'Rows3',
   tree: 'FolderTree',
   count_loc: 'ListChecks',
+  run_tests: 'Play',
+  run_lint: 'ShieldCheck',
+  // skills
+  git_status: 'GitBranch',
+  git_diff: 'GitCompare',
+  git_log: 'GitCommit',
+  git_show: 'Eye',
+  explain_symbol: 'FileCode',
+  find_references: 'Link',
 };
 
 // 创建 Lucide SVG 图标
@@ -89,16 +98,17 @@ function getMarkdownIt() {
     breaks: true,         // 单换行视为 <br>，更贴聊天
     typographer: true,
     highlight(code, lang) {
+      const langCls = lang ? ' class="language-' + lang + '"' : '';
       if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
         try {
-          return '<pre class="hljs"><code>' +
+          return '<pre class="hljs"><code' + langCls + '>' +
             hljs.highlight(code, { language: lang, ignoreIllegals: true }).value +
             '</code></pre>';
         } catch (e) { /* fall through */ }
       }
       // 无语言或高亮失败：转义后原样输出
       const esc = code.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-      return '<pre class="hljs"><code>' + esc + '</code></pre>';
+      return '<pre class="hljs"><code' + langCls + '>' + esc + '</code></pre>';
     },
   });
   return _mdit;
@@ -113,6 +123,42 @@ function renderMarkdownIt(text) {
   const html = md.render(text);
   // markdown-it 输出已由 DOMPurify 兜底净化，阻断 XSS
   return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+}
+
+// ---------- Mermaid 图表渲染 ----------
+let _mermaidReady = false;
+function initMermaid() {
+  if (_mermaidReady) return;
+  if (typeof mermaid === 'undefined') return;
+  mermaid.initialize({ startOnLoad: false, theme: 'default' });
+  _mermaidReady = true;
+}
+
+async function renderMermaidBlocks(container) {
+  if (!container) return;
+  initMermaid();
+  if (typeof mermaid === 'undefined') return;
+
+  const codes = container.querySelectorAll('code.language-mermaid');
+  if (!codes.length) return;
+
+  let idx = 0;
+  for (const code of codes) {
+    const pre = code.parentElement;
+    if (!pre || pre.tagName !== 'PRE') continue;
+    const text = code.textContent.trim();
+    if (!text) continue;
+    try {
+      const id = 'mermaid-' + Date.now() + '-' + (idx++);
+      const { svg } = await mermaid.render(id, text);
+      const wrap = document.createElement('div');
+      wrap.className = 'mermaid-rendered';
+      wrap.innerHTML = svg;
+      pre.replaceWith(wrap);
+    } catch (e) {
+      // 语法错误保留原始代码块
+    }
+  }
 }
 
 // 创建承载 markdown 的气泡：按引擎套用不同排版类（保留原版 marked 用 .mdx，markdown-it 用 .mdit）
@@ -219,7 +265,8 @@ function appendAnswer(text) {
   const bubble = elMarkdownBubble();
   bubble.innerHTML = renderMarkdown(text);
   bindImagePreview(bubble); // markdown 内图片点击预览
-  
+  renderMermaidBlocks(bubble);
+
   // 底部：模型名 + 时间 + 复制
   // 模型名优先使用下拉选中的模型，否则用后端默认
   const footer = el('div', 'answer-footer');
@@ -331,7 +378,7 @@ function appendToolCall(action, params, result, root) {
   toolWrap.appendChild(paramsEl);
   toolWrap.appendChild(body);
   state.streamingSteps.appendChild(toolWrap);
-  scrollDown();
+  scrollDown(true);
 }
 
 // 更新最后一个工具调用块的结果
@@ -419,11 +466,13 @@ function finalizeAnswer(content) {
     // 已有流式输出，更新为最终内容
     state.streamingAnswer.innerHTML = renderMarkdown(content);
     bindImagePreview(state.streamingAnswer);
+    renderMermaidBlocks(state.streamingAnswer);
   } else {
     // 没有流式输出，创建新的答案元素
     ensureMessageContainer();
     state.streamingAnswer.innerHTML = renderMarkdown(content);
     bindImagePreview(state.streamingAnswer);
+    renderMermaidBlocks(state.streamingAnswer);
   }
   
   // 清理状态

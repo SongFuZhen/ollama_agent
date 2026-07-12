@@ -63,6 +63,8 @@ async function saveConversation() {
         stats = {
           ttft: statsEl.dataset.ttft ? Number(statsEl.dataset.ttft) : null,
           total: statsEl.dataset.total ? Number(statsEl.dataset.total) : null,
+          promptTokens: statsEl.dataset.promptTokens ? Number(statsEl.dataset.promptTokens) : 0,
+          completionTokens: statsEl.dataset.completionTokens ? Number(statsEl.dataset.completionTokens) : 0,
         };
       }
       messages.push({

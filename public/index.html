@@ -162,7 +162,8 @@
       <!-- 输入区 -->
       <footer class="composer">
         <div class="composer-box">
-          <textarea id="input" class="composer-input" placeholder="输入消息..." rows="1"></textarea>
+          <textarea id="input" class="composer-input" placeholder="输入消息..." rows="1" maxlength="20000"></textarea>
+          <span class="char-count" id="char-count">0 / 20000</span>
           <div class="composer-actions">
             <button id="img-btn" class="simpui-btn sm" title="选择图片" aria-label="选择图片">
               <i data-lucide="paperclip"></i>
@@ -294,6 +295,7 @@
   <script src="/lib/purify.min.js"></script>
   <script src="/lib/markdown-it/markdown-it.min.js"></script>
   <script src="/lib/highlight/highlight.min.js"></script>
+  <script src="/lib/mermaid/mermaid.min.js"></script>
   <script src="/js/modules/utils.js"></script>
   <script src="/js/modules/state.js"></script>
   <script src="/js/modules/api.js"></script>

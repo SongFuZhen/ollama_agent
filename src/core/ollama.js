@@ -1,7 +1,7 @@
 'use strict';
 
 const http = require('http');
-const { OLLAMA_HOST, STEP_TIMEOUT_MS } = require('../config');
+const { OLLAMA_HOST, STEP_TIMEOUT_MS, NUM_CTX } = require('../config');
 
 // Ollama 调用超时：避免进程假死导致 Agent 循环永久挂起
 // 可通过环境变量 OLLAMA_TIMEOUT_MS 覆盖（毫秒），否则用 config 默认
@@ -20,7 +20,7 @@ function hostParts(hostStr) {
 function chat(model, messages, opts = {}) {
   return new Promise((resolve, reject) => {
     const { host, port } = hostParts(opts.ollamaHost);
-    const body = JSON.stringify({ model, messages, stream: false });
+    const body = JSON.stringify({ model, messages, stream: false, options: { num_ctx: NUM_CTX } });
     const req = http.request(
       { host, port, path: '/api/chat', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
@@ -88,7 +88,7 @@ function listModels(ollamaHost) {
 // opts.onStats({ ttft, total, promptTokens, completionTokens }) 连接统计回调
 async function chatStream(model, messages, opts = {}) {
   const { host, port } = hostParts(opts.ollamaHost);
-  const body = JSON.stringify({ model, messages, stream: true });
+  const body = JSON.stringify({ model, messages, stream: true, options: { num_ctx: NUM_CTX } });
   const startTime = Date.now();
   let firstTokenTime = null;
   let promptTokens = 0;

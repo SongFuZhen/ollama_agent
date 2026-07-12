@@ -2,7 +2,7 @@
 
 const fsp = require('fs/promises');
 const path = require('path');
-const { PROJECT_ROOT } = require('./utils');
+const { PROJECT_ROOT, safeResolve } = require('./utils');
 
 // 递归匹配文件模式
 // 支持: *.js, src/*.ts, a.test.js
@@ -51,7 +51,7 @@ module.exports = {
   
   async run({ pattern, path: p }, ctx = {}) {
     const root = ctx.root || PROJECT_ROOT;
-    const searchDir = p ? path.resolve(root, p) : root;
+    const searchDir = p ? await safeResolve(p, root) : root;
     const results = await matchGlob(searchDir, pattern, root);
     
     if (results.length === 0) {
