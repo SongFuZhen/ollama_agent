@@ -13,7 +13,9 @@ async function rootReal(root) {
 
 async function safeResolve(p, root = PROJECT_ROOT) {
   const realRoot = await rootReal(root);
-  const abs = path.isAbsolute(p) ? path.resolve(p) : path.resolve(realRoot, p);
+  // 去掉前导 /，强制相对 realRoot 解析，防止模型把 /src/foo 当文件系统绝对路径
+  const clean = p.replace(/^\/+/, '');
+  const abs = path.resolve(realRoot, clean);
 
   let realBase;
   try {
