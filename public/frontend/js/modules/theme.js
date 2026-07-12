@@ -3,7 +3,7 @@
 /* theme.js - 主题切换（支持系统偏好） */
 
 const THEME_KEY = 'local-agent-theme';
-const themeSwitch = $('#theme-switch');
+const themeToggle = $('#theme-toggle');
 
 // 当前存储的模式：'light' | 'dark' | 'auto'（缺省视为 auto）
 function storedTheme() {
@@ -36,9 +36,16 @@ function applyTheme(theme) {
   if (hlLight) hlLight.disabled = theme !== 'light';
   if (hlDark) hlDark.disabled = theme === 'light';
 
-  // 同步主题切换开关
-  if (themeSwitch) {
-    themeSwitch.checked = theme === 'light';
+  // 更新按钮图标
+  updateThemeIcon(theme);
+}
+
+function updateThemeIcon(theme) {
+  if (!themeToggle) return;
+  const icon = themeToggle.querySelector('i');
+  if (icon) {
+    icon.setAttribute('data-lucide', theme === 'light' ? 'sun' : 'moon');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 }
 
@@ -46,10 +53,11 @@ function applyTheme(theme) {
 const stored = storedTheme();
 applyTheme(getResolvedTheme(stored));
 
-// 监听主题切换（checkbox 手动切换）
-if (themeSwitch) {
-  themeSwitch.addEventListener('change', () => {
-    const next = themeSwitch.checked ? 'light' : 'dark';
+// 监听主题切换（按钮点击）
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const current = getResolvedTheme(storedTheme());
+    const next = current === 'dark' ? 'light' : 'dark';
     localStorage.setItem(THEME_KEY, next);
     applyTheme(next);
   });

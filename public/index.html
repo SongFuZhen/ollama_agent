@@ -39,38 +39,33 @@
       <h1>Ason Agent</h1>
     </div>
 
-    <div id="status" class="status" role="status" aria-live="polite">
-      <span class="status-dot"></span>
-      <span class="status-text">启动中…</span>
+    <div id="debug-info" class="debug-info">
+      <span class="debug-item">
+        <i data-lucide="activity" class="debug-icon"></i>
+        <span>Ollama: <span id="ollama-status">连接中</span></span>
+      </span>
     </div>
 
-    <div class="user-dropdown">
-      <div id="user-info" class="user-info">
-        <i data-lucide="user" class="user-icon"></i>
-        <span id="user-name">加载中...</span>
-        <i data-lucide="chevron-down" class="chevron-icon"></i>
-      </div>
-      <div class="dropdown-menu">
-        <div class="dropdown-item theme-switch-row">
-          <span class="theme-label">主题</span>
-          <div class="theme-switch-wrap">
-            <i data-lucide="moon" class="theme-text-icon"></i>
-            <label class="simpui-checkbox">
-              <input type="checkbox" id="theme-switch">
-              <span class="simpui-box"></span>
-            </label>
-            <i data-lucide="sun" class="theme-text-icon"></i>
-          </div>
-        </div>
-        <div class="dropdown-sep"></div>
-        <button id="settings-btn" class="dropdown-item">
-          <i data-lucide="settings" class="item-icon"></i>
-          <span>设置</span>
+    <div class="topbar-spacer"></div>
+
+    <div class="topbar-actions">
+      <button id="theme-toggle" class="simpui-btn light sm" title="切换主题">
+        <i data-lucide="moon"></i>
+      </button>
+      <div class="user-dropdown">
+        <button id="user-btn" class="simpui-btn light sm">
+          <i data-lucide="user"></i>
         </button>
-        <a href="/device.html" class="dropdown-item">
-          <i data-lucide="smartphone" class="item-icon"></i>
-          <span>设备信息</span>
-        </a>
+        <div class="dropdown-menu">
+          <button id="settings-btn" class="dropdown-item">
+            <i data-lucide="settings" class="item-icon"></i>
+            <span>设置</span>
+          </button>
+          <a href="/device.html" class="dropdown-item">
+            <i data-lucide="smartphone" class="item-icon"></i>
+            <span>设备信息</span>
+          </a>
+        </div>
       </div>
     </div>
   </header>

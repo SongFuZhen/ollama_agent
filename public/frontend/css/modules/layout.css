@@ -1,5 +1,5 @@
 /* layout.css - 主体布局 */
-/* 设计方向：Technical Laboratory - 240px 侧边栏 */
+/* 设计方向：Geek Terminal × Military Grade */
 
 .layout {
   flex: 1;
@@ -8,7 +8,7 @@
   min-height: 0;
 }
 
-/* 会话级表头 */
+/* 会话栏 */
 .session-bar {
   height: var(--session-bar-h);
   flex-shrink: 0;
@@ -16,9 +16,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 var(--space-5);
-  background: var(--panel);
-  border-bottom: 1px solid var(--panel-3);
+  padding: 0 var(--space-4);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
 }
 
 .sb-left {
@@ -34,9 +34,9 @@
   flex-shrink: 0;
   padding: var(--space-1) var(--space-2);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--chalk);
+  color: var(--text-primary);
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -45,19 +45,19 @@
 }
 
 .conv-name::placeholder {
-  color: var(--mist);
+  color: var(--text-muted);
   font-weight: 400;
 }
 
 .conv-name:hover {
-  border-color: var(--panel-3);
-  background: var(--panel-2);
+  border-color: var(--border);
+  background: var(--bg-tertiary);
 }
 
 .conv-name:focus {
-  background: var(--panel);
-  border-color: var(--volt);
-  box-shadow: 0 0 0 3px var(--volt-dim);
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 .toolbar-btns {
@@ -77,8 +77,8 @@
 .file-panel {
   width: var(--sidebar-w);
   flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--panel-3);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -97,7 +97,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--panel-3);
+  border-bottom: 1px solid var(--border);
 }
 
 .panel-title {
@@ -106,16 +106,16 @@
   gap: var(--space-2);
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ash);
+  color: var(--text-secondary);
 }
 
 .panel-icon {
   width: 14px;
   height: 14px;
-  color: var(--mist);
+  color: var(--text-muted);
 }
 
 .panel-btns {
@@ -125,17 +125,17 @@
 
 .panel-hint {
   padding: var(--space-3) var(--space-4);
-  font-size: 12px;
-  color: var(--mist);
-  border-top: 1px solid var(--panel-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
   line-height: 1.5;
 }
 
 .file-hint {
   padding: var(--space-5) var(--space-4);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.6;
-  color: var(--mist);
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -155,12 +155,12 @@
   gap: var(--space-1);
   max-width: 240px;
   padding: var(--space-1) var(--space-2);
-  background: var(--panel-2);
-  border: 1px solid var(--panel-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ash);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   cursor: default;
   overflow: hidden;
 }
@@ -169,7 +169,7 @@
   width: 12px;
   height: 12px;
   flex-shrink: 0;
-  color: var(--volt);
+  color: var(--accent);
 }
 
 .project-root .pr-path {
@@ -181,8 +181,8 @@
 .project-root .pr-tag {
   flex-shrink: 0;
   font-size: 10px;
-  color: var(--mist);
-  background: var(--panel-3);
+  color: var(--text-muted);
+  background: var(--border);
   border-radius: var(--radius-sm);
   padding: 1px 4px;
 }
@@ -195,22 +195,22 @@
   height: 24px;
   padding: 0 var(--space-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   border-radius: var(--radius-sm);
-  background: var(--panel-2);
-  color: var(--ash);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease);
 }
 
 .chip:hover {
-  background: var(--panel-3);
-  color: var(--chalk);
+  background: var(--border);
+  color: var(--text-primary);
 }
 
 .chip.active {
-  background: var(--volt-dim);
-  color: var(--volt);
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 /* 按钮图标 */

@@ -9,40 +9,25 @@
 const messagesEl = $('#messages');
 const inputEl = $('#input');
 const sendBtn = $('#send');
-const statusEl = $('#status');
-const statusTextEl = statusEl.querySelector('.status-text');
+const ollamaStatusEl = $('#ollama-status');
 const emptyEl = $('#empty');
 const convNameEl = $('#conv-name');
 const sessionStateEl = $('#session-state');
-const userNameEl = $('#user-name');
 const userDropdown = $('.user-dropdown');
 
 // 下拉菜单切换
 if (userDropdown) {
-  const userInfo = userDropdown.querySelector('.user-info');
-  userInfo.addEventListener('click', (e) => {
-    e.stopPropagation();
-    userDropdown.classList.toggle('open');
-  });
+  const userBtn = userDropdown.querySelector('#user-btn');
+  if (userBtn) {
+    userBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      userDropdown.classList.toggle('open');
+    });
+  }
   document.addEventListener('click', () => {
     userDropdown.classList.remove('open');
   });
 }
-
-// 加载用户信息
-async function loadUserInfo() {
-  try {
-    const res = await fetch('/api/device');
-    const device = await res.json();
-    if (userNameEl) {
-      userNameEl.textContent = device.username;
-      userNameEl.title = `${device.username}@${device.hostname}`;
-    }
-  } catch (e) {
-    console.error('获取设备信息失败:', e);
-  }
-}
-loadUserInfo();
 
 // ---------- 历史对话 Drawer ----------
 const historyDrawer = $('#history-drawer');
@@ -252,10 +237,11 @@ if (deleteConfirmBtn) {
   };
 }
 
-// ---------- 状态胶囊 ----------
+// ---------- 状态更新 ----------
 function setStatus(kind, text) {
-  statusEl.className = 'status ' + kind;
-  statusTextEl.textContent = text;
+  if (ollamaStatusEl) {
+    ollamaStatusEl.textContent = text;
+  }
 }
 
 // ---------- 空状态 ----------

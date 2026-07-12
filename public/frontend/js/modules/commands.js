@@ -1,33 +1,46 @@
 'use strict';
 
-/* commands.js - 输入框斜杠指令（参考 opencode / claude code）
-   支持：/skills 列出技能，/tools 列出工具，/models 列出已安装模型 */
+/* commands.js - 输入框斜杠指令（参考 opencode / claude code） */
+
+// 斜杠命令图标映射
+const COMMAND_ICONS = {
+  skills: 'sparkles',
+  tools: 'wrench',
+  models: 'cpu',
+  help: 'help-circle',
+  clear: 'trash-2',
+};
 
 // 指令定义
 const SLASH_COMMANDS = [
   {
     name: 'skills',
-    desc: '列出当前 agent 可用的技能',
+    desc: '查看可用技能',
+    icon: 'sparkles',
     run: showSkills,
   },
   {
     name: 'tools',
-    desc: '列出当前 agent 可用的工具',
+    desc: '查看可用工具',
+    icon: 'wrench',
     run: showTools,
   },
   {
     name: 'models',
-    desc: '列出已安装的 Ollama 模型',
+    desc: '切换模型',
+    icon: 'cpu',
     run: showModels,
   },
   {
     name: 'help',
-    desc: '显示所有可用命令',
+    desc: '显示所有命令',
+    icon: 'help-circle',
     run: showHelp,
   },
   {
     name: 'clear',
     desc: '清空当前对话',
+    icon: 'trash-2',
     run: clearChat,
   },
 ];
@@ -42,7 +55,6 @@ function initCommands() {
   buildPalette();
   input.addEventListener('input', onInputChange);
   input.addEventListener('keydown', onInputKeydown);
-  // 点击别处关闭
   document.addEventListener('click', (e) => {
     if (cmdPaletteEl && !cmdPaletteEl.contains(e.target) && e.target !== input) {
       hidePalette();
@@ -51,18 +63,16 @@ function initCommands() {
 }
 
 function buildPalette() {
-  const wrap = el('div', 'slash-palette hidden');
-  wrap.id = 'slash-palette';
+  const wrap = el('div', 'slash-menu hidden');
+  wrap.id = 'slash-menu';
   const composer = document.querySelector('.composer');
   composer.appendChild(wrap);
   cmdPaletteEl = wrap;
 }
 
-// 根据当前输入更新候选列表
 function onInputChange() {
   const input = $('#input');
   const val = input.value;
-  // 仅在行首以 / 开头、且不含空格时显示候选
   if (val.startsWith('/') && !val.includes(' ')) {
     const q = val.slice(1).toLowerCase();
     cmdFiltered = SLASH_COMMANDS.filter((c) => c.name.startsWith(q));
@@ -81,27 +91,35 @@ function onInputChange() {
 function renderPalette() {
   cmdPaletteEl.innerHTML = '';
   cmdFiltered.forEach((c, i) => {
-    const item = el('div', 'slash-item' + (i === cmdActiveIndex ? ' active' : ''));
-    const name = el('span', 'slash-name', '/' + c.name);
-    const desc = el('span', 'slash-desc', c.desc);
-    item.appendChild(name);
-    item.appendChild(desc);
+    const item = el('div', 'slash-menu-item' + (i === cmdActiveIndex ? ' active' : ''));
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', c.icon || 'terminal');
+    icon.className = 'slash-menu-icon';
+    item.appendChild(icon);
+
+    const textWrap = el('div', 'slash-menu-text');
+    textWrap.appendChild(el('span', 'slash-menu-name', '/' + c.name));
+    textWrap.appendChild(el('span', 'slash-menu-desc', c.desc));
+    item.appendChild(textWrap);
+
     item.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // 防止 input 失焦
+      e.preventDefault();
       runCommand(c);
     });
     cmdPaletteEl.appendChild(item);
   });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function showPalette() {
   cmdPaletteEl.classList.remove('hidden');
 }
+
 function hidePalette() {
   if (cmdPaletteEl) cmdPaletteEl.classList.add('hidden');
 }
 
-// 键盘导航：上下选择，Enter 执行，Esc 关闭
 function onInputKeydown(e) {
   if (!cmdPaletteEl || cmdPaletteEl.classList.contains('hidden')) return;
   if (e.key === 'ArrowDown') {
@@ -121,7 +139,6 @@ function onInputKeydown(e) {
   }
 }
 
-// 执行指令：清空输入框并打开对应面板
 function runCommand(cmd) {
   const input = $('#input');
   input.value = '';
@@ -132,7 +149,6 @@ function runCommand(cmd) {
 /* ----------------------------- */
 /* 列表弹窗（/skills、/tools、/models）   */
 /* ----------------------------- */
-// rows: [{ name, desc, params, tag, kind, onClick }]
 function openListModal(title, rows) {
   let modal = $('#cmd-modal');
   if (!modal) {
@@ -166,7 +182,6 @@ function openListModal(title, rows) {
   modal.classList.remove('hidden');
 }
 
-// 将工具规格转为行数据
 function toolToRow(t) {
   const params = [];
   if (t.params && typeof t.params === 'object') {
@@ -183,7 +198,6 @@ function toolToRow(t) {
   };
 }
 
-// 构建单个工具/技能行（默认描述最多两行，展开后显示完整描述与参数）
 function buildRow(r) {
   const row = el('div', 'cmd-row');
   const head = el('div', 'cmd-row-head');
@@ -206,7 +220,6 @@ function buildRow(r) {
     });
   }
   row.appendChild(paramsWrap);
-  // 描述过长或有参数时，提供展开/折叠（展开显示完整描述 + 参数）
   if ((r.desc && r.desc.length > 48) || (r.params && r.params.length)) {
     const more = el('button', 'cmd-row-more', '展开');
     more.addEventListener('click', (e) => {
