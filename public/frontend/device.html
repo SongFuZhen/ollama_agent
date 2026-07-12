@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设备信息</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 24px;
+      color: #38bdf8;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .field {
+      display: flex;
+      padding: 12px 0;
+      border-bottom: 1px solid #334155;
+    }
+    .field:last-child {
+      border-bottom: none;
+    }
+    .field-label {
+      width: 120px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .field-value {
+      flex: 1;
+      font-family: ui-monospace, monospace;
+      font-size: 14px;
+      word-break: break-all;
+    }
+    .back-btn {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .back-btn:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-btn">← 返回</a>
+    <h1>设备信息</h1>
+    <div class="card" id="device-info">
+      <div class="field">
+        <div class="field-label">设备 ID</div>
+        <div class="field-value" id="d-id">加载中...</div>
+      </div>
+      <div class="field">
+        <div class="field-label">用户名</div>
+        <div class="field-value" id="d-username">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">主机名</div>
+        <div class="field-value" id="d-hostname">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">平台</div>
+        <div class="field-value" id="d-platform">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">架构</div>
+        <div class="field-value" id="d-arch">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">MAC 地址</div>
+        <div class="field-value" id="d-mac">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">首次访问</div>
+        <div class="field-value" id="d-first">-</div>
+      </div>
+      <div class="field">
+        <div class="field-label">最后访问</div>
+        <div class="field-value" id="d-last">-</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/lib/lucide.js"></script>
+  <script>
+    function formatDate(ts) {
+      if (!ts) return '-';
+      return new Date(ts).toLocaleString('zh-CN');
+    }
+
+    async function loadDevice() {
+      try {
+        const res = await fetch('/api/device');
+        const device = await res.json();
+        
+        document.getElementById('d-id').textContent = device.id;
+        document.getElementById('d-username').textContent = device.username;
+        document.getElementById('d-hostname').textContent = device.hostname;
+        document.getElementById('d-platform').textContent = device.platform;
+        document.getElementById('d-arch').textContent = device.arch;
+        document.getElementById('d-mac').textContent = device.mac || '-';
+        document.getElementById('d-first').textContent = formatDate(device.first_seen);
+        document.getElementById('d-last').textContent = formatDate(device.last_seen);
+      } catch (e) {
+        console.error('加载设备信息失败:', e);
+      }
+    }
+    loadDevice();
+  </script>
+</body>
+</html>

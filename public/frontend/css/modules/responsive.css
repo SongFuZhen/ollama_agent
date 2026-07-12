@@ -1,0 +1,19 @@
+/* responsive.css - 响应式样式 */
+
+@media (max-width: 720px) {
+  .file-panel { position: absolute; z-index: 20; height: calc(100% - var(--topbar-h)); box-shadow: var(--shadow); }
+  .layout.sidebar-collapsed .file-panel { margin-left: -320px; }
+  .topbar h1 { display: none; }
+  
+  /* 窄屏下压缩顶栏间距 */
+  .topbar { gap: 8px; padding: 0 10px; }
+  .actions { gap: 4px; }
+
+  /* 窄屏下对话区减少内边距 */
+  .chat { padding: 12px; }
+
+  /* 窄屏下输入区调整 */
+  .composer { padding: 8px 10px; gap: 6px; }
+  #input { padding: 10px 12px; font-size: 13px; }
+  .send-btn { padding: 0 16px; font-size: 13px; }
+}

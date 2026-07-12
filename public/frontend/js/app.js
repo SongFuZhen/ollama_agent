@@ -1,14 +1,12 @@
 'use strict';
 
 /* =========================================================================
- * 本地 Agent 客户端 — 前端
+ * Ason Agent — 前端主入口
  * 三个场景标签页（代码 / 排查 / 通用），各自独立会话，共享同一沙箱工具箱。
  * 通过 SSE 接收后端的 Agent 执行过程并实时渲染。
  * ========================================================================= */
 
 // ---------- DOM 引用 ----------
-const $ = (sel) => document.querySelector(sel);
-const tabsEl = $('#tabs');
 const messagesEl = $('#messages');
 const inputEl = $('#input');
 const sendBtn = $('#send');
@@ -16,8 +14,251 @@ const statusEl = $('#status');
 const statusTextEl = statusEl.querySelector('.status-text');
 const emptyEl = $('#empty');
 const sceneNameEl = $('#scene-name');
+const convNameEl = $('#conv-name');
+const sessionStateEl = $('#session-state');
+const userNameEl = $('#user-name');
+const userDropdown = $('.user-dropdown');
 
+// 下拉菜单切换
+if (userDropdown) {
+  const userInfo = userDropdown.querySelector('.user-info');
+  userInfo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    userDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', () => {
+    userDropdown.classList.remove('open');
+  });
+}
 
+// 加载用户信息
+async function loadUserInfo() {
+  try {
+    const res = await fetch('/api/device');
+    const device = await res.json();
+    if (userNameEl) {
+      userNameEl.textContent = device.username;
+      userNameEl.title = `${device.username}@${device.hostname}`;
+    }
+  } catch (e) {
+    console.error('获取设备信息失败:', e);
+  }
+}
+loadUserInfo();
+
+// ---------- 历史对话 Drawer ----------
+const historyDrawer = $('#history-drawer');
+const historyList = $('#history-list');
+const drawerClose = $('#drawer-close');
+const drawerOverlay = $('#drawer-overlay');
+
+function openDrawer() {
+  historyDrawer.classList.remove('hidden');
+  loadHistoryList();
+}
+
+function closeDrawer() {
+  historyDrawer.classList.add('hidden');
+}
+
+async function loadHistoryList() {
+  if (!state.activeScenario) return;
+
+  historyList.innerHTML = '<div class="history-loading"><span class="spin"></span>加载中…</div>';
+  try {
+    const res = await fetch(`/api/conversations?scenario=${state.activeScenario}`);
+    const conversations = await res.json();
+
+    if (conversations.length === 0) {
+      historyList.innerHTML = '<div class="history-empty">暂无历史对话</div>';
+      return;
+    }
+
+    historyList.innerHTML = conversations.map(conv => {
+      const time = new Date(conv.updated_at).toLocaleString('zh-CN');
+      const title = conv.title || '新对话';
+      return `
+        <div class="history-item" data-id="${conv.id}">
+          <div class="history-item-main" data-id="${conv.id}">
+            <div class="history-item-title">${escapeHtml(title)}</div>
+            <div class="history-item-time">${time}</div>
+          </div>
+          <button class="history-del" type="button" data-id="${conv.id}" data-title="${escapeHtml(title)}" title="删除对话" aria-label="删除对话">🗑</button>
+        </div>
+      `;
+    }).join('');
+
+    // 绑定点击事件：点击主体加载对话，点击删除按钮弹确认
+    historyList.querySelectorAll('.history-item-main').forEach(item => {
+      item.onclick = () => loadHistoryConversation(item.dataset.id);
+    });
+    historyList.querySelectorAll('.history-del').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        openDeleteConfirm(btn.dataset.id, btn.dataset.title);
+      };
+    });
+  } catch (e) {
+    historyList.innerHTML = '<div class="history-err">⚠ 加载失败: ' + escapeHtml(e.message) + '</div>';
+    console.error('加载历史对话失败:', e);
+  }
+}
+
+async function loadHistoryConversation(convId) {
+  // 加载中：在会话区显示占位，避免空白或旧内容闪烁
+  emptyEl.style.display = 'none';
+  const session = state.sessions[state.activeScenario];
+  if (session) session.innerHTML = '<div class="history-conv-loading"><span class="spin"></span>加载对话中…</div>';
+  closeDrawer();
+  try {
+    const res = await fetch(`/api/conversation/${convId}`);
+    const data = await res.json();
+
+    if (!data.messages || data.messages.length === 0) {
+      alert('对话内容为空');
+      return;
+    }
+
+    // 清空当前会话
+    const scenario = state.activeScenario;
+    const sess = state.sessions[scenario];
+    if (sess) sess.innerHTML = '';
+
+    // 设置对话 ID
+    state.conversationIds[scenario] = convId;
+    syncUrl();
+
+    // 恢复对话名称（历史中保存的标题）
+    const savedTitle = data.title || '';
+    state.conversationTitles[scenario] = savedTitle;
+    if (convNameEl && scenario === state.activeScenario) {
+      convNameEl.value = savedTitle;
+    }
+
+    // 恢复项目目录（只接受绝对路径）
+    const root = data.project_root || '';
+    const validRoot = (root && (root.startsWith('/') || /^[A-Z]:\\/i.test(root))) ? root : null;
+    state.currentProjectRoot = validRoot;
+    updateProjectRootUI();
+    
+    // 如果对话有有效的 project_root，加载对应的文件树
+    if (validRoot) {
+      // 先检查本地缓存
+      const cachedFiles = localDirCache.get(validRoot);
+      if (cachedFiles) {
+        // 从缓存恢复
+        localFiles = cachedFiles;
+        browseRoot = validRoot;
+        const tree = buildLocalTree(cachedFiles);
+        fileTreeEl.innerHTML = '';
+        const rootNode = createFileNode('dir', browseRoot, 'dir');
+        const rootBox = el('div', 'local-children');
+        renderLocalTree(tree, rootBox, '');
+        rootNode.onclick = () => {
+          if (rootBox.childElementCount === 0) renderLocalTree(tree, rootBox, '');
+          else rootBox.innerHTML = '';
+        };
+        fileTreeEl.appendChild(rootNode);
+        fileTreeEl.appendChild(rootBox);
+        updatePanelHint();
+      } else {
+        // 尝试从后端加载
+        loadFileTreeForRoot(validRoot);
+      }
+    }
+    
+     // 渲染消息
+    for (const msg of data.messages) {
+      if (msg.role === 'user') {
+        appendUser(msg.content, msg.images || []);
+      } else {
+        ensureMessageContainer();
+        // 先按保存顺序恢复思考链与工具调用（thinks/tools 按索引交错还原）
+        const thinks = msg.thinks || [];
+        const tools = msg.tools || [];
+        const maxLen = Math.max(thinks.length, tools.length);
+        for (let i = 0; i < maxLen; i++) {
+          if (i < thinks.length) {
+            appendThinkBlock();
+            if (state.streamingThink) state.streamingThink.textContent = thinks[i];
+            state.streamingThink = null;
+            state.streamingThinkText = '';
+          }
+          if (i < tools.length) {
+            const tool = tools[i];
+            appendToolCall(tool.name, tool.params || {}, tool.result || '', state.currentProjectRoot || effectiveRoot() || '');
+          }
+        }
+        // 渲染 Markdown 内容
+        if (msg.content) {
+          state.streamingAnswer.innerHTML = renderMarkdown(msg.content);
+        }
+        state.streamingAnswer = null;
+        state.streamingSteps = null;
+      }
+    }
+    
+    closeDrawer();
+    showEmptyIfEmpty();
+    scrollDown();
+  } catch (e) {
+    console.error('加载对话失败:', e);
+  }
+}
+
+if (drawerClose) drawerClose.onclick = closeDrawer;
+if (drawerOverlay) drawerOverlay.onclick = closeDrawer;
+
+const historyBtnToolbar = $('#history-btn-toolbar');
+if (historyBtnToolbar) {
+  historyBtnToolbar.onclick = openDrawer;
+}
+
+// ---------- 删除历史对话（需二次确认） ----------
+const deleteConfirmModal = $('#delete-confirm');
+const deleteConfirmName = $('#delete-confirm-name');
+const deleteConfirmBtn = $('#delete-confirm-btn');
+const deleteCancelBtn = $('#delete-cancel');
+const deleteCancelX = $('#delete-cancel-x');
+let pendingDeleteId = null;
+
+function openDeleteConfirm(id, title) {
+  pendingDeleteId = id;
+  if (deleteConfirmName) deleteConfirmName.textContent = title || '未命名对话';
+  if (deleteConfirmModal) deleteConfirmModal.classList.remove('hidden');
+}
+function closeDeleteConfirm() {
+  pendingDeleteId = null;
+  if (deleteConfirmModal) deleteConfirmModal.classList.add('hidden');
+}
+if (deleteCancelBtn) deleteCancelBtn.onclick = closeDeleteConfirm;
+if (deleteCancelX) deleteCancelX.onclick = closeDeleteConfirm;
+if (deleteConfirmModal) {
+  deleteConfirmModal.onclick = (e) => { if (e.target === deleteConfirmModal) closeDeleteConfirm(); };
+}
+if (deleteConfirmBtn) {
+  deleteConfirmBtn.onclick = async () => {
+    const id = pendingDeleteId;
+    closeDeleteConfirm();
+    if (!id) return;
+    // 若正在查看该对话，先清空当前会话
+    if (state.conversationIds[state.activeScenario] === id) {
+      const sess = state.sessions[state.activeScenario];
+      if (sess) sess.innerHTML = '';
+      state.conversationIds[state.activeScenario] = generateConvId();
+      showEmptyIfEmpty();
+    }
+    try {
+      const r = await fetch('/api/conversation/' + id, { method: 'DELETE' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || '删除失败');
+      // 重新拉取列表（保持在抽屉内）
+      loadHistoryList();
+    } catch (e) {
+      alert('删除失败: ' + e.message);
+    }
+  };
+}
 
 // ---------- 状态胶囊 ----------
 function setStatus(kind, text) {
@@ -32,91 +273,94 @@ function showEmptyIfEmpty() {
   const has = session && session.childElementCount > 0;
   emptyEl.style.display = has ? 'none' : 'flex';
 }
+
+// ---------- 对话名称（可编辑，保存到历史） ----------
+// 更新当前场景的对话名称（仅更新 UI 与状态，落库由 save/blur 触发）
+function setConvName(key, title) {
+  state.conversationTitles[key] = title || '';
+  if (key === state.activeScenario && convNameEl && document.activeElement !== convNameEl) {
+    convNameEl.value = title || '';
+  }
+}
+// 持久化对话名称到后端（PATCH /api/conversation/:id）
+function renameConversation(id, title) {
+  if (!id) return;
+  fetch('/api/conversation/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, title: title || '' }),
+  }).catch((e) => console.error('重命名对话失败:', e));
+}
+if (convNameEl) {
+  const commit = () => {
+    const key = state.activeScenario;
+    const val = convNameEl.value.trim();
+    setConvName(key, val);
+    renameConversation(state.conversationIds[key], val);
+  };
+  // 失焦时保存
+  convNameEl.addEventListener('blur', commit);
+  // 回车提交并失焦
+  convNameEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); convNameEl.blur(); }
+  });
+}
+
+// ---------- URL 会话持久化（刷新/分享不丢失） ----------
+// 把当前激活场景的对话 ID 写进 hash：#/session/<id>
+let _urlSyncLock = false;
+function syncUrl() {
+  const id = state.conversationIds[state.activeScenario];
+  if (!id) return;
+  const target = '#/session/' + id;
+  if (location.hash === target) return;
+  _urlSyncLock = true;
+  location.hash = target;
+}
+// 从 hash 解析会话 ID（无则返回 null）
+function parseSessionIdFromHash() {
+  const m = location.hash.match(/^#\/session\/(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+// 打开指定 ID 的对话（用于刷新恢复 / hash 导航）
+async function openSessionById(id) {
+  if (!id) return false;
+  try {
+    const res = await fetch(`/api/conversation/${encodeURIComponent(id)}`);
+    const data = await res.json();
+    if (!data || data.error || !data.id) return false;
+    // 复用历史对话渲染逻辑
+    await loadHistoryConversation(id);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 // 示例卡点击即填入输入框
 document.querySelectorAll('.eg-card').forEach((c) => {
-  c.onclick = () => { inputEl.value = c.dataset.prompt; inputEl.focus(); };
+  c.onclick = () => { inputEl.value = c.dataset.prompt; inputEl.focus(); autoResizeInput(); };
 });
 // 新对话：清空当前场景会话
 $('#new-chat').onclick = () => {
+  // 中止进行中的请求并复位忙碌态，避免输入框/发送按钮卡死
+  abortCurrentRequest();
+  setBusy(false);
+
   const s = state.sessions[state.activeScenario];
   if (s) s.innerHTML = '';
   messagesEl.innerHTML = '';
   if (s) messagesEl.appendChild(s);
+  // 清除项目目录绑定，生成新对话 ID（新对话回退到默认沙箱根）
+  state.currentProjectRoot = effectiveRoot();
+  state.conversationIds[state.activeScenario] = generateConvId();
+  state.conversationTitles[state.activeScenario] = '';
+  setConvName(state.activeScenario, '');
+  updateProjectRootUI();
+  syncUrl();
+  resetSessionStats();
+  renderSessionState();
   showEmptyIfEmpty();
 };
-
-// ---------- 主题切换（跟随系统 / 浅色 / 深色 三态循环） ----------
-const THEME_KEY = 'local-agent-theme';
-const themeBtn = $('#theme-btn');
-
-// 返回系统偏好：'light' | 'dark'
-function systemTheme() {
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-// 当前存储的模式：'system' | 'light' | 'dark'（缺省视为 dark）
-function storedMode() {
-  return localStorage.getItem(THEME_KEY) || 'dark';
-}
-// 实际生效主题
-function effectiveTheme() {
-  const m = storedMode();
-  return m === 'system' ? systemTheme() : m;
-}
-function applyTheme(theme) {
-  if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-    themeBtn.textContent = '☀️';
-    themeBtn.title = '当前：浅色（点击切换）';
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    themeBtn.textContent = '🌙';
-    themeBtn.title = '当前：深色（点击切换）';
-  }
-}
-function applyMode(mode) {
-  if (mode === 'system') {
-    themeBtn.textContent = '🖥️';
-    themeBtn.title = '当前：跟随系统（点击切换）';
-    applyTheme(systemTheme());
-  } else {
-    applyTheme(mode);
-  }
-}
-applyMode(storedMode());
-
-// 跟随系统模式下，实时跟随系统主题变化
-if (window.matchMedia) {
-  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-    if (storedMode() === 'system') applyTheme(systemTheme());
-  });
-}
-// 循环：深色 ↔ 浅色
-themeBtn.onclick = () => {
-  const next = storedMode() === 'dark' ? 'light' : 'dark';
-  localStorage.setItem(THEME_KEY, next);
-  applyMode(next);
-};
-
-// ---------- 全局状态 ----------
-const state = {
-  scenarios: {},            // 后端下发的场景配置 { key: {label, model} }
-  activeScenario: null,     // 当前选中的场景 key
-  sessions: {},             // 每个场景独立的消息 DOM 容器 { key: HTMLElement }
-  busy: false,              // 是否有请求进行中
-  streamingAnswer: null,    // 当前流式输出的答案元素
-  streamingText: '',        // 当前流式输出的完整文本
-  streamingThink: null,     // 当前流式输出的思考元素
-  streamingThinkText: '',   // 当前流式输出的思考文本
-  streamingHead: null,      // 当前流式输出的答案头部元素
-};
-
-// ---------- 小工具：创建元素 ----------
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-}
 
 // ---------- 消息流渲染 ----------
 // 切换场景时，把对应会话的 DOM 挂回主区域
@@ -125,8 +369,23 @@ function mountSession(key) {
   if (!state.sessions[key]) {
     state.sessions[key] = el('div', 'session');
   }
+  // 确保有对话 ID
+  if (!state.conversationIds[key]) {
+    state.conversationIds[key] = generateConvId();
+  }
+  // 启动阶段由 hash 恢复接管，避免覆盖 URL；启动完成后切换场景时同步
+  if (state.bootDone) syncUrl();
   messagesEl.appendChild(state.sessions[key]);
   if (sceneNameEl) sceneNameEl.textContent = state.scenarios[key]?.label || '对话';
+  // 同步可编辑的对话名称
+  if (convNameEl) {
+    convNameEl.value = state.conversationTitles[key] || '';
+    convNameEl.placeholder = '新对话';
+  }
+  // 已有消息的历史会话：以当前时间为起点近似计时
+  const hasMsgs = state.sessions[key] && state.sessions[key].querySelectorAll('.msg').length > 0;
+  state.sessionStats.startTs = hasMsgs ? Date.now() : null;
+  renderSessionState();
   showEmptyIfEmpty();
   scrollDown();
 }
@@ -134,6 +393,23 @@ function mountSession(key) {
 function scrollDown() {
   const chatEl = messagesEl.closest('.chat') || messagesEl;
   chatEl.scrollTop = chatEl.scrollHeight;
+  updateScrollButton();
+}
+
+// 滚动到底部按钮：距底一定距离时显示
+const scrollBottomBtn = $('#scroll-bottom');
+function updateScrollButton() {
+  if (!scrollBottomBtn) return;
+  const chatEl = messagesEl.closest('.chat') || messagesEl;
+  const distance = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+  if (distance > 80) scrollBottomBtn.classList.remove('hidden');
+  else scrollBottomBtn.classList.add('hidden');
+}
+if (scrollBottomBtn) {
+  scrollBottomBtn.onclick = () => scrollDown();
+  const chatEl = messagesEl.closest('.chat') || messagesEl;
+  chatEl.addEventListener('scroll', updateScrollButton);
+  window.addEventListener('resize', updateScrollButton);
 }
 
 function appendToActive(node) {
@@ -143,159 +419,151 @@ function appendToActive(node) {
   scrollDown();
 }
 
-// 用户气泡
-function appendUser(text) {
-  const m = el('div', 'msg user');
-  m.appendChild(el('div', 'bubble', text));
-  appendToActive(m);
+// 当前生效的沙箱根（已绑定的绝对路径优先，其次设置页/服务端默认）
+function effectiveRoot() {
+  if (state.currentProjectRoot && isAbs(state.currentProjectRoot)) return state.currentProjectRoot;
+  const sRoot = settingsRoot();
+  if (sRoot && isAbs(sRoot)) return sRoot;
+  if (serverRootCache && isAbs(serverRootCache)) return serverRootCache;
+  if (state.serverDefaultRoot && isAbs(state.serverDefaultRoot)) return state.serverDefaultRoot;
+  return null;
 }
 
-// Agent 最终回答卡片（角色标签 + 复制）
-function appendAnswer(text) {
-  const m = el('div', 'msg agent answer-card');
-  const head = el('div', 'answer-head');
-  head.appendChild(el('span', 'role', 'Agent'));
-  const copy = el('button', 'copy', '复制');
-  copy.onclick = () => {
-    navigator.clipboard?.writeText(text).then(() => {
-      copy.textContent = '已复制';
-      setTimeout(() => (copy.textContent = '复制'), 1200);
-    });
-  };
-  head.appendChild(copy);
-  const bubble = el('div', 'bubble');
-  bubble.innerHTML = renderMarkdown(text);
-  m.appendChild(head);
-  m.appendChild(bubble);
-  appendToActive(m);
-}
+// 更新顶栏的项目目录显示 + 沙箱提示
+function updateProjectRootUI() {
+  const chip = $('#project-root');
+  const hint = $('#sandbox-hint');
+  if (!chip) return;
 
-// 简单的 Markdown 渲染器（仅处理代码块）
-function renderMarkdown(text) {
-  if (!text) return '';
-  
-  // 使用 marked 库渲染 markdown
-  if (typeof marked !== 'undefined') {
-    // 配置 marked
-    marked.setOptions({
-      breaks: false,  // 不转换换行符，保持 markdown 格式
-      gfm: true,      // 启用 GitHub 风格 markdown
-    });
-    return marked.parse(text);
+  const abs = effectiveRoot();
+
+  if (abs) {
+    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(abs)}</span>`;
+    chip.title = '当前会话文件访问限定在此沙箱内：' + abs;
+    if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
+  } else if (browseRoot) {
+    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(browseRoot)}</span><span class="pr-tag">本地浏览</span>`;
+    chip.title = '本地浏览目录（仅用于插入路径，模型读取仍受沙箱限制）';
+    if (hint) hint.textContent = '本会话以「选择目录」浏览本地文件，模型读取受沙箱限制';
+  } else {
+    const fallback = settingsRoot() || serverRootCache || state.serverDefaultRoot || '默认沙箱';
+    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(fallback)}</span>`;
+    chip.title = '当前会话文件访问限定在此沙箱内';
+    if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
   }
-  
-  // 降级处理：简单换行
-  return text.replace(/\n/g, '<br>');
+  // 重新渲染 Lucide 图标
+  if (window.lucide) lucide.createIcons();
+  // 同步空状态的绑定提示
+  if (typeof refreshEmptyRootStatus === 'function') refreshEmptyRootStatus();
+  // 同步文件面板：无根显示提示，有根加载目录树
+  if (typeof updateFilePanelState === 'function') updateFilePanelState();
+  // 同步会话状态栏（模型 / 目录 / 分支）
+  renderSessionState();
+  fetchGitBranch(effectiveRoot());
 }
 
-// 过程步骤（思考链 / 工具调用 / 错误等）
-function appendStep(type, text) {
-  const s = el('div', 'step ' + type, text);
-  appendToActive(s);
-  return s;
+// ---------- 会话状态栏 ----------
+let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
+
+function resetSessionStats() {
+  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0 };
+  state.gitBranch = '';
 }
 
-// R1 推理块：默认折叠，可点击展开
-function appendThinkBlock() {
-  const thinkWrap = el('div', 'think-block');
-  thinkWrap.setAttribute('data-collapsed', 'true');
-  
-  const header = el('div', 'think-header');
-  const arrow = el('span', 'think-arrow', '▶');
-  const label = el('span', 'think-label', '思考过程');
-  header.appendChild(arrow);
-  header.appendChild(label);
-  
-  const body = el('div', 'think-body');
-  
-  header.onclick = () => {
-    const isCollapsed = thinkWrap.getAttribute('data-collapsed') === 'true';
-    thinkWrap.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
-    arrow.textContent = isCollapsed ? '▼' : '▶';
-  };
-  
-  thinkWrap.appendChild(header);
-  thinkWrap.appendChild(body);
-  state.streamingAnswer.appendChild(thinkWrap);
-  state.streamingThink = body;
-  state.streamingThinkText = '';
+function formatElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  return h + 'h ' + (m % 60) + 'm';
 }
 
-// 更新思考内容
-function updateThinkContent(text) {
-  if (state.streamingThink) {
-    state.streamingThinkText += text;
-    state.streamingThink.textContent = state.streamingThinkText;
+// 渲染对话框下方的会话状态栏
+function renderSessionState() {
+  if (!sessionStateEl) return;
+  const sc = state.scenarios[state.activeScenario] || {};
+  const model = state.activeModel || modelFor(state.activeScenario) || sc.model || '—';
+  const root = effectiveRoot();
+  const dirName = root ? lastSeg(root) : '默认沙箱';
+  const branch = state.gitBranch ? ` <em>git:(${escapeHtml(state.gitBranch)})</em>` : '';
+  const id = (state.conversationIds[state.activeScenario] || '').slice(0, 12) || '—';
+  const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
+  const counts = state.sessionStats.toolCounts || {};
+  const toolStr = Object.keys(counts).length
+    ? Object.entries(counts).map(([k, v]) => `✓ ${escapeHtml(k)} ×${v}`).join('  ')
+    : '无工具调用';
+  const sess = state.sessions[state.activeScenario];
+  const msgCount = sess ? sess.querySelectorAll('.msg').length : 0;
+
+  sessionStateEl.innerHTML = `
+    <div class="ss-line">
+      <span class="ss-model">${escapeHtml(model)}</span>
+      <span class="ss-sep">·</span>
+      <span class="ss-dir">${escapeHtml(dirName)}${branch}</span>
+      <span class="ss-sep">·</span>
+      <span class="ss-id">${escapeHtml(id)}</span>
+      <span class="ss-sep">·</span>
+      <span class="ss-elapsed">⏱️ ${elapsed}</span>
+      <span class="ss-sep">·</span>
+      <span class="ss-tools">${toolStr}</span>
+      <span class="ss-sep">·</span>
+      <span class="ss-msg">消息 ${msgCount}</span>
+      <span class="ss-more">详情 ›</span>
+    </div>
+  `;
+}
+
+// 组装状态详情文本（用于弹框展示）
+function buildStateDetail() {
+  const sc = state.scenarios[state.activeScenario] || {};
+  const model = state.activeModel || modelFor(state.activeScenario) || sc.model || '—';
+  const root = effectiveRoot();
+  const id = state.conversationIds[state.activeScenario] || '—';
+  const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
+  const counts = state.sessionStats.toolCounts || {};
+  const toolLines = Object.keys(counts).length
+    ? Object.entries(counts).map(([k, v]) => `  ${k} ×${v}`).join('\n')
+    : '  无';
+  const sess = state.sessions[state.activeScenario];
+  const msgCount = sess ? sess.querySelectorAll('.msg').length : 0;
+  return `模型: ${model}
+目录: ${root || '默认沙箱'}${state.gitBranch ? '\n分支: ' + state.gitBranch : ''}
+会话 ID: ${id}
+已用时长: ${elapsed}
+消息数: ${msgCount}
+工具调用:
+${toolLines}`;
+}
+
+// 点击状态栏弹出详情
+function openStateModal() {
+  const body = $('#state-modal-body');
+  if (body) body.textContent = buildStateDetail();
+  const modal = $('#state-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+function closeStateModal() {
+  const modal = $('#state-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// 查询沙箱目录的 git 分支（用于状态栏），同一根只查一次
+async function fetchGitBranch(root) {
+  if (!root) { state.gitBranch = ''; lastGitRoot = null; return; }
+  if (lastGitRoot === root) return;
+  lastGitRoot = root;
+  state.gitBranch = '';
+  try {
+    const params = new URLSearchParams();
+    params.set('root', root);
+    const r = await fetch('/api/fs/git-branch?' + params.toString());
+    const d = await r.json();
+    state.gitBranch = d.branch || '';
+  } catch (e) {
+    state.gitBranch = '';
   }
-}
-
-// 工具调用块：直接显示结果
-function appendToolCall(action, params, result) {
-  const toolWrap = el('div', 'tool-block');
-  
-  // 工具调用标题
-  const header = el('div', 'tool-toggle');
-  const icon = el('span', 'tool-icon', '→');
-  const title = el('span', 'tool-title', `${action}(${JSON.stringify(params)})`);
-  header.appendChild(icon);
-  header.appendChild(title);
-  
-  // 工具结果
-  const body = el('div', 'tool-body');
-  if (result !== null) {
-    body.textContent = result;
-  }
-  
-  toolWrap.appendChild(header);
-  toolWrap.appendChild(body);
-  state.streamingAnswer.appendChild(toolWrap);
-  scrollDown();
-}
-
-// 更新最后一个工具调用块的结果
-function updateToolResult(result) {
-  const toolBlocks = state.streamingAnswer?.querySelectorAll('.tool-block');
-  if (toolBlocks && toolBlocks.length > 0) {
-    const lastBlock = toolBlocks[toolBlocks.length - 1];
-    const body = lastBlock.querySelector('.tool-body');
-    if (body) {
-      body.textContent = result;
-    }
-  }
-}
-
-// ---------- 写操作确认卡片（每次单独确认） ----------
-function showConfirm(card) {
-  const { id, action, params } = card;
-  const c = el('div', 'confirm-card');
-  c.appendChild(el('div', 'step confirm', `写操作确认 [${action}]`));
-  const pre = el('pre');
-  pre.textContent = JSON.stringify(params, null, 2);
-  c.appendChild(pre);
-
-  const btns = el('div', 'btns');
-  const yes = el('button', 'yes', '确认写入');
-  const no = el('button', 'no', '拒绝');
-  yes.onclick = () => {
-    fetch('/api/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ok: true }),
-    });
-    c.remove();
-  };
-  no.onclick = () => {
-    fetch('/api/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ok: false }),
-    });
-    c.remove();
-  };
-  btns.appendChild(yes);
-  btns.appendChild(no);
-  c.appendChild(btns);
-  appendToActive(c);
+  renderSessionState();
 }
 
 // ---------- SSE 事件分发 ----------
@@ -305,6 +573,7 @@ function handleEvent(ev) {
   switch (ev.type) {
     case 'meta':
       state.scenarios = ev.scenarios || {};
+      state.tools = Array.isArray(ev.tools) ? ev.tools : [];
       break;
       
     case 'thinking_start':
@@ -329,7 +598,10 @@ function handleEvent(ev) {
       // 工具调用，追加到当前消息容器
       toggleThinking(true, '执行工具');
       ensureMessageContainer();
-      appendToolCall(ev.action, ev.params, null);
+      appendToolCall(ev.action, ev.params, null, ev.root || effectiveRoot() || '');
+      // 累计工具调用次数到状态栏
+      state.sessionStats.toolCounts[ev.action] = (state.sessionStats.toolCounts[ev.action] || 0) + 1;
+      renderSessionState();
       break;
       
     case 'tool_result':
@@ -345,7 +617,8 @@ function handleEvent(ev) {
       break;
       
     case 'answer':
-      // 最终答案
+      // 最终答案（同时结束思考态，兼容仅输出 think 无 token 的模型）
+      toggleThinking(false);
       finalizeAnswer(ev.content);
       break;
       
@@ -371,58 +644,6 @@ function handleEvent(ev) {
       appendStep('error', '⚠ ' + ev.msg + (ev.content ? '\n' + ev.content : ''));
       break;
   }
-}
-
-// 确保当前消息容器存在
-function ensureMessageContainer() {
-  if (state.streamingAnswer) return;
-  
-  const m = el('div', 'msg agent answer-card');
-  const head = el('div', 'answer-head');
-  head.appendChild(el('span', 'role', 'Agent'));
-  const stats = el('span', 'stats');
-  head.appendChild(stats);
-  const copy = el('button', 'copy', '复制');
-  head.appendChild(copy);
-  const bubble = el('div', 'bubble');
-  m.appendChild(head);
-  m.appendChild(bubble);
-  appendToActive(m);
-  
-  state.streamingAnswer = bubble;
-  state.streamingText = '';
-  state.streamingHead = head;
-  
-  copy.onclick = () => {
-    navigator.clipboard?.writeText(state.streamingText).then(() => {
-      copy.textContent = '已复制';
-      setTimeout(() => (copy.textContent = '复制'), 1200);
-    });
-  };
-}
-
-// 追加 token 到当前答案
-function appendToken(token) {
-  state.streamingText += token;
-  state.streamingAnswer.innerHTML = renderMarkdown(state.streamingText);
-  scrollDown();
-}
-
-// 最终确定答案
-function finalizeAnswer(content) {
-  if (state.streamingAnswer) {
-    // 已有流式输出，更新为最终内容
-    state.streamingAnswer.innerHTML = renderMarkdown(content);
-  } else {
-    // 没有流式输出，创建新的答案元素
-    ensureMessageContainer();
-    state.streamingAnswer.innerHTML = renderMarkdown(content);
-  }
-  
-  // 清理状态
-  state.streamingAnswer = null;
-  state.streamingText = '';
-  state.streamingHead = null;
 }
 
 // ---------- 图片粘贴 / 拖拽（仅随消息发送，不落工作目录） ----------
@@ -496,298 +717,6 @@ inputEl.addEventListener('drop', (e) => {
   }
 });
 
-// ---------- 设置（存 localStorage，随请求下发，不碰后端常量） ----------
-const SETTINGS_KEY = 'local-agent-settings';
-function loadSettings() {
-  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
-  catch (e) { return {}; }
-}
-function saveSettings(s) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-}
-// 取某场景的模型名（前端覆盖优先，否则用后端默认）
-function modelFor(scenarioKey) {
-  const s = loadSettings();
-  const map = { coder: s.coder, debug: s.debug, general: s.general, vision: s.vision };
-  const v = map[scenarioKey];
-  return v && v.trim() ? v.trim() : null; // null => 用后端默认
-}
-const DEFAULT_OLLAMA_HOST = 'http://192.168.0.101:11434';
-function ollamaHost() {
-  const s = loadSettings();
-  return s.ollama && s.ollama.trim() ? s.ollama.trim() : DEFAULT_OLLAMA_HOST;
-}
-
-const settingsBtn = $('#settings-btn');
-const settingsModal = $('#settings-modal');
-const settingsClose = $('#settings-close');
-const settingsSave = $('#settings-save');
-function scenarioDefault(key) {
-  return state.scenarios[key]?.model || '';
-}
-
-settingsBtn.onclick = () => {
-  const s = loadSettings();
-  $('#set-ollama').value = s.ollama || DEFAULT_OLLAMA_HOST;
-  $('#set-root').value = s.root || serverRootCache || '';
-  $('#set-coder').value = s.coder || scenarioDefault('coder');
-  $('#set-debug').value = s.debug || scenarioDefault('debug');
-  $('#set-general').value = s.general || scenarioDefault('general');
-  $('#set-vision').value = s.vision || scenarioDefault('vision');
-  settingsModal.classList.remove('hidden');
-};
-settingsClose.onclick = () => settingsModal.classList.add('hidden');
-settingsSave.onclick = async () => {
-  const rootVal = $('#set-root').value.trim();
-  const s = {
-    ollama: $('#set-ollama').value,
-    root: rootVal,
-    coder: $('#set-coder').value,
-    debug: $('#set-debug').value,
-    general: $('#set-general').value,
-    vision: $('#set-vision').value,
-  };
-  saveSettings(s);
-  // 立即把已保存的模型覆盖到当前标签上并刷新，避免等待服务端自检才看到变化
-  if (state.scenarios && Object.keys(state.scenarios).length) {
-    for (const k of Object.keys(state.scenarios)) {
-      const v = modelFor(k);
-      if (v) state.scenarios[k].model = v;
-    }
-    renderTabs();
-    mountSession(state.activeScenario);
-  }
-  // 服务端持久化 + 校验项目根目录
-  let serverMsg = '';
-  try {
-    const r = await fetch('/api/root', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root: rootVal }) });
-    const d = await r.json();
-    if (!d.ok) serverMsg = ' · ' + (d.error || '项目目录无效');
-  } catch (e) { serverMsg = ' · 服务端保存失败'; }
-  $('#settings-msg').textContent = '已保存（浏览器本地）' + serverMsg;
-  setTimeout(() => {
-    settingsModal.classList.add('hidden');
-    $('#settings-msg').textContent = '';
-    preflight(); // 地址/模型变更后刷新状态栏（以服务端就绪状态为准）
-  }, 600);
-};
-
-// 项目目录绝对路径：设置页填写优先，否则回退服务端持久化根，否则默认沙箱
-let serverRootCache = null; // 服务端持久化的有效根（启动拉取）
-async function loadServerRoot() {
-  try {
-    const r = await fetch('/api/root');
-    const d = await r.json();
-    if (d && d.persisted && d.root) serverRootCache = d.root;
-  } catch (e) { /* 忽略 */ }
-}
-function settingsRoot() {
-  const s = loadSettings();
-  const local = s.root && s.root.trim() ? s.root.trim() : null;
-  return local || serverRootCache || null;
-}
-
-// ---------- 文件浏览器（左栏） ----------
-// browseRoot: null => 后端默认沙箱目录；非 null => 用户用「选择目录」挑的本地目录名
-let browseRoot = null;
-let localFiles = null;        // 最近一次选定的 FileList
-const fileTreeEl = $('#file-tree');
-const fsRefresh = $('#fs-refresh');
-const fsPick = $('#fs-pick');
-const dirInput = $('#dir-input');
-
-async function loadFileTree(sub) {
-  if (browseRoot !== null) return; // 本地浏览模式，不请求后端
-  const root = settingsRoot();
-  fileTreeEl.textContent = '加载中…';
-  try {
-    const params = new URLSearchParams();
-    if (sub) params.set('path', sub);
-    if (root) params.set('root', root);
-    const q = params.toString() ? ('?' + params.toString()) : '';
-    const r = await fetch('/api/fs/list' + q);
-    const d = await r.json();
-    if (d.error) { fileTreeEl.textContent = '⚠ ' + d.error; return; }
-    // 渲染为可展开的树：根目录名（取绝对路径最后一段）+ 子节点
-    const rootLabel = lastSeg(d.root) || '项目文件';
-    renderFsTree(d.items, '', rootLabel);
-  } catch (e) {
-    fileTreeEl.textContent = '⚠ ' + e.message;
-  }
-}
-
-// 取路径最后一段作为根名显示
-function lastSeg(p) { return p ? p.replace(/[/\\]$/, '').split(/[/\\]/).pop() : ''; }
-
-// 创建文件树节点（带SVG图标）
-function createFileNode(type, name, className) {
-  const node = el('div', 'node ' + (className || ''));
-  const icon = el('img', 'tree-icon');
-  icon.src = type === 'dir' ? '/icons/folder.svg' : '/icons/file.svg';
-  icon.alt = '';
-  node.appendChild(icon);
-  node.appendChild(document.createTextNode(' ' + name));
-  return node;
-}
-
-async function loadFsChildren(fullPath, container) {
-  const root = settingsRoot();
-  const loading = el('div', 'node loading', '加载中…');
-  container.appendChild(loading);
-  try {
-    const params = new URLSearchParams();
-    params.set('path', fullPath);
-    if (root) params.set('root', root);
-    const r = await fetch('/api/fs/list?' + params.toString());
-    const d = await r.json();
-    container.removeChild(loading);
-    if (d.error) { container.appendChild(el('div', 'node', '⚠ ' + d.error)); return; }
-    renderFsChildren(d.items, fullPath, container);
-  } catch (e) {
-    if (loading.parentNode) container.removeChild(loading);
-    container.appendChild(el('div', 'node', '⚠ ' + e.message));
-  }
-}
-
-// 渲染树的一层（用于根层）：直接把根下内容渲染进 rootBox，避免重复请求
-function renderFsTree(items, base, rootLabel) {
-  fileTreeEl.innerHTML = '';
-  const rootNode = createFileNode('dir', rootLabel || '项目文件', 'dir');
-  const rootBox = el('div', 'local-children');
-  rootNode.onclick = () => {
-    // 再次点击根：折叠/展开切换
-    if (rootBox.childElementCount === 0) renderFsChildren(items, base, rootBox);
-    else rootBox.innerHTML = '';
-  };
-  fileTreeEl.appendChild(rootNode);
-  fileTreeEl.appendChild(rootBox);
-  // 初始即展开根目录，直接展示第一层
-  renderFsChildren(items, base, rootBox);
-}
-
-// 渲染子层到指定容器（带展开/折叠）
-function renderFsChildren(items, base, container) {
-  container.innerHTML = '';
-  const dirs = items.filter((i) => i.type === 'dir').sort((a, b) => a.name.localeCompare(b.name));
-  const files = items.filter((i) => i.type === 'file').sort((a, b) => a.name.localeCompare(b.name));
-  for (const it of dirs) {
-    const full = base ? base + '/' + it.name : it.name;
-    const dirNode = createFileNode('dir', it.name, 'dir');
-    const childBox = el('div', 'local-children');
-    dirNode.onclick = () => {
-      if (childBox.childElementCount === 0) loadFsChildren(full, childBox);
-      else childBox.innerHTML = ''; // 再次点击折叠
-    };
-    container.appendChild(dirNode);
-    container.appendChild(childBox);
-  }
-  for (const it of files) {
-    const full = base ? base + '/' + it.name : it.name;
-    const fNode = createFileNode('file', it.name, 'file');
-    fNode.onclick = () => insertPath(full);
-    container.appendChild(fNode);
-  }
-}
-
-// ---------- 本地目录浏览（纯前端，不经后端沙箱） ----------
-// 把 FileList 按 webkitRelativePath 构建成可展开的虚拟树
-function buildLocalTree(fileList) {
-  const root = { name: '', dirs: new Map(), files: [] };
-  for (const f of fileList) {
-    const parts = f.webkitRelativePath.split('/');
-    const rootName = parts[0];
-    root.name = rootName;
-    let cur = root;
-    // 跳过根目录名，逐层建立子目录
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      const isLast = i === parts.length - 1;
-      if (isLast) {
-        cur.files.push(part);
-      } else {
-        if (!cur.dirs.has(part)) cur.dirs.set(part, { name: part, dirs: new Map(), files: [] });
-        cur = cur.dirs.get(part);
-      }
-    }
-  }
-  return root;
-}
-
-function renderLocalTree(node, container, basePath) {
-  // 子目录
-  const dirNames = [...node.dirs.keys()].sort();
-  for (const name of dirNames) {
-    const child = node.dirs.get(name);
-    const full = basePath ? basePath + '/' + name : name;
-    const dirNode = createFileNode('dir', name, 'dir');
-    const childBox = el('div', 'local-children');
-    let expanded = false;
-    dirNode.onclick = () => {
-      if (!expanded) {
-        childBox.innerHTML = '';
-        renderLocalTree(child, childBox, full);
-        expanded = true;
-      } else {
-        childBox.innerHTML = '';
-        expanded = false;
-      }
-    };
-    container.appendChild(dirNode);
-    container.appendChild(childBox);
-  }
-  // 文件
-  const fileNames = node.files.slice().sort();
-  for (const name of fileNames) {
-    const full = basePath ? basePath + '/' + name : name;
-    const fNode = createFileNode('file', name, 'file');
-    fNode.onclick = () => insertPath(full);
-    container.appendChild(fNode);
-  }
-}
-
-function loadLocalTree(fileList) {
-  if (!fileList || !fileList.length) return;
-  localFiles = fileList;
-  browseRoot = fileList[0].webkitRelativePath.split('/')[0];
-  const tree = buildLocalTree(fileList);
-  fileTreeEl.innerHTML = '';
-  const rootNode = el('div', 'node dir', '📂 ' + browseRoot);
-  const rootBox = el('div', 'local-children');
-  renderLocalTree(tree, rootBox, '');
-  rootNode.onclick = () => {
-    rootBox.innerHTML = '';
-    renderLocalTree(tree, rootBox, '');
-  };
-  fileTreeEl.appendChild(rootNode);
-  fileTreeEl.appendChild(rootBox);
-  updatePanelHint();
-}
-
-function updatePanelHint() {
-  const hint = document.querySelector('.panel-hint');
-  if (hint) {
-    hint.textContent = browseRoot
-      ? '当前浏览：' + browseRoot + '（点文件插入路径）'
-      : '点文件：插入路径 · 点「选择目录」可浏览任意本地文件夹';
-  }
-}
-
-// 点文件：把相对路径插入输入框（供用户发送时引用，或交给模型读取）
-// 本地模式下，路径前缀所选根目录名，便于模型理解
-function insertPath(rel) {
-  const prefixed = browseRoot ? (browseRoot + '/' + rel) : rel;
-  const cur = inputEl.value;
-  inputEl.value = (cur ? cur + ' ' : '') + '文件: ' + prefixed;
-  inputEl.focus();
-}
-
-fsRefresh.onclick = () => {
-  if (browseRoot !== null && localFiles) loadLocalTree(localFiles);
-  else loadFileTree('');
-};
-fsPick.onclick = () => dirInput.click();
-dirInput.onchange = () => loadLocalTree(dirInput.files);
-
 // ---------- 中止控制器 ----------
 let currentAbortController = null;
 
@@ -797,20 +726,56 @@ async function send() {
   if (state.busy) return;
   if (!text && pendingImages.length === 0) return; // 文+图至少一项
 
+  const scenario = state.activeScenario;
+  const convId = state.conversationIds[scenario];
+
   const imgs = pendingImages.slice();
   inputEl.value = '';
+  autoResizeInput();
   pendingImages.length = 0;
   renderImageThumbs();
-  appendUser(text || '（图片）');
+
+  // 上传图片到当前项目目录（按 日期/对话 组织），写入磁盘以便持久化与历史回放
+  const uploadRoot = settingsRoot() || state.currentProjectRoot || (typeof serverRootCache !== 'undefined' ? serverRootCache : '') || '';
+  for (const img of imgs) {
+    try {
+      const r = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ root: uploadRoot, convId, name: img.name, data: img.dataUrl }),
+      });
+      const d = await r.json();
+      if (d.ok && d.path) { img.path = d.path; img.name = d.name || img.name; }
+    } catch (e) {
+      console.error('图片上传失败:', e);
+    }
+  }
+
+  appendUser(text || '（图片）', imgs);
   setBusy(true);
 
-  const scenario = state.activeScenario;
+  // 首次输入时保存对话
+  const session = state.sessions[scenario];
+  const msgCount = session ? session.querySelectorAll('.msg').length : 0;
+  if (msgCount <= 1) {
+    // 第一条用户消息，保存对话
+    await saveConversation(scenario);
+  }
+
   const body = { message: text, scenario, images: imgs.map((i) => i.b64) };
-  const m = modelFor(scenario); if (m) body.model = m;       // 前端覆盖模型名
+  if (state.activeModel) body.model = state.activeModel;    // 下拉选中的模型
   const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
-  // 项目目录：设置页填写的绝对路径优先；否则若用户用「选择目录」挑了本地文件夹，用其目录名作为沙箱根
-  const root = settingsRoot() || browseRoot;
-  if (root) body.projectRoot = root;
+
+  // 生效沙箱根：已绑定的绝对路径优先；否则设置页绝对路径；否则本地浏览目录名
+  const boundAbs = (state.currentProjectRoot && isAbs(state.currentProjectRoot)) ? state.currentProjectRoot : null;
+  if (!boundAbs) {
+    const sAbs = (settingsRoot() && isAbs(settingsRoot())) ? settingsRoot() : null;
+    if (sAbs) state.currentProjectRoot = sAbs;
+  }
+  const effRoot = boundAbs || state.currentProjectRoot || settingsRoot() || browseRoot;
+  if (effRoot) body.projectRoot = effRoot;
+  if (!state.sessionStats.startTs) state.sessionStats.startTs = Date.now();
+  updateProjectRootUI();
 
   // 创建 AbortController 以支持中止
   currentAbortController = new AbortController();
@@ -868,17 +833,20 @@ function setBusy(flag) {
   toggleThinking(flag);
 
   if (flag) {
-    // 忙碌时：发送按钮变为中止按钮
-    sendBtn.textContent = '中止';
+    // 忙碌时：发送按钮变为中止按钮（方块图标表示停止）
+    sendBtn.innerHTML = '<i data-lucide="square" class="send-icon"></i>';
+    sendBtn.title = '中止';
     sendBtn.classList.add('abort');
     sendBtn.onclick = abortCurrentRequest;
   } else {
-    // 空闲时：恢复发送按钮
-    sendBtn.textContent = '发送';
+    // 空闲时：恢复发送按钮（纸飞机图标）
+    sendBtn.innerHTML = '<i data-lucide="send" class="send-icon"></i>';
+    sendBtn.title = '发送';
     sendBtn.classList.remove('abort');
     sendBtn.onclick = send;
     currentAbortController = null;
   }
+  if (window.lucide) lucide.createIcons();
 }
 
 // ---------- 思考中… + 秒数 ----------
@@ -905,108 +873,51 @@ function toggleThinking(on, msg) {
   }
 }
 
-// ---------- 场景标签栏（分段控件） ----------
-function renderTabs() {
-  tabsEl.innerHTML = '';
-  for (const key of Object.keys(state.scenarios)) {
-    const sc = state.scenarios[key];
-    // 模型未就绪的标签置灰并提示，不可点击
-    const disabled = sc.ready === false;
-    const cls = 'tab' + (key === state.activeScenario ? ' active' : '') + (disabled ? ' disabled' : '');
-    const tab = el('div', cls);
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-selected', String(key === state.activeScenario));
-    const dot = el('span', 'dot');
-    dot.style.background = disabled ? 'var(--text-mute)' : 'var(--accent)';
-    tab.appendChild(dot);
-    tab.appendChild(el('div', 'label', sc.label));
-    tab.appendChild(el('div', 'm', sc.model));
-    if (!disabled) tab.onclick = () => selectScenario(key);
-    tabsEl.appendChild(tab);
+// ---------- 模型选择（持久化到 localStorage，通过 /models 弹窗切换） ----------
+const MODEL_KEY = 'local-agent-model'; // 持久化当前选中的模型
+
+function loadSelectedModel() {
+  try { return localStorage.getItem(MODEL_KEY) || null; }
+  catch (e) { return null; }
+}
+function saveSelectedModel(m) {
+  try { if (m) localStorage.setItem(MODEL_KEY, m); } catch (e) {}
+}
+
+function renderModelDropdown() {
+  const models = Array.isArray(state.installedModels) ? state.installedModels.slice() : [];
+  if (!models.length) {
+    state.activeModel = null;
+    return;
+  }
+  // 优先用上次持久化的选择；否则默认第一个
+  const saved = loadSelectedModel();
+  const selected = (saved && models.includes(saved)) ? saved : models[0];
+  state.activeModel = selected;
+  renderSessionState();
+}
+
+function setActiveModel(model) {
+  if (state.busy) return;
+  if (!model || !state.installedModels.includes(model)) return;
+  state.activeModel = model;
+  saveSelectedModel(model);
+  renderSessionState();
+}
+
+function updateSceneName() {
+  const sc = state.scenarios[state.activeScenario];
+  if (sceneNameEl && sc) {
+    sceneNameEl.textContent = sc.label;
   }
 }
 
-function selectScenario(key) {
-  if (state.busy) return; // 请求进行中不允许切换
-  state.activeScenario = key;
-  renderTabs();
-  mountSession(key);
+// ---------- 输入框自适应高度（最多约 4 行，超出滚动） ----------
+function autoResizeInput() {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 104) + 'px';
 }
-
-// ---------- 加载后端默认配置（模型名等） ----------
-async function loadConfig() {
-  try {
-    const r = await fetch('/api/config');
-    const d = await r.json();
-    state.scenarios = {};
-    for (const k of Object.keys(d.scenarios || {})) {
-      const sc = d.scenarios[k];
-      const saved = modelFor(k);
-      state.scenarios[k] = {
-        label: SCENARIO_LABELS[k] || sc.label || k,
-        model: saved || sc.model,
-        ready: null,
-      };
-    }
-    // 设置模型输入框的占位提示
-    $('#set-coder').placeholder = scenarioDefault('coder');
-    $('#set-debug').placeholder = scenarioDefault('debug');
-    $('#set-general').placeholder = scenarioDefault('general');
-    $('#set-vision').placeholder = scenarioDefault('vision');
-  } catch (e) { console.error('loadConfig failed', e); }
-}
-
-// ---------- 启动自检 ----------
-async function preflight() {
-  try {
-    const oh = ollamaHost();
-    const r = await fetch('/api/preflight' + (oh ? '?ollamaHost=' + encodeURIComponent(oh) : ''));
-    const d = await r.json();
-    // 用后端下发的场景配置初始化标签（带就绪状态），即使 Ollama 不可达也要渲染标签
-    // 模型名优先用用户在设置里保存的值（modelFor），否则用后端默认；就绪状态以后端为准
-    state.scenarios = {};
-    const installed = Array.isArray(d.models) ? d.models : [];
-    const isInstalled = (m) => installed.some((n) => n === m || n === m + ':latest' || n === 'latest');
-    for (const k of Object.keys(d.scenarios || {})) {
-      const s = d.scenarios[k];
-      const saved = modelFor(k);
-      const model = saved || s.model;
-      // 就绪状态以「已安装列表」为准：后端默认或用户自定义模型都行
-      const ready = installed.length ? isInstalled(model) : s.ready;
-      state.scenarios[k] = {
-        label: SCENARIO_LABELS[k] || k,
-        model,
-        ready,
-      };
-    }
-    if (!state.activeScenario) {
-      const firstReady = Object.keys(state.scenarios).find((k) => state.scenarios[k].ready);
-      state.activeScenario = firstReady || Object.keys(state.scenarios)[0];
-    }
-    renderTabs();
-    mountSession(state.activeScenario);
-
-    loadFileTree(''); // 启动即加载项目文件树
-
-    if (d.ollama !== 'ok') {
-      setStatus('warn', '⚠ Ollama 不可达 (' + (d.ollamaHost || '') + '): ' + (d.error || ''));
-      return;
-    }
-    const readyList = Object.entries(state.scenarios)
-      .filter(([, v]) => v.ready).map(([, v]) => v.model);
-    setStatus('ok', `就绪 | Node ${d.node} | Ollama: ${d.ollamaHost || '?'} | 已装: ${readyList.join(', ') || '无'} | 根: ${d.projectRoot}`);
-  } catch (e) {
-    setStatus('err', '⚠ 无法连接服务: ' + e.message);
-  }
-}
-
-// 场景 key -> 中文标签（后端也下发 label，这里作兜底）
-const SCENARIO_LABELS = {
-  coder: '代码补全 / 解释',
-  debug: '逻辑排查 / 找 bug',
-  general: '通用对话',
-  vision: '图片识别',
-};
+inputEl.addEventListener('input', autoResizeInput);
 
 // ---------- 绑定事件 ----------
 sendBtn.onclick = send;
@@ -1014,8 +925,58 @@ inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
+// 初始化面板提示和按钮状态
+updatePanelHint();
+renderSessionState();
+
+// 状态栏：点击弹出详情弹框
+if (sessionStateEl) {
+  sessionStateEl.onclick = openStateModal;
+}
+// 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
+const stateModalClose = $('#state-modal-close');
+if (stateModalClose) stateModalClose.onclick = closeStateModal;
+const stateModal = $('#state-modal');
+if (stateModal) {
+  stateModal.onclick = (e) => { if (e.target === stateModal) closeStateModal(); };
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeStateModal();
+    closeDeleteConfirm();
+  }
+});
+// 状态栏：定时刷新已用时长
+setInterval(() => { if (state.sessionStats.startTs) renderSessionState(); }, 30000);
+
 loadServerRoot();
-loadConfig().then(preflight);
+loadConfig().then(preflight).then(afterBoot);
+
+// 启动后：若 URL 带 #/session/<id> 则恢复该对话；完成后允许切场景同步 URL
+async function afterBoot() {
+  state.bootDone = true;
+  if (typeof initCommands === 'function') initCommands();
+  const id = parseSessionIdFromHash();
+  if (id) {
+    const ok = await openSessionById(id);
+    if (!ok) {
+      // 无效 ID：回到当前场景的空会话，并清掉错误 hash
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  }
+  // hash 变化（浏览器前进/后退或手动改）时跳到对应对话
+  window.addEventListener('hashchange', async () => {
+    if (_urlSyncLock) { _urlSyncLock = false; return; } // 忽略自身写入触发的 hashchange
+    const hid = parseSessionIdFromHash();
+    if (hid && hid !== state.conversationIds[state.activeScenario]) {
+      const ok = await openSessionById(hid);
+      if (!ok) history.replaceState(null, '', location.pathname + location.search);
+    } else if (!hid) {
+      // 回到无会话 hash：开启新对话
+      $('#new-chat').click();
+    }
+  });
+}
 
 // ---------- 热重载：public/ 文件变更时自动刷新页面 ----------
 if (typeof EventSource !== 'undefined') {

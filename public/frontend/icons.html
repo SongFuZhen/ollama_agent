@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lucide 图标库预览</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 24px;
+      color: #38bdf8;
+    }
+    .search-box {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .search-box input {
+      width: 100%;
+      max-width: 400px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-size: 14px;
+      outline: none;
+    }
+    .search-box input:focus { border-color: #38bdf8; }
+    .stats {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .icon-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 8px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-card:hover {
+      border-color: #38bdf8;
+      background: #253349;
+      transform: translateY(-2px);
+    }
+    .icon-card svg {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 8px;
+      color: #e2e8f0;
+    }
+    .icon-card .name {
+      font-size: 11px;
+      color: #94a3b8;
+      text-align: center;
+      word-break: break-all;
+    }
+    .copied {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #22c55e;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .copied.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>Lucide 图标库</h1>
+  <div class="search-box">
+    <input type="text" id="search" placeholder="搜索图标名称...">
+  </div>
+  <div class="stats" id="stats">加载中...</div>
+  <div class="grid" id="grid"></div>
+  <div class="copied" id="copied">已复制!</div>
+
+  <script src="/lib/lucide.js?v=1.24.0"></script>
+  <script>
+    const grid = document.getElementById('grid');
+    const searchInput = document.getElementById('search');
+    const statsEl = document.getElementById('stats');
+    const copiedEl = document.getElementById('copied');
+
+    // PascalCase -> kebab-case
+    function toKebab(str) {
+      return str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    }
+
+    // lucide.icons uses PascalCase keys
+    const iconEntries = Object.entries(lucide.icons);
+    const allIcons = iconEntries.map(([pascalName, data]) => ({
+      pascalName,
+      kebabName: toKebab(pascalName),
+      data
+    }));
+
+    function renderIcons(icons) {
+      grid.innerHTML = '';
+      icons.forEach(({ pascalName, kebabName, data }) => {
+        const card = document.createElement('div');
+        card.className = 'icon-card';
+        card.title = `点击复制: ${kebabName}`;
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+
+        // data is an array of [tagName, attributes] pairs
+        if (Array.isArray(data)) {
+          data.forEach(([tag, attrs]) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+            svg.appendChild(el);
+          });
+        }
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = kebabName;
+
+        card.appendChild(svg);
+        card.appendChild(nameEl);
+
+        card.addEventListener('click', () => {
+          navigator.clipboard.writeText(kebabName);
+          copiedEl.classList.add('show');
+          setTimeout(() => copiedEl.classList.remove('show'), 1500);
+        });
+
+        grid.appendChild(card);
+      });
+
+      statsEl.textContent = `共 ${allIcons.length} 个图标，当前显示 ${icons.length} 个`;
+    }
+
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      const filtered = query
+        ? allIcons.filter(i => i.kebabName.includes(query) || i.pascalName.toLowerCase().includes(query))
+        : allIcons;
+      renderIcons(filtered);
+    });
+
+    renderIcons(allIcons);
+  </script>
+</body>
+</html>

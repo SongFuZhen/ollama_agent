@@ -18,7 +18,7 @@ const STORE_FILE = path.join(TMP, 'project-root.json');
 // 复制 rootstore 逻辑到可控环境：直接 require 源码，但重定向其存储路径
 // rootstore 内部 STORE_FILE 是模块常量，无法注入；改为用同名覆盖 + 重新加载模块不可行。
 // 方案：直接调用源码函数，并在测试末尾清理其真实 data/ 文件，断言用返回值而非文件。
-const rootstore = require('../src/rootstore');
+const rootstore = require('../src/storage/rootstore');
 const { validateRoot, saveProjectRoot, getProjectRoot, isRootPersisted } = rootstore;
 
 const REAL_STORE = path.resolve(__dirname, '..', 'src', '..', 'data', 'project-root.json');

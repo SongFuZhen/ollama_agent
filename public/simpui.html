@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimpUI 预览</title>
+    <link rel="stylesheet" href="/lib/simpui/css/simpui.css">
+    <link rel="stylesheet" href="/lib/simpui/css/simpicker.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin: 20px 0; color: #333; }
+        h2 { margin: 20px 0 10px; color: #555; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        .demo-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .demo-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; align-items: center; }
+        .back-link { display: inline-block; margin: 10px 0; color: #007bff; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .code-block { background: #1e1e1e; color: #d4d4d4; padding: 12px 16px; border-radius: 6px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; overflow-x: auto; margin-top: 10px; white-space: pre; }
+        .code-label { font-size: 12px; color: #888; margin-top: 15px; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← 返回主页</a>
+        <h1>SimpUI 组件预览</h1>
+
+        <!-- Buttons -->
+        <div class="demo-section">
+            <h2>Buttons</h2>
+            <div class="demo-row">
+                <button class="simpui-btn primary sm">Primary</button>
+                <button class="simpui-btn secondary sm">Secondary</button>
+                <button class="simpui-btn success sm">Success</button>
+                <button class="simpui-btn info sm">Info</button>
+                <button class="simpui-btn warning sm">Warning</button>
+                <button class="simpui-btn danger sm">Danger</button>
+                <button class="simpui-btn dark sm">Dark</button>
+                <button class="simpui-btn light sm">Light</button>
+            </div>
+            <div class="demo-row">
+                <button class="simpui-btn primary">Normal</button>
+                <button class="simpui-btn primary md">Medium</button>
+                <button class="simpui-btn primary lg">Large</button>
+            </div>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;button class="simpui-btn primary sm"&gt;Primary&lt;/button&gt;
+&lt;button class="simpui-btn secondary sm"&gt;Secondary&lt;/button&gt;
+&lt;button class="simpui-btn success sm"&gt;Success&lt;/button&gt;
+&lt;button class="simpui-btn primary"&gt;Normal&lt;/button&gt;
+&lt;button class="simpui-btn primary md"&gt;Medium&lt;/button&gt;
+&lt;button class="simpui-btn primary lg"&gt;Large&lt;/button&gt;</div>
+        </div>
+
+        <!-- Badge -->
+        <div class="demo-section">
+            <h2>Badge</h2>
+            <div class="demo-row">
+                <span class="simpui-badge primary">Primary</span>
+                <span class="simpui-badge success">Success</span>
+                <span class="simpui-badge warning">Warning</span>
+                <span class="simpui-badge danger">Danger</span>
+            </div>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;span class="simpui-badge primary"&gt;Primary&lt;/span&gt;
+&lt;span class="simpui-badge success"&gt;Success&lt;/span&gt;
+&lt;span class="simpui-badge warning"&gt;Warning&lt;/span&gt;
+&lt;span class="simpui-badge danger"&gt;Danger&lt;/span&gt;</div>
+        </div>
+
+        <!-- Input -->
+        <div class="demo-section">
+            <h2>Input</h2>
+            <div class="demo-row">
+                <input type="text" class="simpui-input" placeholder="Default input">
+                <input type="text" class="simpui-input primary" placeholder="Primary input">
+                <input type="text" class="simpui-input success" placeholder="Success input">
+                <input type="text" class="simpui-input danger" placeholder="Danger input">
+            </div>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;input type="text" class="simpui-input" placeholder="Default input"&gt;
+&lt;input type="text" class="simpui-input primary" placeholder="Primary input"&gt;
+&lt;input type="text" class="simpui-input success" placeholder="Success input"&gt;
+&lt;input type="text" class="simpui-input danger" placeholder="Danger input"&gt;</div>
+        </div>
+
+        <!-- Textarea -->
+        <div class="demo-section">
+            <h2>Textarea</h2>
+            <textarea class="simpui-textarea" rows="3" placeholder="Enter text..."></textarea>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;textarea class="simpui-textarea" rows="3" placeholder="Enter text..."&gt;&lt;/textarea&gt;</div>
+        </div>
+
+        <!-- Checkbox & Radio -->
+        <div class="demo-section">
+            <h2>Checkbox & Radio</h2>
+            <div class="demo-row">
+                <label class="simpui-checkbox">
+                    <input type="checkbox"> Option 1
+                </label>
+                <label class="simpui-checkbox">
+                    <input type="checkbox" checked> Option 2
+                </label>
+                <label class="simpui-radio">
+                    <input type="radio" name="demo"> Radio 1
+                </label>
+                <label class="simpui-radio">
+                    <input type="radio" name="demo" checked> Radio 2
+                </label>
+            </div>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;label class="simpui-checkbox"&gt;
+    &lt;input type="checkbox"&gt; Option 1
+&lt;/label&gt;
+
+&lt;label class="simpui-radio"&gt;
+    &lt;input type="radio" name="demo"&gt; Radio 1
+&lt;/label&gt;</div>
+        </div>
+
+        <!-- Select -->
+        <div class="demo-section">
+            <h2>Select</h2>
+            <select class="simpui-select" id="demo-select">
+                <option value="">Choose an option</option>
+                <option value="1">Option 1</option>
+                <option value="2">Option 2</option>
+                <option value="3">Option 3</option>
+            </select>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;select class="simpui-select"&gt;
+    &lt;option value=""&gt;Choose an option&lt;/option&gt;
+    &lt;option value="1"&gt;Option 1&lt;/option&gt;
+    &lt;option value="2"&gt;Option 2&lt;/option&gt;
+&lt;/select&gt;</div>
+        </div>
+
+        <!-- Modal Button -->
+        <div class="demo-section">
+            <h2>Modal</h2>
+            <button class="simpui-btn primary" onclick="document.getElementById('demo-modal').style.display='flex'">Open Modal</button>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;button class="simpui-btn primary" onclick="document.getElementById('modal').style.display='flex'"&gt;Open Modal&lt;/button&gt;
+
+&lt;div id="modal" class="simpui-modal" style="display: none;"&gt;
+    &lt;div class="simpui-modal-content"&gt;
+        &lt;div class="simpui-modal-header"&gt;
+            &lt;h3&gt;Modal Title&lt;/h3&gt;
+            &lt;span class="simpui-modal-close" onclick="document.getElementById('modal').style.display='none'"&gt;&amp;times;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class="simpui-modal-body"&gt;
+            &lt;p&gt;Modal content here.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div class="simpui-modal-footer"&gt;
+            &lt;button class="simpui-btn light" onclick="document.getElementById('modal').style.display='none'"&gt;Cancel&lt;/button&gt;
+            &lt;button class="simpui-btn primary" onclick="document.getElementById('modal').style.display='none'"&gt;Confirm&lt;/button&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/div&gt;</div>
+        </div>
+
+        <!-- Modal -->
+        <div id="demo-modal" class="simpui-modal" style="display: none;">
+            <div class="simpui-modal-content">
+                <div class="simpui-modal-header">
+                    <h3>Modal Title</h3>
+                    <span class="simpui-modal-close" onclick="document.getElementById('demo-modal').style.display='none'">&times;</span>
+                </div>
+                <div class="simpui-modal-body">
+                    <p>This is a demo modal content.</p>
+                </div>
+                <div class="simpui-modal-footer">
+                    <button class="simpui-btn light" onclick="document.getElementById('demo-modal').style.display='none'">Cancel</button>
+                    <button class="simpui-btn primary" onclick="document.getElementById('demo-modal').style.display='none'">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div class="demo-section">
+            <h2>Toast</h2>
+            <div class="demo-row">
+                <button class="simpui-btn success" onclick="simpuiToast('Success!', 'success')">Success Toast</button>
+                <button class="simpui-btn danger" onclick="simpuiToast('Error!', 'danger')">Error Toast</button>
+                <button class="simpui-btn info" onclick="simpuiToast('Info!', 'info')">Info Toast</button>
+            </div>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;button class="simpui-btn success" onclick="simpuiToast('Success!', 'success')"&gt;Success Toast&lt;/button&gt;
+
+&lt;script&gt;
+function simpuiToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `simpui-toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+&lt;/script&gt;</div>
+        </div>
+
+        <!-- Dark Mode Toggle -->
+        <div class="demo-section">
+            <h2>Dark Mode</h2>
+            <button class="simpui-btn dark" onclick="document.body.classList.toggle('dark-mode')">Toggle Dark Mode</button>
+            <p class="code-label">使用方式：</p>
+            <div class="code-block">&lt;button class="simpui-btn dark" onclick="document.body.classList.toggle('dark-mode')"&gt;Toggle Dark Mode&lt;/button&gt;</div>
+        </div>
+    </div>
+
+    <script src="/lib/simpui/js/simpicker.js"></script>
+    <script src="/lib/simpui/js/simpui.js"></script>
+    <script>
+        function simpuiToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `simpui-toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+'use strict';
+
+const fsp = require('fs/promises');
+const path = require('path');
+const { PROJECT_ROOT } = require('./utils');
+
+// 递归匹配文件模式
+// 支持: *.js, src/*.ts, a.test.js
+async function matchGlob(dir, pattern, root, results = []) {
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relPath = path.relative(root, fullPath);
+    
+    // 跳过 node_modules 和 .开头的目录
+    if (entry.isDirectory() && (entry.name === 'node_modules' || entry.name.startsWith('.'))) {
+      continue;
+    }
+    
+    if (entry.isDirectory()) {
+      await matchGlob(fullPath, pattern, root, results);
+    } else if (matchPattern(relPath, pattern)) {
+      results.push(relPath);
+    }
+  }
+  
+  return results;
+}
+
+// 简单的 glob 模式匹配
+// 支持: *, **, ?
+function matchPattern(filePath, pattern) {
+  // 将 glob 转换为正则
+  const regexStr = pattern
+    .replace(/\./g, '\\.')
+    .replace(/\*\*/g, '{{GLOBSTAR}}')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]')
+    .replace(/\{\{GLOBSTAR\}\}/g, '.*');
+  
+  const regex = new RegExp(`^${regexStr}$`);
+  return regex.test(filePath);
+}
+
+module.exports = {
+  name: 'glob',
+  desc: '按模式查找文件（支持 glob 语法如 *.js, src/**/*.ts）',
+  params: { pattern: 'glob 模式', path: '搜索目录，默认项目根' },
+  needConfirm: false,
+  
+  async run({ pattern, path: p }, ctx = {}) {
+    const root = ctx.root || PROJECT_ROOT;
+    const searchDir = p ? path.resolve(root, p) : root;
+    const results = await matchGlob(searchDir, pattern, root);
+    
+    if (results.length === 0) {
+      return '未找到匹配文件';
+    }
+    
+    return results.sort().join('\n');
+  },
+};
