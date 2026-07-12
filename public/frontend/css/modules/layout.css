@@ -1,5 +1,4 @@
 /* layout.css - 主体布局 */
-/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
 /* 主体布局 */
 .layout {
@@ -10,21 +9,21 @@
 
 /* 侧边栏 */
 .sidebar {
-  width: 240px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
+  width: var(--sidebar-w);
+  background: var(--simpui-bg);
+  border-right: 1px solid var(--simpui-input-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
 .sidebar-header {
-  height: 40px;
+  height: var(--session-bar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--simpui-input-border);
 }
 
 .sidebar-title {
@@ -32,7 +31,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--simpui-text-light);
 }
 
 .file-tree {
@@ -52,9 +51,9 @@
 
 /* 会话栏 */
 .session-bar {
-  height: 40px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border);
+  height: var(--session-bar-h);
+  background: var(--simpui-bg);
+  border-bottom: 1px solid var(--simpui-input-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,7 +63,18 @@
 
 .session-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  align-items: center;
+}
+
+.session-actions .divider {
+  width: 1px;
+  height: 16px;
+  background: var(--simpui-input-border);
+}
+
+#new-chat {
+  min-width: 88px;
 }
 
 /* 对话名称输入框 */
@@ -75,26 +85,26 @@
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--simpui-text-dim);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
   outline: none;
-  transition: all var(--duration-fast) var(--ease);
+  transition: all 0.15s;
 }
 
 .conv-name::placeholder {
-  color: var(--text-muted);
+  color: var(--simpui-placeholder);
   font-weight: 400;
 }
 
 .conv-name:hover {
-  border-color: var(--border);
-  background: var(--bg-tertiary);
+  border-color: var(--simpui-input-border);
+  background: var(--simpui-bg);
 }
 
 .conv-name:focus {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+  background: var(--simpui-bg);
+  border-color: var(--simpui-focus);
+  box-shadow: 0 0 0 3px var(--simpui-focus);
 }

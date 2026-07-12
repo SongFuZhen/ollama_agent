@@ -1,12 +1,11 @@
 /* status-bar.css - 状态栏 */
-/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
 /* 状态栏 */
 .status-bar {
-  height: 28px;
+  height: var(--status-bar-h);
   padding: 0 12px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
+  background: var(--simpui-bg);
+  border-top: 1px solid var(--simpui-input-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -23,11 +22,11 @@
 }
 
 .status-item {
-  color: var(--text-muted);
+  color: var(--simpui-text-light);
 }
 
 .status-ready {
-  color: var(--success);
+  color: var(--green);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -39,14 +38,14 @@
 }
 
 .status-sep {
-  color: var(--border);
+  color: var(--simpui-input-border);
 }
 
 .status-more {
-  color: var(--text-muted);
+  color: var(--simpui-text-light);
   cursor: pointer;
 }
 
 .status-more:hover {
-  color: var(--text-primary);
+  color: var(--simpui-text-dim);
 }

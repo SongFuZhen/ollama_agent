@@ -84,24 +84,33 @@ function serveStatic(req, res) {
     if (rel.startsWith('..') || path.isAbsolute(rel)) {
       res.writeHead(403); res.end('forbidden'); return;
     }
+    fs.readFile(filePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('not found'); return; }
+      const ext = path.extname(filePath);
+      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+      res.end(data);
+    });
+    return;
   } else {
-    filePath = path.resolve(PUBLIC_DIR, path.join('.', urlPath));
-    rel = path.relative(PUBLIC_DIR, filePath);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
-      // 尝试从 LIB_DIR (public/lib/) 读取
-      filePath = path.resolve(LIB_DIR, path.join('.', urlPath));
-      rel = path.relative(LIB_DIR, filePath);
-      if (rel.startsWith('..') || path.isAbsolute(rel)) {
-        res.writeHead(403); res.end('forbidden'); return;
+    // 按优先级尝试多个目录：PUBLIC_DIR -> ROOT_DIR -> LIB_DIR
+    const tryDirs = [PUBLIC_DIR, ROOT_DIR, LIB_DIR];
+    for (const dir of tryDirs) {
+      filePath = path.resolve(dir, path.join('.', urlPath));
+      rel = path.relative(dir, filePath);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) continue;
+      try {
+        const data = fs.readFileSync(filePath);
+        const ext = path.extname(filePath);
+        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+        res.end(data);
+        return;
+      } catch (e) {
+        // 文件不存在，继续尝试下一个目录
       }
     }
+    res.writeHead(404); res.end('not found');
+    return;
   }
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end('not found'); return; }
-    const ext = path.extname(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    res.end(data);
-  });
 }
 
 function readBody(req) {

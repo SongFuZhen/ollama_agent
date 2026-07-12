@@ -1,22 +1,31 @@
 /* topbar.css - 顶栏样式 */
-/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
 /* 顶栏布局 */
 .topbar {
-  height: 48px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border);
+  height: var(--topbar-h);
+  background: var(--simpui-bg);
+  border-bottom: 1px solid var(--simpui-input-border);
   display: flex;
-  align-items: center;
-  padding: 0 16px;
-  gap: 16px;
+  align-items: stretch;
+  padding: 0;
 }
 
-/* 品牌 */
+/* 品牌 - 与侧边栏对齐 */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: calc(var(--sidebar-w) - 1px);
+  padding: 0 16px;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+/* 顶栏分割线 - 顶满高度 */
+.topbar-divider {
+  width: 1px;
+  height: 100%;
+  background: var(--simpui-input-border);
 }
 
 .brand-logo {
@@ -24,10 +33,24 @@
   height: 28px;
 }
 
+/* 亮色主题下反转品牌图标颜色 */
+[data-theme="light"] .brand-logo {
+  filter: invert(1);
+}
+
 .brand h1 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--simpui-heading-color);
+}
+
+/* 顶栏分割线 - 与侧边栏对齐 */
+.topbar-divider {
+  width: 1px;
+  height: 100%;
+  background: var(--simpui-input-border);
+  margin-left: 0;
+  margin-right: 16px;
 }
 
 /* 调试信息 */
@@ -36,11 +59,14 @@
   align-items: center;
   gap: 12px;
   padding: 4px 10px;
-  background: var(--bg-tertiary);
+  margin-left: 16px;
+  background: var(--simpui-bg);
+  border: 1px solid var(--simpui-input-border);
   border-radius: 4px;
-  font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--simpui-text-light);
+  height: fit-content;
+  margin: auto 0;
 }
 
 .debug-item {
@@ -54,6 +80,14 @@
   height: 12px;
 }
 
+.debug-icon.ready {
+  color: var(--green);
+}
+
+.debug-icon.error {
+  color: var(--error);
+}
+
 /* 弹性空间 */
 .topbar-spacer {
   flex: 1;
@@ -64,6 +98,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.topbar-actions .divider {
+  width: 1px;
+  height: 16px;
+  background: var(--simpui-input-border);
 }
 
 /* 用户下拉菜单 */
@@ -78,16 +120,19 @@
   right: 0;
   margin-top: 4px;
   min-width: 160px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: var(--shadow);
+  background: var(--modal-bg);
+  border: 1px solid var(--simpui-input-border);
+  border-radius: var(--modal-radius);
+  box-shadow: var(--modal-shadow);
   z-index: 100;
   overflow: hidden;
 }
 
 .user-dropdown.open .dropdown-menu {
   display: block;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .dropdown-item {
@@ -98,25 +143,36 @@
   padding: 8px 12px;
   background: none;
   border: none;
-  color: var(--text-primary);
+  color: var(--simpui-text-dim);
   font-size: 13px;
   cursor: pointer;
   text-decoration: none;
-  transition: background var(--duration-fast) var(--ease);
+  transition: background 0.15s;
+}
+
+/* 用户名（真实电脑名）过长截断，点击按钮展开下拉 */
+#user-name {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .dropdown-item:hover {
-  background: var(--bg-tertiary);
+  background: var(--simpui-focus);
 }
 
-.dropdown-item i {
-  width: 14px;
-  height: 14px;
-  color: var(--text-muted);
+.dropdown-item i,
+.dropdown-item svg {
+  width: 15px;
+  height: 15px;
+  color: var(--simpui-text-light);
 }
 
 .dropdown-divider {
   height: 1px;
-  background: var(--border);
+  background: var(--simpui-input-border);
   margin: 4px 0;
 }
