@@ -271,7 +271,8 @@ function imageSrc(img) {
 // 用户气泡
 function appendUser(text, images) {
   const m = el('div', 'msg user');
-  const bubble = el('div', 'bubble', text);
+  const bubble = el('div', 'bubble');
+  bubble.innerHTML = renderMarkdown(text || '');
   m.appendChild(bubble);
 
   // 发送的图片：在气泡内以网格展示，限制大小

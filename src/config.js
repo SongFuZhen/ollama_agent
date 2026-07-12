@@ -10,7 +10,7 @@ const PROJECT_ROOT = process.env.PROJECT_ROOT
 const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
 
 // 默认对话模型（可通过环境变量 MODEL 覆盖，例如 MODEL=qwen2.5-coder:7b）
-const DEFAULT_MODEL = process.env.MODEL || 'qwen2.5-coder:7b';
+const DEFAULT_MODEL = process.env.MODEL || 'deepseek-r1:8b';
 
 const MAX_STEPS = 6;          // 7B 循环步数上限，防空转
 const JSON_RETRY = 2;         // 工具调用 JSON 解析失败重试次数

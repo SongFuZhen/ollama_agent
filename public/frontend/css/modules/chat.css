@@ -194,19 +194,32 @@
   border-collapse: collapse;
   margin: var(--space-3) 0;
   font-size: 13px;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .bubble th,
 .bubble td {
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--simpui-input-border);
   padding: var(--space-2) var(--space-3);
   text-align: left;
 }
 
 .bubble th {
-  background: var(--simpui-focus);
+  background: var(--simpui-input-border);
   color: var(--simpui-heading-color);
   font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bubble td {
+  background: transparent;
+}
+
+.bubble tbody tr:hover {
+  background: var(--simpui-focus);
 }
 
 .bubble img {
