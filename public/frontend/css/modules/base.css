@@ -1,5 +1,4 @@
-/* base.css - 设计变量、主题、基础样式 */
-/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
+/* base.css - 基于 simpui 的主题变量 */
 
 /* 本地字体 */
 @font-face {
@@ -26,38 +25,8 @@
   src: url("/fonts/JetBrainsMono-Bold.ttf") format("truetype");
 }
 
-/* 暗色主题（默认） */
+/* 使用 simpui 的变量系统 */
 :root {
-  /* 基础色 */
-  --bg-primary: #0a0a0b;
-  --bg-secondary: #111113;
-  --bg-tertiary: #1a1a1f;
-  --bg-elevated: #222228;
-
-  /* 文本色 */
-  --text-primary: #e8e8ec;
-  --text-secondary: #8b8b94;
-  --text-muted: #5a5a63;
-
-  /* 品牌色 - 青蓝 */
-  --accent: #00b4d8;
-  --accent-dim: rgba(0, 180, 216, 0.12);
-  --accent-hover: #0096c7;
-
-  /* 语义色 */
-  --success: #00ff88;
-  --warning: #ffb800;
-  --error: #ff4444;
-  --info: #00b4d8;
-
-  /* 边框 */
-  --border: #2a2a32;
-  --border-hover: #3a3a44;
-
-  /* 特殊 */
-  --glow: 0 0 20px rgba(0, 180, 216, 0.15);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-
   /* 字体 */
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 
@@ -97,53 +66,11 @@
   --status-bar-h: 28px;
   --sidebar-w: 240px;
 
+  /* 语义色 - 与 simpui 保持一致 */
+  --green: #198754;
+  --red: #dc3545;
+
   font-size: 14px;
-}
-
-/* 亮色主题 */
-[data-theme="light"] {
-  --bg-primary: #fafafa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f5f5f7;
-  --bg-elevated: #ffffff;
-
-  --text-primary: #1a1a1f;
-  --text-secondary: #6b6b73;
-  --text-muted: #9a9aa3;
-
-  --accent: #0096c7;
-  --accent-dim: rgba(0, 150, 199, 0.10);
-  --accent-hover: #0077b6;
-
-  --border: #e5e5ea;
-  --border-hover: #d0d0d8;
-
-  --glow: none;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-}
-
-/* 跟随系统（无 data-theme 属性时） */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --bg-primary: #0a0a0b;
-    --bg-secondary: #111113;
-    --bg-tertiary: #1a1a1f;
-    --bg-elevated: #222228;
-
-    --text-primary: #e8e8ec;
-    --text-secondary: #8b8b94;
-    --text-muted: #5a5a63;
-
-    --accent: #00b4d8;
-    --accent-dim: rgba(0, 180, 216, 0.12);
-    --accent-hover: #0096c7;
-
-    --border: #2a2a32;
-    --border-hover: #3a3a44;
-
-    --glow: 0 0 20px rgba(0, 180, 216, 0.15);
-    --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  }
 }
 
 /* Reset */
@@ -151,6 +78,42 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* lucide 图标跟随主题（stroke 用 currentColor，切主题自动变色） */
+[data-lucide],
+.lucide,
+svg.lucide {
+  stroke: currentColor;
+  color: inherit;
+}
+
+/* 覆盖 simpui 字体 - 使用项目字体 */
+html, body, h1, h2, h3, h4, h5, h6, p, div, span, strong, th, tr, input, select, option, textarea, label {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+
+/* 暗黑模式下按钮样式 */
+.dark .simpui-btn {
+  background: var(--modal-bg);
+  color: var(--simpui-text-dim);
+  border-color: var(--simpui-input-border);
+}
+
+.dark .simpui-btn:hover {
+  background: var(--simpui-focus);
+}
+
+.dark .simpui-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.dark .simpui-btn.danger {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
 }
 
 html, body {
@@ -163,15 +126,13 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-base);
   line-height: 1.5;
-  color: var(--text-primary);
-  background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* 焦点样式 */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--simpui-focus);
   outline-offset: 2px;
 }
 
@@ -186,18 +147,18 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--simpui-text-light);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--simpui-text-dim);
 }
 
 /* 选择文本 */
 ::selection {
-  background: var(--accent-dim);
-  color: var(--text-primary);
+  background: var(--simpui-focus);
+  color: var(--simpui-text-dim);
 }
 
 /* 减少动效 */
@@ -206,17 +167,4 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* simpui 暗色主题覆盖 */
-.dark {
-  --simpui-bg: var(--bg-primary);
-  --input-bg: var(--bg-secondary);
-  --simpui-heading-color: var(--text-primary);
-  --simpui-text-dim: var(--text-primary);
-  --simpui-text-light: var(--text-secondary);
-  --modal-bg: var(--bg-secondary);
-  --modal-fg: var(--text-primary);
-  --backdrop-bg: rgba(0, 0, 0, 0.6);
-  --simpui-placeholder: var(--text-muted);
 }

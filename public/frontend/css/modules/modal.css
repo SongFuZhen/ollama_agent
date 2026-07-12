@@ -1,35 +1,4 @@
-/* modal.css - 弹窗、抽屉 */
-
-/* ---------- SimpUI 主题变量覆盖 ---------- */
-:root {
-  --simpui-bg: var(--panel);
-  --modal-bg: var(--panel);
-  --modal-fg: var(--chalk);
-  --simpui-multimodal-bg: var(--panel);
-  --simpui-multimodal-fg: var(--chalk);
-  --simpui-focus: var(--volt);
-  --simpui-input-border: var(--panel-3);
-  --simpui-heading-color: var(--chalk);
-  --simpui-text-dim: var(--chalk);
-  --simpui-text-light: var(--ash);
-  --simpui-placeholder: var(--mist);
-  --simpui-fileinput-placeholder: var(--mist);
-}
-
-[data-theme="light"] {
-  --simpui-bg: var(--panel);
-  --modal-bg: var(--panel);
-  --modal-fg: var(--chalk);
-  --simpui-multimodal-bg: var(--panel);
-  --simpui-multimodal-fg: var(--chalk);
-  --simpui-focus: var(--volt);
-  --simpui-input-border: var(--panel-3);
-  --simpui-heading-color: var(--chalk);
-  --simpui-text-dim: var(--chalk);
-  --simpui-text-light: var(--ash);
-  --simpui-placeholder: var(--mist);
-  --simpui-fileinput-placeholder: var(--mist);
-}
+/* modal.css - 弹框（居中对话框） */
 
 /* 原生 select / textarea 跟随主题 */
 select, textarea {
@@ -37,59 +6,26 @@ select, textarea {
   color-scheme: dark;
 }
 
-[data-theme="light"] select,
-[data-theme="light"] textarea {
+.dark select,
+.dark textarea {
+  color-scheme: dark;
+}
+
+:not(.dark) select,
+:not(.dark) textarea {
   color-scheme: light;
 }
 
-/* 修复 simpui 悬浮标签颜色 */
-.simpui-input:focus + .simpui-floating-label,
-.simpui-input:not(:placeholder-shown) + .simpui-floating-label,
-.simpui-textarea:focus + .simpui-floating-label,
-.simpui-textarea:not(:placeholder-shown) + .simpui-floating-label {
-  color: var(--volt);
-}
-
-/* ---------- simpui-dialog 覆盖 ---------- */
+/* simpui-dialog 覆盖 */
 .simpui-dialog-backdrop.hidden {
   display: none;
 }
 
-.simpui-dialog-panel {
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--panel-3);
-}
-
-.simpui-dialog-header {
-  border-bottom-color: var(--panel-3);
-}
-
-.simpui-dialog-title {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash);
-}
-
-.simpui-dialog-close {
-  color: var(--mist);
-}
-
-.simpui-dialog-close:hover {
-  color: var(--chalk);
-}
-
-.simpui-dialog-actions {
-  border-top-color: var(--panel-3);
-}
-
-/* ---------- 兼容旧 .modal 类（备用） ---------- */
+/* 兼容旧 .modal 类（备用） */
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--backdrop-bg);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -101,7 +37,7 @@ select, textarea {
   display: none;
 }
 
-/* ---------- 表单字段 ---------- */
+/* 表单字段 */
 .field {
   margin-bottom: var(--space-3);
 }
@@ -113,90 +49,41 @@ select, textarea {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mist);
+  color: var(--simpui-text-light);
   margin-bottom: var(--space-1);
 }
 
 .field input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--panel-2);
-  color: var(--chalk);
-  border: 1px solid var(--panel-3);
+  background: var(--simpui-bg);
+  color: var(--simpui-text-dim);
+  border: 1px solid var(--simpui-input-border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 13px;
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease);
+  transition: border-color 0.15s;
 }
 
 .field input:focus {
-  border-color: var(--volt);
-  box-shadow: 0 0 0 3px var(--volt-dim);
+  border-color: var(--simpui-focus);
+  box-shadow: 0 0 0 3px var(--simpui-focus);
 }
 
 .hint {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--volt);
+  color: var(--accent);
 }
 
-/* ---------- 会话状态弹框 ---------- */
+/* 会话状态弹框 */
 #state-modal-body {
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.8;
-  color: var(--ash);
+  color: var(--simpui-text-light);
   white-space: pre-line;
-}
-
-/* ---------- Drawer ---------- */
-.drawer {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-}
-
-.drawer.hidden {
-  display: none;
-}
-
-.drawer-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-}
-
-.drawer-content {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 320px;
-  max-width: 80vw;
-  background: var(--panel);
-  border-left: 1px solid var(--panel-3);
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-}
-
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--panel-3);
-}
-
-.drawer-header h3 {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash);
 }
 
 /* 共享旋转加载图标 */
@@ -205,8 +92,8 @@ select, textarea {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  border: 2px solid var(--panel-3);
-  border-top-color: var(--volt);
+  border: 2px solid var(--simpui-input-border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -215,7 +102,7 @@ select, textarea {
   to { transform: rotate(360deg); }
 }
 
-/* ---------- 目录选择器抽屉 ---------- */
+/* 目录选择器弹框 */
 .dir-picker {
   position: fixed;
   inset: 0;
@@ -229,7 +116,7 @@ select, textarea {
 .dir-picker-mask {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--backdrop-bg);
   backdrop-filter: blur(4px);
 }
 
@@ -241,10 +128,10 @@ select, textarea {
   width: 460px;
   max-width: 92vw;
   max-height: 80vh;
-  background: var(--panel);
-  border: 1px solid var(--panel-3);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
+  background: var(--modal-bg);
+  border: 1px solid var(--simpui-input-border);
+  border-radius: var(--modal-radius);
+  box-shadow: var(--modal-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -255,19 +142,19 @@ select, textarea {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--panel-3);
+  border-bottom: 1px solid var(--simpui-input-border);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ash);
+  color: var(--simpui-text-light);
 }
 
 .dir-picker-close {
   border: none;
   background: transparent;
-  color: var(--mist);
+  color: var(--simpui-text-light);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -280,8 +167,8 @@ select, textarea {
 }
 
 .dir-picker-close:hover {
-  background: var(--panel-2);
-  color: var(--chalk);
+  background: var(--simpui-focus);
+  color: var(--simpui-text-dim);
 }
 
 .dir-picker-path {
@@ -289,17 +176,17 @@ select, textarea {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--panel-3);
+  background: var(--simpui-bg);
+  border-bottom: 1px solid var(--simpui-input-border);
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--ash);
+  color: var(--simpui-text-light);
 }
 
 .dir-picker-up {
-  border: 1px solid var(--panel-3);
-  background: var(--panel);
-  color: var(--mist);
+  border: 1px solid var(--simpui-input-border);
+  background: var(--modal-bg);
+  color: var(--simpui-text-light);
   border-radius: var(--radius-sm);
   width: 28px;
   height: 28px;
@@ -311,8 +198,8 @@ select, textarea {
 }
 
 .dir-picker-up:hover {
-  color: var(--chalk);
-  border-color: var(--volt);
+  color: var(--simpui-text-dim);
+  border-color: var(--accent);
 }
 
 .dir-picker-up:disabled {
@@ -322,7 +209,7 @@ select, textarea {
 
 .dir-picker-current {
   flex: 1;
-  color: var(--ash);
+  color: var(--simpui-text-light);
   word-break: break-all;
 }
 
@@ -341,33 +228,33 @@ select, textarea {
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 14px;
-  color: var(--chalk);
+  color: var(--simpui-text-dim);
   user-select: none;
 }
 
 .dir-picker-item:hover {
-  background: var(--panel-2);
+  background: var(--simpui-focus);
 }
 
 .dir-picker-item.selected {
-  background: var(--volt-dim);
-  color: var(--volt);
+  background: var(--accent);
+  color: var(--simpui-bg);
 }
 
 .dir-picker-item.up {
-  color: var(--mist);
+  color: var(--simpui-text-light);
 }
 
 .dir-picker-loading,
 .dir-picker-err,
 .dir-picker-empty {
   padding: var(--space-4);
-  color: var(--mist);
+  color: var(--simpui-text-light);
   font-size: 13px;
 }
 
 .dir-picker-err {
-  color: var(--err);
+  color: var(--error);
 }
 
 .dir-picker-foot {
@@ -375,5 +262,5 @@ select, textarea {
   justify-content: flex-end;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--panel-3);
+  border-top: 1px solid var(--simpui-input-border);
 }

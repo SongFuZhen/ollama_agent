@@ -80,7 +80,8 @@
 - `layout.css` - 主体布局
 - `chat.css` - 对话区、消息气泡
 - `input.css` - 输入区
-- `modal.css` - 弹窗、抽屉
+- `modal.css` - 弹框（居中对话框）
+- `drawer.css` - 抽屉（侧滑面板）
 - `components.css` - 组件样式
 - `responsive.css` - 响应式
 

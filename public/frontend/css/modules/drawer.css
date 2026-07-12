@@ -1,0 +1,168 @@
+/* drawer.css - 抽屉（侧滑面板） */
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.drawer.hidden {
+  display: none;
+}
+
+.drawer-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop-bg);
+  backdrop-filter: blur(4px);
+}
+
+.drawer-content {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 360px;
+  max-width: 82vw;
+  background: var(--modal-bg);
+  border-left: 1px solid var(--simpui-input-border);
+  box-shadow: var(--modal-shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--simpui-input-border);
+}
+
+.drawer-header h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--simpui-text-dim);
+}
+
+/* 历史对话列表 */
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.history-item {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  border: 1px solid var(--simpui-input-border);
+  border-radius: var(--radius-lg);
+  background: var(--simpui-bg);
+  transition: border-color var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease);
+}
+
+.history-item:hover {
+  border-color: var(--simpui-text-light);
+  background: var(--simpui-focus);
+}
+
+.history-item-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  cursor: pointer;
+}
+
+.history-item-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--simpui-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-time {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--simpui-text-light);
+}
+
+.history-del {
+  flex-shrink: 0;
+  width: 36px;
+  border: none;
+  background: transparent;
+  color: var(--simpui-text-light);
+  font-size: var(--text-base);
+  cursor: pointer;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease);
+}
+
+.history-item:hover .history-del {
+  opacity: 1;
+}
+
+.history-del:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+/* 空 / 加载 / 错误状态 */
+.history-empty,
+.history-loading,
+.history-err,
+.history-conv-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--simpui-text-light);
+  font-size: var(--text-sm);
+}
+
+.history-loading,
+.history-conv-loading {
+  flex-direction: row;
+  gap: var(--space-2);
+}
+
+.history-empty {
+  margin-top: 20%;
+}
+
+.history-empty i {
+  width: 40px;
+  height: 40px;
+  color: var(--simpui-text-light);
+  opacity: 0.6;
+}
+
+.history-empty-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--simpui-text-dim);
+}
+
+.history-empty-sub {
+  font-size: var(--text-xs);
+  color: var(--simpui-text-light);
+}
+
+.history-err {
+  color: var(--red);
+}

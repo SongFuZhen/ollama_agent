@@ -10,9 +10,11 @@ const messagesEl = $('#messages');
 const inputEl = $('#input');
 const sendBtn = $('#send');
 const ollamaStatusEl = $('#ollama-status');
+const debugIconEl = $('#debug-icon');
 const emptyEl = $('#empty');
 const convNameEl = $('#conv-name');
 const userDropdown = $('.user-dropdown');
+const userNameEl = $('#user-name');
 
 // 状态栏元素
 const ssModelEl = $('#ss-model');
@@ -57,7 +59,13 @@ async function loadHistoryList() {
     const conversations = await res.json();
 
     if (conversations.length === 0) {
-      historyList.innerHTML = '<div class="history-empty">暂无历史对话</div>';
+      historyList.innerHTML = `
+        <div class="history-empty">
+          <i data-lucide="message-square-dashed"></i>
+          <div class="history-empty-title">暂无历史对话</div>
+          <div class="history-empty-sub">开始新对话后会显示在这里</div>
+        </div>`;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -198,6 +206,11 @@ if (historyBtnToolbar) {
   historyBtnToolbar.onclick = openDrawer;
 }
 
+const historyBtn = $('#history-btn');
+if (historyBtn) {
+  historyBtn.onclick = openDrawer;
+}
+
 // ---------- 删除历史对话（需二次确认） ----------
 const deleteConfirmModal = $('#delete-confirm');
 const deleteConfirmName = $('#delete-confirm-name');
@@ -247,6 +260,14 @@ if (deleteConfirmBtn) {
 function setStatus(kind, text) {
   if (ollamaStatusEl) {
     ollamaStatusEl.textContent = text;
+  }
+  if (debugIconEl) {
+    debugIconEl.className = 'debug-icon';
+    if (kind === 'ok') {
+      debugIconEl.classList.add('ready');
+    } else if (kind === 'error') {
+      debugIconEl.classList.add('error');
+    }
   }
 }
 
@@ -896,9 +917,25 @@ setInterval(() => { renderSessionState(); }, 30000);
 loadServerRoot();
 loadConfig().then(preflight).then(afterBoot);
 
+// 获取并显示真实电脑名
+async function loadUserInfo() {
+  try {
+    const res = await fetch('/api/device');
+    if (res.ok) {
+      const data = await res.json();
+      if (userNameEl) {
+        const name = data.hostname || data.username || '用户';
+        userNameEl.textContent = name;
+        userNameEl.title = name;
+      }
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
 // 启动后：若 URL 带 #/session/<id> 则恢复该对话；完成后允许切场景同步 URL
 async function afterBoot() {
   state.bootDone = true;
+  loadUserInfo();
   if (typeof initCommands === 'function') initCommands();
   const id = parseSessionIdFromHash();
   if (id) {

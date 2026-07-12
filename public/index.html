@@ -29,10 +29,11 @@
   <link rel="stylesheet" href="/css/modules/input.css">
   <link rel="stylesheet" href="/css/modules/status-bar.css">
   <link rel="stylesheet" href="/css/modules/modal.css">
+  <link rel="stylesheet" href="/css/modules/drawer.css">
   <link rel="stylesheet" href="/css/modules/responsive.css">
   <script src="/lib/simpui/js/simpicker.js"></script>
 </head>
-<body>
+<body class="dark">
   <!-- Lucide Icons -->
   <script src="/lib/lucide.js?v=1.24.0"></script>
 
@@ -42,10 +43,11 @@
       <img src="/favicon.svg" alt="Ason Agent" class="brand-logo">
       <h1>Ason Agent</h1>
     </div>
+    <div class="topbar-divider"></div>
 
     <div id="debug-info" class="debug-info">
       <span class="debug-item">
-        <i data-lucide="activity" class="debug-icon"></i>
+        <i data-lucide="activity" class="debug-icon ready" id="debug-icon"></i>
         <span>Ollama: <span id="ollama-status">连接中</span></span>
       </span>
     </div>
@@ -53,12 +55,16 @@
     <div class="topbar-spacer"></div>
 
     <div class="topbar-actions">
-      <button id="theme-toggle" class="simpui-btn light sm" title="切换主题">
+      <button id="theme-toggle" class="simpui-btn sm" title="切换主题">
         <i data-lucide="moon"></i>
+        <span>主题</span>
       </button>
+      <div class="divider"></div>
       <div class="user-dropdown">
-        <button id="user-btn" class="simpui-btn light sm">
+        <button id="user-btn" class="simpui-btn sm">
           <i data-lucide="user"></i>
+          <span id="user-name">用户</span>
+          <i data-lucide="chevron-down"></i>
         </button>
         <div class="dropdown-menu">
           <button id="settings-btn" class="dropdown-item">
@@ -69,11 +75,6 @@
             <i data-lucide="smartphone"></i>
             <span>设备信息</span>
           </a>
-          <div class="dropdown-divider"></div>
-          <button class="dropdown-item danger">
-            <i data-lucide="log-out"></i>
-            <span>退出</span>
-          </button>
         </div>
       </div>
     </div>
@@ -85,8 +86,9 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">文件</span>
-        <button id="fs-refresh" class="simpui-btn light sm" aria-label="刷新">
+        <button id="fs-refresh" class="simpui-btn sm" aria-label="刷新">
           <i data-lucide="refresh-cw"></i>
+          <span>刷新</span>
         </button>
       </div>
       <div id="file-tree" class="file-tree"></div>
@@ -98,10 +100,11 @@
       <div class="session-bar">
         <input type="text" class="conv-name" id="conv-name" placeholder="新对话" maxlength="60" spellcheck="false">
         <div class="session-actions">
-          <button id="history-btn" class="simpui-btn light sm">
+          <button id="history-btn" class="simpui-btn sm">
             <i data-lucide="history"></i>
             <span>历史</span>
           </button>
+          <div class="divider"></div>
           <button id="new-chat" class="simpui-btn primary sm">
             <i data-lucide="plus"></i>
             <span>新对话</span>
@@ -159,11 +162,13 @@
         <div class="composer-box">
           <textarea id="input" class="composer-input" placeholder="输入消息..." rows="1"></textarea>
           <div class="composer-actions">
-            <button id="img-btn" class="simpui-btn light sm" title="选择图片" aria-label="选择图片">
+            <button id="img-btn" class="simpui-btn sm" title="选择图片" aria-label="选择图片">
               <i data-lucide="paperclip"></i>
+              <span>图片</span>
             </button>
             <button id="send" class="simpui-btn primary sm" title="发送">
               <i data-lucide="send"></i>
+              <span>发送</span>
             </button>
           </div>
         </div>
@@ -198,10 +203,14 @@
     <div class="drawer-content">
       <div class="drawer-header">
         <h3>历史对话</h3>
-        <button id="drawer-close" class="simpui-btn light sm" aria-label="关闭">✕</button>
+        <button id="drawer-close" class="simpui-btn sm" aria-label="关闭">✕</button>
       </div>
       <div id="history-list" class="history-list">
-        <div class="history-empty">暂无历史对话</div>
+        <div class="history-empty">
+          <i data-lucide="message-square-dashed"></i>
+          <div class="history-empty-title">暂无历史对话</div>
+          <div class="history-empty-sub">开始新对话后会显示在这里</div>
+        </div>
       </div>
     </div>
   </div>
