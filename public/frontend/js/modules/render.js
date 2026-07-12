@@ -89,6 +89,55 @@ function renderWithMarked(text) {
 
 // 渲染引擎二：markdown-it + highlight.js（气泡风格、代码高亮、默认 XSS 安全）
 let _mdit = null;
+
+// 修复模型生成表格时分隔行漏列的问题（如 3 列表头只写了 2 列分隔符）
+function normalizeTables(text) {
+  if (!text) return text;
+  const lines = text.split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    // 检查是否可能为表格行：包含 | 分隔
+    const isTableRow = (l) => l && l.includes('|');
+    if (!isTableRow(line)) {
+      out.push(line);
+      i++;
+      continue;
+    }
+    // 收集连续的表格行
+    const block = [];
+    while (i < lines.length && isTableRow(lines[i])) {
+      block.push(lines[i]);
+      i++;
+    }
+    if (block.length < 2) {
+      out.push(...block);
+      continue;
+    }
+    // 计算每行的列数，取最大值
+    const cols = block.map((l) => {
+      const t = l.replace(/^\|/, '').replace(/\|$/, '');
+      return t.split('|').length;
+    });
+    const maxCols = Math.max(...cols);
+    // 补齐每行到 maxCols 列
+    for (let j = 0; j < block.length; j++) {
+      const isDelim = /^\|?[\s:-]+\|/.test(block[j]);
+      let row = block[j];
+      const need = maxCols - cols[j];
+      if (need > 0) {
+        const suffix = isDelim
+          ? '|' + Array(need).fill('---').join('|')
+          : '|' + Array(need).fill(' ').join('|');
+        row = row.replace(/\|$/, suffix + '|');
+      }
+      out.push(row);
+    }
+  }
+  return out.join('\n');
+}
+
 function getMarkdownIt() {
   if (_mdit) return _mdit;
   if (typeof window.markdownit === 'undefined') return null;
@@ -120,7 +169,7 @@ function renderMarkdownIt(text) {
     // markdown-it 未加载：降级到 marked（仍渲染，不转义）
     return renderWithMarked(text);
   }
-  const html = md.render(text);
+  const html = md.render(normalizeTables(text));
   // markdown-it 输出已由 DOMPurify 兜底净化，阻断 XSS
   return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
 }
