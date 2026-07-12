@@ -174,21 +174,33 @@ function getConversation(id) {
 // 获取会话统计（用于状态栏）
 function getConversationStats(conversationId) {
   const rows = getDB().prepare(`
-    SELECT stats FROM messages
-    WHERE conversation_id = ? AND role = 'assistant' AND stats IS NOT NULL
+    SELECT stats, tools FROM messages
+    WHERE conversation_id = ? AND role = 'assistant' AND (stats IS NOT NULL OR tools IS NOT NULL)
   `).all(conversationId);
   
   let ttftSum = 0, ttftCount = 0, totalTimeSum = 0;
   let toolCounts = {};
   
   for (const r of rows) {
-    const s = JSON.parse(r.stats);
-    if (typeof s.ttft === 'number') {
-      ttftSum += s.ttft;
-      ttftCount++;
+    if (r.stats) {
+      const s = JSON.parse(r.stats);
+      if (typeof s.ttft === 'number') {
+        ttftSum += s.ttft;
+        ttftCount++;
+      }
+      if (typeof s.total === 'number') {
+        totalTimeSum += s.total;
+      }
     }
-    if (typeof s.total === 'number') {
-      totalTimeSum += s.total;
+    if (r.tools) {
+      const tools = JSON.parse(r.tools);
+      if (Array.isArray(tools)) {
+        for (const tool of tools) {
+          if (tool && tool.name) {
+            toolCounts[tool.name] = (toolCounts[tool.name] || 0) + 1;
+          }
+        }
+      }
     }
   }
   
