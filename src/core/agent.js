@@ -50,7 +50,7 @@ function systemPrompt(specs) {
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, confirm, images }
-async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot } = {}, emitInput) {
+async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history } = {}, emitInput) {
   const emit = emitInput || (() => {});
   const specs = specsFor();
   const hasTools = specs.length > 0;
@@ -68,8 +68,13 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     ? { role: 'user', content: userInput, images: images.slice() }
     : { role: 'user', content: userInput };
 
+  // 筛选有效历史：只保留 user/assistant 角色且有内容的消息，最多 20 条
+  const validHistory = Array.isArray(history)
+    ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())
+    : [];
   const messages = [
     { role: 'system', content: systemPrompt(specs) },
+    ...validHistory,
     userMessage,
   ];
 

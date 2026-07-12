@@ -863,7 +863,25 @@ async function send() {
     syncUrl();
   }
 
-  const body = { message: text, images: imgs.map((i) => i.b64) };
+  // 收集对话历史（最近 20 条，不含当前输入），供模型感知上下文
+  const history = [];
+  if (state.session) {
+    const msgs = state.session.querySelectorAll('.msg');
+    for (const m of msgs) {
+      if (m.classList.contains('user')) {
+        const bubble = m.querySelector('.bubble');
+        history.push({ role: 'user', content: bubble ? bubble.textContent.trim() : '' });
+      } else if (m.classList.contains('agent') && m.classList.contains('answer-card')) {
+        // 只取最终答案，跳过思考/工具步骤
+        const bubble = m.querySelector('.bubble');
+        if (bubble && bubble.textContent.trim()) {
+          history.push({ role: 'assistant', content: bubble.textContent.trim() });
+        }
+      }
+    }
+  }
+
+  const body = { message: text, images: imgs.map((i) => i.b64), history };
   if (state.activeModel) body.model = state.activeModel;    // 下拉选中的模型
   const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
 
@@ -1079,6 +1097,8 @@ async function loadUserInfo() {
 async function afterBoot() {
   state.bootDone = true;
   loadUserInfo();
+  // 确保 context window 大小在启动后一定会查询（兜底）
+  if (!state.sessionStats.contextLimit) fetchModelContext();
   if (typeof initCommands === 'function') initCommands();
   const id = parseSessionIdFromHash();
   if (id) {

@@ -165,7 +165,7 @@ function handleChat(req, res) {
   send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs() });
 
   readBody(req).then(async (body) => {
-    const { message, images, model: bodyModel, ollamaHost, projectRoot } = body;
+    const { message, images, model: bodyModel, ollamaHost, projectRoot, history } = body;
     const model = bodyModel || DEFAULT_MODEL; // 前端可覆盖模型名
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
@@ -187,7 +187,7 @@ function handleChat(req, res) {
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot }, send)
+    runAgent(message, { model, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot, history }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
