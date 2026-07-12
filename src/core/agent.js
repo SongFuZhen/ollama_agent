@@ -13,15 +13,26 @@ function stripThink(text) {
   return { think, rest };
 }
 
-// 宽松 JSON 解析：容忍模型输出里的代码块、多余文本
+// 移除 JSON 中的 JS 风格注释（小模型经常在 JSON 里加注释导致解析失败）
+function stripJSONComments(json) {
+  return json
+    .replace(/\/\*[\s\S]*?\*\//g, '')  // 移除块注释 /* ... */
+    .replace(/\/\/[^\n]*/g, '')         // 移除行注释 // ...
+    .replace(/,\s*}/g, '}')             // 移除尾部逗号 { "a": 1, }
+    .replace(/,\s*]/g, ']');            // 移除尾部逗号 [1, 2, ]
+}
+
+// 宽松 JSON 解析：容忍模型输出里的代码块、多余文本、注释
 function parseToolCall(text) {
   let m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   let candidate = m ? m[1] : text;
   const s = candidate.indexOf('{');
   const e = candidate.lastIndexOf('}');
   if (s === -1 || e === -1) return null;
+  let json = candidate.slice(s, e + 1);
+  json = stripJSONComments(json);
   try {
-    return JSON.parse(candidate.slice(s, e + 1));
+    return JSON.parse(json);
   } catch (err) {
     return null;
   }
@@ -41,7 +52,7 @@ function systemPrompt(specs) {
     '2. 需要文件内容时，必须先调用可用工具获取真实数据。',
     '3. 可用工具（只能用以下这些）：',
     specStr,
-    '4. 如需读数据，输出 JSON：{"action":"工具名","params":{...}}。',
+    '4. 如需读数据，输出纯 JSON（不要注释、不要多余文字）：{"action":"工具名","params":{...}}。',
     '5. 若已掌握足够信息可回答，直接输出最终答案（不要 JSON）。',
     '6. 一次只调用一个工具。',
     '7. 回答时使用 markdown 格式，包括标题、列表、代码块等。',
