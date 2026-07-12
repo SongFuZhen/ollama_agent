@@ -246,9 +246,11 @@ function updatePanelHint() {
 // 点文件：把相对路径插入输入框（供用户发送时引用，或交给模型读取）
 // 本地模式下，路径前缀所选根目录名，便于模型理解
 function insertPath(rel) {
-  const prefixed = browseRoot ? (browseRoot + '/' + rel) : rel;
+  // 拼接为绝对路径，让模型直接拿到完整路径
+  const root = effectiveRoot();
+  const full = root ? root.replace(/\/+$/, '') + '/' + rel : rel;
   const cur = inputEl.value;
-  inputEl.value = (cur ? cur + ' ' : '') + '文件: ' + prefixed;
+  inputEl.value = (cur ? cur + ' ' : '') + '文件: ' + full;
   inputEl.focus();
 }
 
