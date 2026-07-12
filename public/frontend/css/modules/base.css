@@ -81,7 +81,7 @@
   --surface-2: #eef1f6;        /* 代码块 / 工具块底色 */
   --border-soft: #e2e6ee;      /* 分割线 / 边框 */
   --divider: rgba(0, 0, 0, .08);
-  --simpui-input-border: #e0e0e0;
+  --simpui-input-border: var(--divider);
   --danger: #dc2626;
   --warning: #b45309;
   --warning-dim: rgba(180, 83, 9, .12);
