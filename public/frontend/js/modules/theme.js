@@ -11,26 +11,35 @@ function storedTheme() {
 }
 
 function applyTheme(theme) {
+  const root = document.documentElement;
+  const body = document.body;
+
   if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-    document.body.classList.remove('dark');
+    // 明亮主题
+    root.setAttribute('data-theme', 'light');
+    body.classList.remove('dark');
   } else {
-    document.documentElement.removeAttribute('data-theme');
-    document.body.classList.add('dark');
+    // 暗色主题（默认）
+    root.removeAttribute('data-theme');
+    body.classList.add('dark');
   }
-  // markdown 气泡（.mdx / .mdit）明暗随项目主题变量自动切换，无需单独样式表
+
   // 代码高亮主题随明暗切换
   const hlLight = document.getElementById('hljs-theme-light');
   const hlDark = document.getElementById('hljs-theme-dark');
   if (hlLight) hlLight.disabled = theme !== 'light';
   if (hlDark) hlDark.disabled = theme === 'light';
+
+  // 同步主题切换开关
   if (themeSwitch) {
     themeSwitch.checked = theme === 'light';
   }
 }
 
+// 初始化主题
 applyTheme(storedTheme());
 
+// 监听主题切换
 if (themeSwitch) {
   themeSwitch.addEventListener('change', () => {
     const next = themeSwitch.checked ? 'light' : 'dark';

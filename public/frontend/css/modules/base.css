@@ -129,3 +129,16 @@ body {
   background: var(--accent-soft);
   color: var(--text);
 }
+
+/* 覆盖 simpui 暗色主题变量 */
+.dark {
+  --simpui-bg: var(--bg);
+  --input-bg: var(--surface);
+  --simpui-heading-color: var(--text);
+  --simpui-text-dim: var(--text);
+  --simpui-text-light: var(--text-secondary);
+  --modal-bg: var(--surface);
+  --modal-fg: var(--text);
+  --backdrop-bg: rgba(0, 0, 0, 0.5);
+  --simpui-placeholder: var(--text-muted);
+}
