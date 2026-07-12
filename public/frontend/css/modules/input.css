@@ -2,6 +2,7 @@
 
 /* 输入区 */
 .composer {
+  position: relative;
   padding: 16px 20px;
   background: var(--simpui-bg);
   border-top: 1px solid var(--simpui-input-border);
@@ -133,29 +134,27 @@
   color: var(--simpui-text-light);
 }
 
-/* 滚动到底部按钮 */
+/* 滚动到底部按钮（定位在输入框上方右侧） */
+/* 滚动到底部按钮：基于 simpui-btn，仅覆盖定位/圆形与令牌色 */
 .scroll-bottom {
   position: absolute;
-  right: 20px;
-  bottom: 100px;
+  right: 12px;
+  bottom: calc(100% + 10px);
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--modal-bg);
-  border: 1px solid var(--simpui-input-border);
+  margin: 0;
+  padding: 0;
   border-radius: 9999px;
+  background: var(--simpui-bg);
+  border: 1px solid var(--simpui-input-border);
   color: var(--simpui-text-light);
-  cursor: pointer;
-  box-shadow: var(--modal-shadow);
+  box-shadow: var(--simpui-shadow, 0 2px 8px rgba(0, 0, 0, 0.1));
   z-index: 30;
-  transition: all 0.15s;
 }
 
-.scroll-bottom:hover {
+.scroll-bottom:hover:not(:disabled) {
   background: var(--simpui-focus);
-  color: var(--simpui-text-dim);
+  color: var(--simpui-heading-color);
 }
 
 .scroll-bottom.hidden {

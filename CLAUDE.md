@@ -13,6 +13,7 @@
 
 **所有 UI 组件必须基于 `lib/simpui` 库构建，禁止写原生样式！**
 
+- 组件优先复用 `simpui` 已有组件/类；`simpui` 未提供时，才允许使用原生元素或自行编写，且仍须沿用 simpui 的令牌与风格，不要另起一套。
 - 按钮：使用 `.simpui-btn` 及其变体（primary/secondary/danger 等）
 - 输入框：使用 `.simpui-input`, `.simpui-textarea`
 - 下拉菜单：使用 `.simpui-select`, `.dropdown-menu`

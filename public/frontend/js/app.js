@@ -7,6 +7,7 @@
 
 // ---------- DOM 引用 ----------
 const messagesEl = $('#messages');
+const chatAreaEl = $('#chat-area');
 const inputEl = $('#input');
 const sendBtn = $('#send');
 const ollamaStatusEl = $('#ollama-status');
@@ -395,8 +396,8 @@ function mountSession() {
 }
 
 function scrollDown() {
-  const chatEl = messagesEl.closest('.chat') || messagesEl;
-  chatEl.scrollTop = chatEl.scrollHeight;
+  const chatEl = chatAreaEl || messagesEl;
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
   updateScrollButton();
 }
 
@@ -404,16 +405,17 @@ function scrollDown() {
 const scrollBottomBtn = $('#scroll-bottom');
 function updateScrollButton() {
   if (!scrollBottomBtn) return;
-  const chatEl = messagesEl.closest('.chat') || messagesEl;
+  const chatEl = chatAreaEl || messagesEl;
   const distance = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
   if (distance > 80) scrollBottomBtn.classList.remove('hidden');
   else scrollBottomBtn.classList.add('hidden');
 }
 if (scrollBottomBtn) {
   scrollBottomBtn.onclick = () => scrollDown();
-  const chatEl = messagesEl.closest('.chat') || messagesEl;
+  const chatEl = chatAreaEl || messagesEl;
   chatEl.addEventListener('scroll', updateScrollButton);
   window.addEventListener('resize', updateScrollButton);
+  window.addEventListener('load', updateScrollButton);
 }
 
 function appendToActive(node) {

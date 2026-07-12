@@ -152,6 +152,10 @@ function bindImagePreview(container) {
       img.addEventListener('click', () => {
         if (img.src) showLightbox(img.src);
       });
+      // 图片异步加载会改变布局高度，加载完成后再次滚到底部
+      if (!img.complete) {
+        img.addEventListener('load', () => scrollDown(), { once: true });
+      }
     }
   });
 }
