@@ -181,7 +181,7 @@ let _mermaidReady = false;
 function initMermaid() {
   if (_mermaidReady) return;
   if (typeof mermaid === 'undefined') return;
-  mermaid.initialize({ startOnLoad: false, theme: 'default' });
+  mermaid.initialize({ startOnLoad: false, theme: 'base' });
   _mermaidReady = true;
 }
 
@@ -207,7 +207,7 @@ async function renderMermaidBlocks(container) {
       wrap.innerHTML = svg;
       pre.replaceWith(wrap);
     } catch (e) {
-      // 语法错误保留原始代码块
+      console.error('mermaid render error:', e);
     }
   }
 }
