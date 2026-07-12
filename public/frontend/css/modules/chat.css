@@ -188,38 +188,51 @@
   font-size: 13px;
 }
 
-/* 表格 */
+/* 表格 — 复用 simpui 令牌，无内置 table 组件，自行编写 */
 .bubble table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin: var(--space-3) 0;
   font-size: 13px;
+  border: 1px solid var(--simpui-input-border);
   border-radius: 6px;
   overflow: hidden;
 }
 
 .bubble th,
 .bubble td {
-  border: 1px solid var(--simpui-input-border);
-  padding: var(--space-2) var(--space-3);
+  padding: 8px 12px;
   text-align: left;
+  border-bottom: 1px solid var(--simpui-input-border);
 }
 
-.bubble th {
-  background: var(--simpui-input-border);
+.bubble thead th {
+  background: var(--border-soft);
   color: var(--simpui-heading-color);
   font-weight: 600;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--simpui-input-border);
 }
 
-.bubble td {
+.bubble thead th:first-child {
+  border-radius: 6px 0 0 0;
+}
+
+.bubble thead th:last-child {
+  border-radius: 0 6px 0 0;
+}
+
+.bubble tbody td {
   background: transparent;
 }
 
-.bubble tbody tr:hover {
-  background: var(--simpui-focus);
+.bubble tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.bubble tbody tr:hover td {
+  background: var(--accent-dim);
 }
 
 .bubble img {
