@@ -535,8 +535,11 @@ async function fetchModelContext() {
 // 渲染状态栏
 function renderSessionState() {
   const model = state.activeModel || state.defaultModel || '—';
-  const root = effectiveRoot();
-  const dirName = root ? lastSeg(root) : '默认沙箱';
+  const boundAbs = (state.currentProjectRoot && isAbs(state.currentProjectRoot)) ? state.currentProjectRoot : null;
+  const dirName = boundAbs ? lastSeg(boundAbs)
+    : (typeof browseRoot !== 'undefined' && browseRoot) ? browseRoot
+    : effectiveRoot() ? lastSeg(effectiveRoot())
+    : '默认沙箱';
   const toolCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'tool').length;
   const skillCount = (state.tools || []).filter(t => t.kind === 'skill').length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
@@ -586,7 +589,8 @@ if (ssSkillsEl) ssSkillsEl.addEventListener('click', showSkills);
 // 组装状态详情文本（用于弹框展示）
 function buildStateDetail() {
   const model = state.activeModel || state.defaultModel || '—';
-  const root = effectiveRoot();
+  const boundAbs = (state.currentProjectRoot && isAbs(state.currentProjectRoot)) ? state.currentProjectRoot : null;
+  const root = boundAbs || (typeof browseRoot !== 'undefined' && browseRoot) || effectiveRoot();
   const id = state.conversationId || '—';
   const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
   const counts = state.sessionStats.toolCounts || {};
