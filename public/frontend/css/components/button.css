@@ -1,7 +1,7 @@
 /* button.css - 按钮组件 */
-/* 设计方向：Technical Laboratory - 绿色主按钮、尖角 */
+/* 设计方向：Geek Terminal × Military Grade */
 
-/* 兼容 simpui-btn 旧类名 */
+/* simpui 按钮覆盖 */
 .simpui-btn {
   display: inline-flex;
   align-items: center;
@@ -10,11 +10,11 @@
   height: 36px;
   padding: 0 var(--space-4);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   line-height: 1;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease);
   white-space: nowrap;
@@ -27,197 +27,88 @@
   pointer-events: none;
 }
 
+.simpui-btn i {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Primary */
 .simpui-btn.primary {
-  background: var(--volt);
-  color: var(--ink);
-  border-color: var(--volt);
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
 }
 
 .simpui-btn.primary:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-hover);
 }
 
+/* Secondary */
 .simpui-btn.secondary {
-  background: var(--panel-2);
-  color: var(--chalk);
-  border-color: var(--panel-3);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border);
 }
 
 .simpui-btn.secondary:hover:not(:disabled) {
-  background: var(--panel-3);
+  background: var(--border);
 }
 
+/* Light */
 .simpui-btn.light {
   background: transparent;
-  color: var(--ash);
+  color: var(--text-secondary);
   border-color: transparent;
 }
 
 .simpui-btn.light:hover:not(:disabled) {
-  background: var(--panel-2);
-  color: var(--chalk);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
+/* Danger */
 .simpui-btn.danger {
-  background: var(--err);
+  background: var(--error);
   color: white;
-  border-color: var(--err);
+  border-color: var(--error);
 }
 
 .simpui-btn.danger:hover:not(:disabled) {
   filter: brightness(1.1);
 }
 
+/* 尺寸 */
 .simpui-btn.sm {
   height: 28px;
   padding: 0 var(--space-3);
-  font-size: 12px;
+  font-size: var(--text-sm);
+}
+
+.simpui-btn.sm i {
+  width: 14px;
+  height: 14px;
 }
 
 .simpui-btn.md {
   height: 36px;
   padding: 0 var(--space-4);
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .simpui-btn.lg {
   height: 44px;
   padding: 0 var(--space-5);
-  font-size: 15px;
+  font-size: var(--text-lg);
 }
 
-/* 新按钮组件 */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  height: 36px;
-  padding: 0 var(--space-4);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease);
-  white-space: nowrap;
-  user-select: none;
+/* 图标按钮（仅图标） */
+.simpui-btn.icon-only {
+  padding: 6px;
+  min-width: 32px;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* Primary - 主要操作 */
-.btn-primary {
-  background: var(--volt);
-  color: var(--ink);
-  border-color: var(--volt);
-}
-
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.06);
-}
-
-.btn-primary:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-/* Secondary - 次要操作 */
-.btn-secondary {
-  background: var(--panel-2);
-  color: var(--chalk);
-  border-color: var(--panel-3);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--panel-3);
-  border-color: var(--mist);
-}
-
-/* Ghost - 幽灵按钮 */
-.btn-ghost {
-  background: transparent;
-  color: var(--ash);
-  border-color: transparent;
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--panel-2);
-  color: var(--chalk);
-}
-
-/* Danger - 危险操作 */
-.btn-danger {
-  background: var(--err);
-  color: white;
-  border-color: var(--err);
-}
-
-.btn-danger:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-/* 尺寸 */
-.btn-sm {
-  height: 28px;
-  padding: 0 var(--space-3);
-  font-size: 12px;
-}
-
-.btn-lg {
-  height: 44px;
-  padding: 0 var(--space-5);
-  font-size: 15px;
-}
-
-/* 图标按钮 */
-.btn-icon {
-  width: 36px;
-  padding: 0;
-}
-
-.btn-icon.btn-sm {
-  width: 28px;
-}
-
-.btn-icon.btn-lg {
-  width: 44px;
-}
-
-/* 图标 */
-.btn svg,
-.btn i {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.btn-sm svg,
-.btn-sm i {
-  width: 14px;
-  height: 14px;
-}
-
-/* 圆形按钮 */
-.btn-round {
-  border-radius: var(--radius-full);
-}
-
-/* 链接样式 */
-.btn-link {
-  background: transparent;
-  color: var(--volt);
-  border: none;
-  padding: 0;
-  height: auto;
-  font-weight: 500;
-}
-
-.btn-link:hover:not(:disabled) {
-  text-decoration: underline;
+.simpui-btn.icon-only.sm {
+  padding: 4px;
+  min-width: 28px;
 }
