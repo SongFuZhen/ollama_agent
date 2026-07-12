@@ -667,6 +667,7 @@ async function fetchGitBranch(root) {
 // 流程：user -> thinking_start -> thought* -> (tool -> tool_result)* -> token* -> answer
 // 每个环节按顺序追加到当前消息容器中
 function handleEvent(ev) {
+  if (requestAborted) return;
   switch (ev.type) {
     case 'meta':
       state.tools = Array.isArray(ev.tools) ? ev.tools : [];
@@ -840,6 +841,7 @@ inputEl.addEventListener('drop', (e) => {
 
 // ---------- 中止控制器 ----------
 let currentAbortController = null;
+let requestAborted = false;
 
 // ---------- 发送请求（SSE 流式读取） ----------
 async function send() {
@@ -918,6 +920,7 @@ async function send() {
   updateProjectRootUI();
 
   // 创建 AbortController 以支持中止
+  requestAborted = false;
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
@@ -961,10 +964,12 @@ async function send() {
 
 // ---------- 中止当前请求 ----------
 function abortCurrentRequest() {
+  requestAborted = true;
   if (currentAbortController) {
     currentAbortController.abort();
     currentAbortController = null;
   }
+  setBusy(false);
 }
 
 function setBusy(flag) {
