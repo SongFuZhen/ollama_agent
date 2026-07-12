@@ -149,15 +149,16 @@ function runCommand(cmd) {
 /* ----------------------------- */
 /* 列表弹窗（/skills、/tools、/models）   */
 /* ----------------------------- */
-function openListModal(title, rows) {
+function openListModal(title, rows, options = {}) {
   let modal = $('#cmd-modal');
   if (!modal) {
     modal = el('div', 'simpui-dialog-backdrop hidden');
     modal.id = 'cmd-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
+    const panelClass = options.compact ? 'simpui-dialog-panel sm' : 'simpui-dialog-panel md';
     modal.innerHTML = `
-      <div class="simpui-dialog-panel md">
+      <div class="${panelClass}">
         <div class="simpui-dialog-header">
           <h3 class="simpui-dialog-title" id="cmd-modal-title"></h3>
           <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
@@ -170,6 +171,8 @@ function openListModal(title, rows) {
     });
     modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
   }
+  const panel = modal.querySelector('.simpui-dialog-panel');
+  panel.className = options.compact ? 'simpui-dialog-panel sm' : 'simpui-dialog-panel md';
   modal.querySelector('#cmd-modal-title').textContent = title;
   const body = modal.querySelector('#cmd-modal-body');
   body.innerHTML = '';
@@ -207,12 +210,26 @@ function buildRow(r) {
     row.addEventListener('click', () => r.onClick(r.name));
     row.classList.add('clickable');
   }
+  // 前置 radio：用于模型选择等单选场景
+  if (r.radio !== undefined) {
+    const radioWrap = el('label', 'simpui-radio-label cmd-row-radio');
+    const radio = el('input', 'simpui-radio-input');
+    radio.type = 'radio';
+    radio.name = r.radioGroup || 'cmd-radio-group';
+    radio.value = r.name;
+    if (r.radio) radio.checked = true;
+    if (r.onRadio) radio.addEventListener('change', () => r.onRadio(r.name));
+    // 阻止 radio 点击冒泡到整行（避免触发整行 onClick 关闭弹框）
+    radioWrap.addEventListener('click', (e) => e.stopPropagation());
+    radioWrap.appendChild(radio);
+    row.appendChild(radioWrap);
+  }
   row.appendChild(head);
   if (r.desc) {
     const desc = el('div', 'cmd-row-desc', r.desc);
     row.appendChild(desc);
   }
-  const paramsWrap = el('div', 'cmd-row-params hidden');
+  const paramsWrap = el('div', 'cmd-row-params');
   if (r.params && r.params.length) {
     r.params.forEach((pp) => {
       const chip = el('code', 'cmd-param', pp);
@@ -220,35 +237,19 @@ function buildRow(r) {
     });
   }
   row.appendChild(paramsWrap);
-  if ((r.desc && r.desc.length > 48) || (r.params && r.params.length)) {
-    const more = el('button', 'cmd-row-more', '展开');
-    more.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const expanded = row.classList.toggle('expanded');
-      if (expanded) {
-        desc && desc.classList.add('expanded');
-        paramsWrap.classList.remove('hidden');
-      } else {
-        desc && desc.classList.remove('expanded');
-        paramsWrap.classList.add('hidden');
-      }
-      more.textContent = expanded ? '折叠' : '展开';
-    });
-    row.appendChild(more);
-  }
   return row;
 }
 
 function showSkills() {
   const tools = Array.isArray(state.tools) ? state.tools : [];
   const rows = tools.filter((t) => (t.kind || 'tool') === 'skill').map(toolToRow);
-  openListModal('可用技能（' + rows.length + '）', rows);
+  openListModal('可用技能（' + rows.length + '）', rows, { compact: true });
 }
 
 function showTools() {
   const tools = Array.isArray(state.tools) ? state.tools : [];
   const rows = tools.filter((t) => (t.kind || 'tool') === 'tool').map(toolToRow);
-  openListModal('可用工具（' + rows.length + '）', rows);
+  openListModal('可用工具（' + rows.length + '）', rows, { compact: true });
 }
 
 function showModels() {
@@ -256,7 +257,26 @@ function showModels() {
   const current = state.activeModel;
   const rows = models.map((m) => ({
     name: m,
+    radio: (m === current),
+    radioGroup: 'model-select',
     tag: (m === current) ? '当前' : null,
+    // 单选 radio 切换：实时设为目标模型，并更新「当前」标记，不关闭弹框
+    onRadio: (name) => {
+      if (typeof setActiveModel === 'function') setActiveModel(name);
+      body && body.querySelectorAll('.cmd-row').forEach((rowEl) => {
+        const nm = rowEl.querySelector('.cmd-row-name')?.textContent;
+        const badge = rowEl.querySelector('.simpui-badge');
+        if (nm === name) {
+          if (!badge) {
+            const h = rowEl.querySelector('.cmd-row-head');
+            h.appendChild(el('span', 'simpui-badge warning sm', '当前'));
+          }
+        } else if (badge) {
+          badge.remove();
+        }
+      });
+    },
+    // 点击整行：选中并关闭弹框（兼容无 radio 的快捷操作）
     onClick: (name) => {
       if (typeof setActiveModel === 'function') {
         setActiveModel(name);
@@ -265,7 +285,9 @@ function showModels() {
       }
     },
   }));
-  openListModal('已安装模型（' + rows.length + '）', rows);
+  openListModal('选择模型（' + rows.length + '）', rows);
+  const body = $('#cmd-modal-body');
+  body.classList.add('model-select-modal');
 }
 
 function showHelp() {

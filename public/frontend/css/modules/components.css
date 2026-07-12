@@ -308,6 +308,100 @@ body.dark .simpui-btn:hover:not(:disabled) {
   color: var(--simpui-heading-color);
 }
 
+/* ---------- 命令弹框（/skills、/tools、/models） ---------- */
+.cmd-empty {
+  color: var(--simpui-text-light);
+  padding: var(--space-3) 0;
+  font-size: 13px;
+}
+
+.cmd-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cmd-row:last-child {
+  border-bottom: none;
+}
+
+.cmd-row.clickable {
+  cursor: pointer;
+}
+
+.cmd-row.clickable:hover {
+  background: var(--simpui-focus);
+}
+
+.cmd-row-radio {
+  align-self: flex-start;
+}
+
+/* 技能/工具对话框：紧凑宽度 600px */
+#cmd-modal .simpui-dialog-panel.sm {
+  max-width: 600px;
+}
+
+#cmd-modal .simpui-dialog-panel.sm .cmd-row-head {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 模型选择对话框：横向排列 */
+.model-select-modal .cmd-row {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.model-select-modal .cmd-row-head {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cmd-row-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.cmd-row-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--simpui-heading-color);
+}
+
+.cmd-row-desc {
+  margin-top: var(--space-1);
+  font-size: 12px;
+  color: var(--simpui-text-dim);
+  line-height: 1.5;
+}
+
+.cmd-row-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.cmd-param {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--simpui-text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
 /* ---------- 会话状态栏 ---------- */
 .session-state {
   flex-shrink: 0;

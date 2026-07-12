@@ -78,16 +78,16 @@
   bottom: 100%;
   left: 0;
   right: 0;
-  max-height: 320px;
+  max-height: 280px;
   overflow-y: auto;
   background: var(--modal-bg);
   border: 1px solid var(--simpui-input-border);
   border-radius: 8px;
   box-shadow: var(--modal-shadow);
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   z-index: 40;
 }
 
@@ -98,8 +98,8 @@
 .slash-menu-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
@@ -111,15 +111,16 @@
 }
 
 .slash-menu-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: var(--accent);
+  flex-shrink: 0;
 }
 
 .slash-menu-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .slash-menu-name {
