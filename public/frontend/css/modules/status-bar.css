@@ -66,3 +66,47 @@
 .status-more:hover {
   color: var(--simpui-text-dim);
 }
+
+/* 上下文用量条 */
+.context-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.context-label {
+  color: var(--simpui-text-dim);
+}
+
+.context-meter {
+  display: inline-block;
+  width: 60px;
+  height: 6px;
+  background: var(--simpui-input-border);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.context-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.context-fill.warn {
+  background: var(--simpui-warning, #e6a817);
+}
+
+.context-fill.danger {
+  background: var(--simpui-danger, #e6503b);
+}
+
+.context-text {
+  color: var(--simpui-text-light);
+  font-size: 10px;
+  min-width: 3em;
+}

@@ -232,6 +232,49 @@ function handleConfig(res) {
   sendJSON(res, 200, { ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT, tools: allSpecs() });
 }
 
+// 查询模型的 context window 大小（通过 Ollama /api/show）
+function handleModelContext(req, res) {
+  const model = new URL(req.url, 'http://x').searchParams.get('model') || '';
+  if (!model) return sendJSON(res, 400, { error: '缺少 model 参数' });
+
+  const { host, port } = (() => {
+    const oh = new URL(req.url, 'http://x').searchParams.get('ollamaHost') || OLLAMA_HOST;
+    const m = oh.match(/^https?:\/\/([^:]+):(\d+)$/);
+    if (!m) return { host: '127.0.0.1', port: 11434 };
+    return { host: m[1], port: parseInt(m[2], 10) };
+  })();
+
+  const body = JSON.stringify({ name: model });
+  const r = http.request(
+    { host, port, path: '/api/show', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+    (apiRes) => {
+      let data = '';
+      apiRes.on('data', (c) => (data += c));
+      apiRes.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          // 从 model_info 中提取 context_length 相关字段
+          const info = json.model_info || {};
+          let ctxSize = 0;
+          for (const key of Object.keys(info)) {
+            if (/context_length|max_position|num_ctx|n_ctx|max_seq_len/i.test(key)) {
+              ctxSize = parseInt(info[key], 10) || 0;
+              break;
+            }
+          }
+          sendJSON(res, 200, { model, contextSize: ctxSize || 0 });
+        } catch (e) {
+          sendJSON(res, 200, { model, contextSize: 0, error: '解析失败' });
+        }
+      });
+    }
+  );
+  r.on('error', () => sendJSON(res, 200, { model, contextSize: 0, error: 'Ollama 不可达' }));
+  r.write(body);
+  r.end();
+}
+
 // 项目根目录：GET 返回当前生效的根（含是否持久化有效）；POST 校验并持久化
 async function handleRootGet(res) {
   const root = await getProjectRoot();
@@ -399,6 +442,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
   if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
+  if (req.method === 'GET' && url === '/api/model/context') return handleModelContext(req, res);
   if (req.method === 'GET' && url === '/api/root') return handleRootGet(res);
   if (req.method === 'POST' && url === '/api/root') return handleRootSave(req, res);
   if (req.method === 'POST' && url === '/api/chat') return handleChat(req, res);

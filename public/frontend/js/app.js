@@ -25,6 +25,8 @@ const ssGitEl = $('#ss-git');
 const ssToolsEl = $('#ss-tools');
 const ssSkillsEl = $('#ss-skills');
 const ssMoreEl = $('#ss-more');
+const ssContextFill = $('#ss-context-fill');
+const ssContextText = $('#ss-context-text');
 
 // 状态栏点击事件：打开工具/技能列表
 if (ssToolsEl) {
@@ -501,7 +503,7 @@ function updateProjectRootUI() {
 let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
 
 function resetSessionStats() {
-  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0 };
+  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0, contextTokens: 0, contextLimit: state.sessionStats.contextLimit || 0 };
 }
 
 function formatElapsed(ms) {
@@ -511,6 +513,23 @@ function formatElapsed(ms) {
   if (m < 60) return m + 'm';
   const h = Math.floor(m / 60);
   return h + 'h ' + (m % 60) + 'm';
+}
+
+// 查询当前模型的 context window 大小
+async function fetchModelContext() {
+  const model = state.activeModel || state.defaultModel;
+  if (!model) return;
+  try {
+    const params = new URLSearchParams({ model });
+    const oh = ollamaHost(); if (oh) params.set('ollamaHost', oh);
+    const r = await fetch('/api/model/context?' + params.toString());
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.contextSize > 0) {
+      state.sessionStats.contextLimit = d.contextSize;
+      renderSessionState();
+    }
+  } catch (e) { /* 忽略 */ }
 }
 
 // 渲染状态栏
@@ -530,6 +549,34 @@ function renderSessionState() {
   if (ssDirEl) ssDirEl.textContent = dirName;
   if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
   if (ssSkillsEl) ssSkillsEl.textContent = 'Skills: ' + skillCount;
+
+  // 渲染上下文用量条
+  renderContextBar();
+}
+
+function renderContextBar() {
+  if (!ssContextFill || !ssContextText) return;
+  const used = state.sessionStats.contextTokens || 0;
+  const limit = state.sessionStats.contextLimit || 0;
+
+  if (limit > 0) {
+    const pct = Math.min(100, Math.round((used / limit) * 100));
+    ssContextFill.style.width = pct + '%';
+    ssContextFill.classList.remove('warn', 'danger');
+    if (pct >= 90) ssContextFill.classList.add('danger');
+    else if (pct >= 70) ssContextFill.classList.add('warn');
+    ssContextText.textContent = `${formatTokenCount(used)}/${formatTokenCount(limit)}`;
+  } else {
+    ssContextFill.style.width = '0%';
+    ssContextFill.classList.remove('warn', 'danger');
+    ssContextText.textContent = used > 0 ? formatTokenCount(used) + '/?' : '—';
+  }
+}
+
+function formatTokenCount(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
+  return String(n);
 }
 
 // 状态栏点击事件
@@ -547,11 +594,18 @@ function buildStateDetail() {
     ? Object.entries(counts).map(([k, v]) => `  ${k} ×${v}`).join('\n')
     : '  无';
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
+  const ctxTokens = state.sessionStats.contextTokens || 0;
+  const ctxLimit = state.sessionStats.contextLimit || 0;
+  const ctxLine = ctxLimit > 0
+    ? `上下文用量: ${formatTokenCount(ctxTokens)} / ${formatTokenCount(ctxLimit)} (${Math.round(ctxTokens / ctxLimit * 100)}%)`
+    : `上下文用量: ${ctxTokens > 0 ? formatTokenCount(ctxTokens) : '—'}`;
+
   return `模型: ${model}
 目录: ${root || '默认沙箱'}${state.gitBranch ? '\n分支: ' + state.gitBranch : ''}
 会话 ID: ${id}
 已用时长: ${elapsed}
 消息数: ${msgCount}
+${ctxLine}
 工具调用:
 ${toolLines}`;
 }
@@ -669,6 +723,14 @@ function handleEvent(ev) {
       }
       if (typeof ev.total === 'number') {
         state.sessionStats.totalTimeSum += ev.total;
+      }
+      // 更新上下文用量（promptTokens 即为当前上下文 token 数）
+      if (typeof ev.promptTokens === 'number' && ev.promptTokens > 0) {
+        state.sessionStats.contextTokens = ev.promptTokens;
+        // 首次获得模型上下文大小时异步查询
+        if (!state.sessionStats.contextLimit) {
+          fetchModelContext();
+        }
       }
       renderSessionState();
       break;
@@ -929,6 +991,7 @@ function renderModelDropdown() {
   const saved = loadSelectedModel();
   const selected = (saved && models.includes(saved)) ? saved : models[0];
   state.activeModel = selected;
+  fetchModelContext();
   renderSessionState();
 }
 
@@ -937,6 +1000,10 @@ function setActiveModel(model) {
   if (!model || !state.installedModels.includes(model)) return;
   state.activeModel = model;
   saveSelectedModel(model);
+  // 切换模型时重置上下文统计并查询新模型的 context window
+  state.sessionStats.contextTokens = 0;
+  state.sessionStats.contextLimit = 0;
+  fetchModelContext();
   renderSessionState();
 }
 

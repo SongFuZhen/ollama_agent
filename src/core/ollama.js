@@ -85,12 +85,14 @@ function listModels(ollamaHost) {
 
 // 流式调用，每次 yield 一个 token
 // opts.onToken(token) 每收到一个 token 时回调
-// opts.onStats({ ttft, total }) 连接统计回调
+// opts.onStats({ ttft, total, promptTokens, completionTokens }) 连接统计回调
 async function chatStream(model, messages, opts = {}) {
   const { host, port } = hostParts(opts.ollamaHost);
   const body = JSON.stringify({ model, messages, stream: true });
   const startTime = Date.now();
   let firstTokenTime = null;
+  let promptTokens = 0;
+  let completionTokens = 0;
 
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -99,6 +101,12 @@ async function chatStream(model, messages, opts = {}) {
       (res) => {
         let buffer = '';
         let fullText = '';
+
+        // 从 JSON 行中提取 token 计数
+        function captureTokens(json) {
+          if (json.prompt_eval_count != null) promptTokens = json.prompt_eval_count;
+          if (json.eval_count != null) completionTokens = json.eval_count;
+        }
 
         res.on('data', (chunk) => {
           buffer += chunk.toString();
@@ -114,6 +122,7 @@ async function chatStream(model, messages, opts = {}) {
                 reject(new Error(json.error));
                 return;
               }
+              captureTokens(json);
               if (json.message) {
                 // 推理模型（deepseek-r1 / qwen3 等）把思考内容放在 reasoning_content，
                 // 统一转成 <think>...</think> 文本交给上层，沿用已有的 think-block 检测逻辑
@@ -142,6 +151,7 @@ async function chatStream(model, messages, opts = {}) {
           if (buffer.trim()) {
             try {
               const json = JSON.parse(buffer);
+              captureTokens(json);
               if (json.message) {
                 if (json.message.reasoning_content) {
                   const reason = json.message.reasoning_content;
@@ -160,7 +170,7 @@ async function chatStream(model, messages, opts = {}) {
           }
           const total = Date.now() - startTime;
           const ttft = firstTokenTime ? firstTokenTime - startTime : total;
-          if (opts.onStats) opts.onStats({ ttft, total });
+          if (opts.onStats) opts.onStats({ ttft, total, promptTokens, completionTokens });
           resolve(fullText);
         });
       }

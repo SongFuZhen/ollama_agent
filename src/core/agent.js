@@ -118,7 +118,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
             }
           },
           onStats: (stats) => {
-            emit({ type: 'stats', step, ttft: stats.ttft, total: stats.total });
+            emit({ type: 'stats', step, ttft: stats.ttft, total: stats.total, promptTokens: stats.promptTokens, completionTokens: stats.completionTokens });
           }
         });
 

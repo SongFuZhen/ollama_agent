@@ -24,6 +24,8 @@ const state = {
     ttftSum: 0,             // TTFT 累计毫秒
     ttftCount: 0,           // TTFT 样本数
     totalTimeSum: 0,        // 总耗时累计毫秒
+    contextTokens: 0,       // 最近一次 prompt_eval_count（上下文用量）
+    contextLimit: 0,        // 模型 context window 大小（0=未知）
   },
   bootDone: false,          // 启动序列完成
   activeModel: null,        // 当前下拉选中的模型（来自 Ollama 已安装列表）
