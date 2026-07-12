@@ -1,0 +1,52 @@
+/* status-bar.css - 状态栏 */
+/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
+
+/* 状态栏 */
+.status-bar {
+  height: 28px;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-item {
+  color: var(--text-muted);
+}
+
+.status-ready {
+  color: var(--success);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.status-sep {
+  color: var(--border);
+}
+
+.status-more {
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.status-more:hover {
+  color: var(--text-primary);
+}

@@ -1,5 +1,5 @@
 /* base.css - 设计变量、主题、基础样式 */
-/* 设计方向：Geek Terminal × Military Grade */
+/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
 /* 本地字体 */
 @font-face {
@@ -26,79 +26,40 @@
   src: url("/fonts/JetBrainsMono-Bold.ttf") format("truetype");
 }
 
+/* 暗色主题（默认） */
 :root {
-  /* 暗色主题（默认）- 设计规范变量体系 */
+  /* 基础色 */
   --bg-primary: #0a0a0b;
   --bg-secondary: #111113;
   --bg-tertiary: #1a1a1f;
   --bg-elevated: #222228;
 
+  /* 文本色 */
   --text-primary: #e8e8ec;
   --text-secondary: #8b8b94;
   --text-muted: #5a5a63;
 
+  /* 品牌色 - 青蓝 */
   --accent: #00b4d8;
   --accent-dim: rgba(0, 180, 216, 0.12);
   --accent-hover: #0096c7;
 
+  /* 语义色 */
   --success: #00ff88;
-  --success-dim: rgba(0, 255, 136, 0.12);
   --warning: #ffb800;
-  --warning-dim: rgba(255, 184, 0, 0.12);
   --error: #ff4444;
-  --error-dim: rgba(255, 68, 68, 0.12);
   --info: #00b4d8;
 
+  /* 边框 */
   --border: #2a2a32;
   --border-hover: #3a3a44;
 
+  /* 特殊 */
   --glow: 0 0 20px rgba(0, 180, 216, 0.15);
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 
-  /* 兼容旧变量名 */
-  --ink: var(--bg-primary);
-  --panel: var(--bg-secondary);
-  --panel-2: var(--bg-tertiary);
-  --panel-3: var(--border);
-  --chalk: var(--text-primary);
-  --ash: var(--text-secondary);
-  --mist: var(--text-muted);
-  --volt: var(--accent);
-  --volt-dim: var(--accent-dim);
-  --volt-glow: var(--glow);
-  --cyan: var(--info);
-  --cyan-dim: var(--accent-dim);
-  --amber: var(--warning);
-  --amber-dim: var(--warning-dim);
-  --err: var(--error);
-  --err-dim: var(--error-dim);
-
-  --bg: var(--bg-primary);
-  --surface: var(--bg-secondary);
-  --surface-2: var(--bg-tertiary);
-  --surface-3: var(--border);
-  --text: var(--text-primary);
-  --text-secondary: var(--text-secondary);
-  --text-muted: var(--text-muted);
-  --text-dim: var(--text-secondary);
-  --green: var(--success);
-  --red: var(--error);
-  --violet: var(--warning);
-  --accent: var(--accent);
-  --accent-hover: var(--accent-hover);
-  --accent-soft: var(--accent-dim);
-  --success: var(--success);
-  --success-soft: var(--success-dim);
-  --warning: var(--warning);
-  --warning-soft: var(--warning-dim);
-  --error: var(--error);
-  --error-soft: var(--error-dim);
-
   /* 字体 */
-  --font-display: "JetBrains Mono", monospace;
-  --font-body: "JetBrains Mono", -apple-system, "PingFang SC", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
-  --font-sans: var(--font-body);
 
   /* 字号阶梯 */
   --text-xs: 11px;
@@ -124,22 +85,17 @@
   --radius-xl: 12px;
   --radius-full: 9999px;
 
-  /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+  /* 过渡 */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
 
   /* 布局 */
   --topbar-h: 48px;
   --session-bar-h: 40px;
   --status-bar-h: 28px;
   --sidebar-w: 240px;
-
-  /* 过渡 */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
 
   font-size: 14px;
 }
@@ -159,66 +115,39 @@
   --accent-dim: rgba(0, 150, 199, 0.10);
   --accent-hover: #0077b6;
 
-  --success: #00c853;
-  --success-dim: rgba(0, 200, 83, 0.10);
-  --warning: #ff9800;
-  --warning-dim: rgba(255, 152, 0, 0.10);
-  --error: #f44336;
-  --error-dim: rgba(244, 67, 54, 0.10);
-
   --border: #e5e5ea;
   --border-hover: #d0d0d8;
 
   --glow: none;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-
-  /* 兼容旧变量名 */
-  --ink: var(--bg-primary);
-  --panel: var(--bg-secondary);
-  --panel-2: var(--bg-tertiary);
-  --panel-3: var(--border);
-  --chalk: var(--text-primary);
-  --ash: var(--text-secondary);
-  --mist: var(--text-muted);
-  --volt: var(--accent);
-  --volt-dim: var(--accent-dim);
-  --volt-glow: var(--glow);
-  --cyan: var(--info);
-  --cyan-dim: var(--accent-dim);
-  --amber: var(--warning);
-  --amber-dim: var(--warning-dim);
-  --err: var(--error);
-  --err-dim: var(--error-dim);
-
-  --bg: var(--bg-primary);
-  --surface: var(--bg-secondary);
-  --surface-2: var(--bg-tertiary);
-  --surface-3: var(--border);
-  --text: var(--text-primary);
-  --text-secondary: var(--text-secondary);
-  --text-muted: var(--text-muted);
-  --text-dim: var(--text-secondary);
-  --green: var(--success);
-  --red: var(--error);
-  --violet: var(--warning);
-  --accent: var(--accent);
-  --accent-hover: var(--accent-hover);
-  --accent-soft: var(--accent-dim);
-  --success: var(--success);
-  --success-soft: var(--success-dim);
-  --warning: var(--warning);
-  --warning-soft: var(--warning-dim);
-  --error: var(--error);
-  --error-soft: var(--error-dim);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-*,
-*::before,
-*::after {
+/* 跟随系统（无 data-theme 属性时） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg-primary: #0a0a0b;
+    --bg-secondary: #111113;
+    --bg-tertiary: #1a1a1f;
+    --bg-elevated: #222228;
+
+    --text-primary: #e8e8ec;
+    --text-secondary: #8b8b94;
+    --text-muted: #5a5a63;
+
+    --accent: #00b4d8;
+    --accent-dim: rgba(0, 180, 216, 0.12);
+    --accent-hover: #0096c7;
+
+    --border: #2a2a32;
+    --border-hover: #3a3a44;
+
+    --glow: 0 0 20px rgba(0, 180, 216, 0.15);
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Reset */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -231,8 +160,8 @@ html, body {
 body {
   display: flex;
   flex-direction: column;
-  font-family: var(--font-body);
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
   line-height: 1.5;
   color: var(--text-primary);
   background: var(--bg-primary);
@@ -271,41 +200,15 @@ body {
   color: var(--text-primary);
 }
 
-/* 等宽字体工具类 */
-.font-mono {
-  font-family: var(--font-mono);
-}
-
-/* 标签字体工具类 */
-.font-label {
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* 网格线工具类 */
-.grid-line-top {
-  border-top: 1px solid var(--border);
-}
-
-.grid-line-bottom {
-  border-bottom: 1px solid var(--border);
-}
-
 /* 减少动效 */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  * {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* 覆盖 simpui 暗色主题变量 */
+/* simpui 暗色主题覆盖 */
 .dark {
   --simpui-bg: var(--bg-primary);
   --input-bg: var(--bg-secondary);
@@ -316,6 +219,4 @@ body {
   --modal-fg: var(--text-primary);
   --backdrop-bg: rgba(0, 0, 0, 0.6);
   --simpui-placeholder: var(--text-muted);
-  --simpui-input-border: var(--border);
-  --simpui-focus: var(--accent);
 }

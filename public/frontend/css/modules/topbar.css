@@ -1,42 +1,31 @@
 /* topbar.css - 顶栏样式 */
-/* 设计方向：Geek Terminal × Military Grade - 48px 顶栏 */
+/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
 /* 顶栏布局 */
 .topbar {
-  height: var(--topbar-h);
+  height: 48px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 var(--space-4);
-  gap: var(--space-4);
-  flex-shrink: 0;
+  padding: 0 16px;
+  gap: 16px;
 }
 
 /* 品牌 */
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
 }
 
-.brand .logo {
+.brand-logo {
   width: 28px;
   height: 28px;
-  background: var(--accent);
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--bg-primary);
-  font-family: var(--font-display);
 }
 
 .brand h1 {
-  font-family: var(--font-display);
-  font-size: var(--text-base);
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -45,19 +34,19 @@
 .debug-info {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-3);
+  gap: 12px;
+  padding: 4px 10px;
   background: var(--bg-tertiary);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .debug-item {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
 }
 
 .debug-icon {
@@ -74,18 +63,7 @@
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.topbar-actions .simpui-btn {
-  padding: 6px;
-  min-width: 32px;
-  height: 32px;
-}
-
-.topbar-actions .simpui-btn i {
-  width: 16px;
-  height: 16px;
+  gap: 8px;
 }
 
 /* 用户下拉菜单 */
@@ -98,11 +76,11 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: var(--space-1);
+  margin-top: 4px;
   min-width: 160px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 6px;
   box-shadow: var(--shadow);
   z-index: 100;
   overflow: hidden;
@@ -110,26 +88,14 @@
 
 .user-dropdown.open .dropdown-menu {
   display: block;
-  animation: dropdown-in var(--duration-fast) var(--ease);
-}
-
-@keyframes dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: 8px 12px;
   background: none;
   border: none;
   color: var(--text-primary);
@@ -143,14 +109,14 @@
   background: var(--bg-tertiary);
 }
 
-.item-icon {
+.dropdown-item i {
   width: 14px;
   height: 14px;
   color: var(--text-muted);
 }
 
-.dropdown-sep {
+.dropdown-divider {
   height: 1px;
   background: var(--border);
-  margin: var(--space-1) 0;
+  margin: 4px 0;
 }

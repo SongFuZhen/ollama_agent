@@ -12,8 +12,14 @@ const sendBtn = $('#send');
 const ollamaStatusEl = $('#ollama-status');
 const emptyEl = $('#empty');
 const convNameEl = $('#conv-name');
-const sessionStateEl = $('#session-state');
 const userDropdown = $('.user-dropdown');
+
+// 状态栏元素
+const ssModelEl = $('#ss-model');
+const ssCharsEl = $('#ss-chars');
+const ssDirEl = $('#ss-dir');
+const ssToolsEl = $('#ss-tools');
+const ssMoreEl = $('#ss-more');
 
 // 下拉菜单切换
 if (userDropdown) {
@@ -447,37 +453,19 @@ function formatElapsed(ms) {
   return h + 'h ' + (m % 60) + 'm';
 }
 
-// 渲染对话框下方的会话状态栏
+// 渲染状态栏
 function renderSessionState() {
-  if (!sessionStateEl) return;
   const model = state.activeModel || state.defaultModel || '—';
   const root = effectiveRoot();
   const dirName = root ? lastSeg(root) : '默认沙箱';
-  const branch = state.gitBranch ? ` <em>git:(${escapeHtml(state.gitBranch)})</em>` : '';
-  const id = (state.conversationId || '').slice(0, 12) || '—';
-  const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
   const counts = state.sessionStats.toolCounts || {};
-  const toolStr = Object.keys(counts).length
-    ? Object.entries(counts).map(([k, v]) => `✓ ${escapeHtml(k)} ×${v}`).join('  ')
-    : '无工具调用';
+  const toolCount = Object.keys(counts).length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
 
-  sessionStateEl.innerHTML = `
-    <div class="ss-line">
-      <span class="ss-model">${escapeHtml(model)}</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-dir">${escapeHtml(dirName)}${branch}</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-id">${escapeHtml(id)}</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-elapsed">⏱️ ${elapsed}</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-tools">${toolStr}</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-msg">消息 ${msgCount}</span>
-      <span class="ss-more">详情 ›</span>
-    </div>
-  `;
+  if (ssModelEl) ssModelEl.textContent = model;
+  if (ssCharsEl) ssCharsEl.textContent = msgCount + ' 字';
+  if (ssDirEl) ssDirEl.textContent = dirName;
+  if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
 }
 
 // 组装状态详情文本（用于弹框展示）
@@ -886,8 +874,8 @@ updatePanelHint();
 renderSessionState();
 
 // 状态栏：点击弹出详情弹框
-if (sessionStateEl) {
-  sessionStateEl.onclick = openStateModal;
+if (ssMoreEl) {
+  ssMoreEl.onclick = openStateModal;
 }
 // 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
 const stateModalClose = $('#state-modal-close');
@@ -902,8 +890,8 @@ document.addEventListener('keydown', (e) => {
     closeDeleteConfirm();
   }
 });
-// 状态栏：定时刷新已用时长
-setInterval(() => { if (state.sessionStats.startTs) renderSessionState(); }, 30000);
+// 状态栏：定时刷新
+setInterval(() => { renderSessionState(); }, 30000);
 
 loadServerRoot();
 loadConfig().then(preflight).then(afterBoot);

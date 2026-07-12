@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ason Agent</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <!-- Meta -->
+  <meta name="description" content="Ason Agent - AI 智能助手">
+  <meta name="theme-color" content="#0a0a0b">
   <!-- 第三方库样式（先加载） -->
   <link rel="stylesheet" href="/lib/typeset/typeset.css">
   <link rel="stylesheet" href="/lib/simpui/css/simpui.css">
@@ -14,16 +21,13 @@
   <link rel="stylesheet" href="/css/modules/base.css">
   <!-- 组件样式 -->
   <link rel="stylesheet" href="/css/components/button.css">
-  <link rel="stylesheet" href="/css/components/input.css">
   <link rel="stylesheet" href="/css/components/dialog.css">
-  <link rel="stylesheet" href="/css/components/select.css">
-  <link rel="stylesheet" href="/css/components/file-tree.css">
   <!-- 页面样式（最后加载，覆盖第三方库） -->
   <link rel="stylesheet" href="/css/modules/topbar.css">
   <link rel="stylesheet" href="/css/modules/layout.css">
   <link rel="stylesheet" href="/css/modules/chat.css">
-  <link rel="stylesheet" href="/css/modules/components.css">
   <link rel="stylesheet" href="/css/modules/input.css">
+  <link rel="stylesheet" href="/css/modules/status-bar.css">
   <link rel="stylesheet" href="/css/modules/modal.css">
   <link rel="stylesheet" href="/css/modules/responsive.css">
   <script src="/lib/simpui/js/simpicker.js"></script>
@@ -35,7 +39,7 @@
   <!-- ===== 顶栏 ===== -->
   <header class="topbar">
     <div class="brand">
-      <span class="logo">◆</span>
+      <img src="/favicon.svg" alt="Ason Agent" class="brand-logo">
       <h1>Ason Agent</h1>
     </div>
 
@@ -58,53 +62,55 @@
         </button>
         <div class="dropdown-menu">
           <button id="settings-btn" class="dropdown-item">
-            <i data-lucide="settings" class="item-icon"></i>
+            <i data-lucide="settings"></i>
             <span>设置</span>
           </button>
           <a href="/device.html" class="dropdown-item">
-            <i data-lucide="smartphone" class="item-icon"></i>
+            <i data-lucide="smartphone"></i>
             <span>设备信息</span>
           </a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger">
+            <i data-lucide="log-out"></i>
+            <span>退出</span>
+          </button>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- ===== 主体 ===== -->
-  <div id="layout" class="layout">
-    <!-- 会话级表头（拉通横跨整个 session，代表项目文件属于整个 session） -->
-    <div class="session-bar">
-      <div class="sb-left">
-        <input id="conv-name" class="conv-name" type="text" placeholder="新对话" maxlength="60" spellcheck="false">
-      </div>
-      <div class="toolbar-btns">
-        <button id="history-btn-toolbar" class="simpui-btn light sm" title="历史对话">
-          <i data-lucide="history" style="width:14px;height:14px"></i>
-          <span>历史对话</span>
+  <!-- ===== 主体布局 ===== -->
+  <div class="layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">文件</span>
+        <button id="fs-refresh" class="simpui-btn light sm" aria-label="刷新">
+          <i data-lucide="refresh-cw"></i>
         </button>
-        <button id="new-chat" class="simpui-btn primary sm" title="清空当前对话">＋ 新对话</button>
-      </div>
-    </div>
-    <div class="layout-body">
-    <!-- 文件浏览器（左栏，可折叠） -->
-    <aside id="file-panel" class="file-panel">
-      <div class="panel-head">
-        <span class="panel-title">
-          <i data-lucide="folder" class="panel-icon"></i> 项目文件
-        </span>
-        <span class="panel-btns">
-          <button id="fs-refresh" class="simpui-btn light sm" aria-label="刷新">
-            <i data-lucide="refresh-cw" class="btn-icon"></i> 刷新
-          </button>
-        </span>
       </div>
       <div id="file-tree" class="file-tree"></div>
-      <div class="panel-hint">绑定沙箱目录后，可在此浏览目录内的文件</div>
     </aside>
 
-    <!-- 右栏：对话 + 输入 -->
-    <section class="right-col">
-      <main class="chat">
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 会话栏 -->
+      <div class="session-bar">
+        <input type="text" class="conv-name" id="conv-name" placeholder="新对话" maxlength="60" spellcheck="false">
+        <div class="session-actions">
+          <button id="history-btn" class="simpui-btn light sm">
+            <i data-lucide="history"></i>
+            <span>历史</span>
+          </button>
+          <button id="new-chat" class="simpui-btn primary sm">
+            <i data-lucide="plus"></i>
+            <span>新对话</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 聊天区 -->
+      <div class="chat-area" id="chat-area">
         <!-- 空状态 -->
         <div id="empty" class="empty">
           <h2>开始一个新任务</h2>
@@ -118,7 +124,7 @@
             <div id="empty-root-status" class="empty-root-status"></div>
           </div>
 
-          <!-- 目录选择器抽屉（服务端文件系统导航，得到真实绝对路径） -->
+          <!-- 目录选择器抽屉 -->
           <div id="dir-picker" class="dir-picker hidden">
             <div class="dir-picker-mask" data-close></div>
             <div class="dir-picker-panel">
@@ -146,28 +152,44 @@
           <span class="thinking-label">思考中</span>
           <span id="think-secs">0</span>s
         </div>
-      </main>
+      </div>
 
+      <!-- 输入区 -->
       <footer class="composer">
         <div class="composer-box">
-          <textarea id="input" class="composer-input" placeholder="输入问题，或输入 / 唤起命令"></textarea>
-          <div class="composer-fab">
-            <button id="img-btn" class="toolbar-btn" title="选择图片" aria-label="选择图片">
-              <i data-lucide="paperclip" class="toolbar-icon"></i>
+          <textarea id="input" class="composer-input" placeholder="输入消息..." rows="1"></textarea>
+          <div class="composer-actions">
+            <button id="img-btn" class="simpui-btn light sm" title="选择图片" aria-label="选择图片">
+              <i data-lucide="paperclip"></i>
             </button>
-            <button id="send" class="send-btn-round" title="发送">
-              <i data-lucide="send" class="send-icon"></i>
+            <button id="send" class="simpui-btn primary sm" title="发送">
+              <i data-lucide="send"></i>
             </button>
           </div>
         </div>
         <input id="img-input" type="file" accept="image/*" multiple hidden>
       </footer>
-      <button id="scroll-bottom" class="scroll-bottom hidden" title="滚动到底部">
-        <i data-lucide="arrow-down" class="scroll-bottom-icon"></i>
-      </button>
-      <div id="session-state" class="session-state"></div>
-    </section>
-    </div>
+
+      <!-- 状态栏 -->
+      <div class="status-bar">
+        <div class="status-left">
+          <span class="status-item status-ready">
+            <i data-lucide="circle" class="status-dot"></i>
+            <span>就绪</span>
+          </span>
+          <span class="status-sep">|</span>
+          <span class="status-item" id="ss-model">qwen2.5-coder</span>
+          <span class="status-sep">|</span>
+          <span class="status-item" id="ss-chars">0 字</span>
+        </div>
+        <div class="status-right">
+          <span class="status-item" id="ss-dir">/path/to/project</span>
+          <span class="status-sep">|</span>
+          <span class="status-item" id="ss-tools">Tools: 0</span>
+          <span class="status-more" id="ss-more">详情</span>
+        </div>
+      </div>
+    </main>
   </div>
 
   <!-- ===== 历史对话 Drawer ===== -->

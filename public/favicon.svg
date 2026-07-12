@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00b4d8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0096c7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#0a0a0b"/>
+  <!-- Abstract A shape - representing Agent -->
+  <path d="M64 28L96 88H80L72 70H56L48 88H32L64 28Z" fill="url(#grad)"/>
+  <!-- Circuit node -->
+  <circle cx="64" cy="52" r="6" fill="#0a0a0b"/>
+  <circle cx="64" cy="52" r="3" fill="#00b4d8"/>
+  <!-- Connection lines -->
+  <line x1="64" y1="58" x2="64" y2="70" stroke="#00b4d8" stroke-width="2" opacity="0.6"/>
+</svg>

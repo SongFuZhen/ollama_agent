@@ -1,20 +1,20 @@
 /* button.css - 按钮组件 */
-/* 设计方向：Geek Terminal × Military Grade */
+/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
-/* simpui 按钮覆盖 */
+/* simpui 按钮 */
 .simpui-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
+  gap: 6px;
   height: 36px;
-  padding: 0 var(--space-4);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  font-size: 14px;
   font-weight: 500;
   line-height: 1;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 6px;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease);
   white-space: nowrap;
@@ -81,8 +81,8 @@
 /* 尺寸 */
 .simpui-btn.sm {
   height: 28px;
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  padding: 0 12px;
+  font-size: 12px;
 }
 
 .simpui-btn.sm i {
@@ -92,23 +92,12 @@
 
 .simpui-btn.md {
   height: 36px;
-  padding: 0 var(--space-4);
-  font-size: var(--text-base);
+  padding: 0 16px;
+  font-size: 14px;
 }
 
 .simpui-btn.lg {
   height: 44px;
-  padding: 0 var(--space-5);
-  font-size: var(--text-lg);
-}
-
-/* 图标按钮（仅图标） */
-.simpui-btn.icon-only {
-  padding: 6px;
-  min-width: 32px;
-}
-
-.simpui-btn.icon-only.sm {
-  padding: 4px;
-  min-width: 28px;
+  padding: 0 20px;
+  font-size: 15px;
 }

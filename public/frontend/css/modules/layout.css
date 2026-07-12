@@ -1,45 +1,84 @@
 /* layout.css - 主体布局 */
-/* 设计方向：Geek Terminal × Military Grade */
+/* 严格按照 2026-03-12-ui-redesign.md 设计规范 */
 
+/* 主体布局 */
 .layout {
   flex: 1;
   display: flex;
-  flex-direction: column;
   min-height: 0;
+}
+
+/* 侧边栏 */
+.sidebar {
+  width: 240px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.file-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* 主内容区 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
 }
 
 /* 会话栏 */
 .session-bar {
-  height: var(--session-bar-h);
-  flex-shrink: 0;
+  height: 40px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: 0 var(--space-4);
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  flex-shrink: 0;
 }
 
-.sb-left {
+.session-actions {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
+  gap: 6px;
 }
 
+/* 对话名称输入框 */
 .conv-name {
   width: 300px;
   max-width: 40vw;
-  flex-shrink: 0;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   outline: none;
   transition: all var(--duration-fast) var(--ease);
 }
@@ -58,165 +97,4 @@
   background: var(--bg-secondary);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.toolbar-btns {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* 布局主体 */
-.layout-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-/* 侧边栏 */
-.file-panel {
-  width: var(--sidebar-w);
-  flex-shrink: 0;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  transition: width var(--duration-slow) var(--ease);
-}
-
-.layout.sidebar-collapsed .file-panel {
-  width: 0;
-  border-right: none;
-  overflow: hidden;
-}
-
-.panel-head {
-  height: 40px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.panel-icon {
-  width: 14px;
-  height: 14px;
-  color: var(--text-muted);
-}
-
-.panel-btns {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.panel-hint {
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  border-top: 1px solid var(--border);
-  line-height: 1.5;
-}
-
-.file-hint {
-  padding: var(--space-5) var(--space-4);
-  font-size: var(--text-base);
-  line-height: 1.6;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-/* 右栏 */
-.right-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* 路径标签 */
-.project-root {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  max-width: 240px;
-  padding: var(--space-1) var(--space-2);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  cursor: default;
-  overflow: hidden;
-}
-
-.project-root .pr-icon {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
-.project-root .pr-path {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project-root .pr-tag {
-  flex-shrink: 0;
-  font-size: 10px;
-  color: var(--text-muted);
-  background: var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1px 4px;
-}
-
-/* 芯片 */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  height: 24px;
-  padding: 0 var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease);
-}
-
-.chip:hover {
-  background: var(--border);
-  color: var(--text-primary);
-}
-
-.chip.active {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-/* 按钮图标 */
-.btn-icon {
-  width: 14px;
-  height: 14px;
-  color: currentColor;
 }
