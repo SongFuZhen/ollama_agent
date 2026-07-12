@@ -485,7 +485,7 @@ function updateProjectRootUI() {
 let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
 
 function resetSessionStats() {
-  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0 };
+  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0 };
   state.gitBranch = '';
 }
 
@@ -507,9 +507,11 @@ function renderSessionState() {
   const toolCount = Object.keys(counts).length;
   const skillCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'skill').length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
+  const avgTtft = state.sessionStats.ttftCount > 0 ? Math.round(state.sessionStats.ttftSum / state.sessionStats.ttftCount) : 0;
+  const totalTime = state.sessionStats.totalTimeSum;
 
   if (ssModelEl) ssModelEl.textContent = model;
-  if (ssCharsEl) ssCharsEl.textContent = msgCount + ' 字';
+  if (ssCharsEl) ssCharsEl.textContent = `${msgCount} 条 | TTFT: ${avgTtft}ms | 总耗时: ${formatElapsed(totalTime)}`;
   if (ssDirEl) ssDirEl.textContent = dirName;
   if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
   if (ssSkillsEl) ssSkillsEl.textContent = 'Skills: ' + skillCount;
@@ -645,6 +647,15 @@ function handleEvent(ev) {
         // 统计到达即落库，确保刷新/历史回放可恢复
         saveConversation();
       }
+      // 累计到会话统计
+      if (typeof ev.ttft === 'number') {
+        state.sessionStats.ttftSum += ev.ttft;
+        state.sessionStats.ttftCount += 1;
+      }
+      if (typeof ev.total === 'number') {
+        state.sessionStats.totalTimeSum += ev.total;
+      }
+      renderSessionState();
       break;
     }
       
