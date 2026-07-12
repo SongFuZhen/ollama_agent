@@ -13,9 +13,19 @@ async function rootReal(root) {
 
 async function safeResolve(p, root = PROJECT_ROOT) {
   const realRoot = await rootReal(root);
-  // 去掉前导 /，强制相对 realRoot 解析，防止模型把 /src/foo 当文件系统绝对路径
-  const clean = p.replace(/^\/+/, '');
-  const abs = path.resolve(realRoot, clean);
+
+  let abs;
+  if (path.isAbsolute(p)) {
+    // 绝对路径：如果在沙箱内直接使用，否则去前导 / 后相对沙箱解析
+    const rel = path.relative(realRoot, p);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+      abs = p;
+    } else {
+      abs = path.resolve(realRoot, p.replace(/^\/+/, ''));
+    }
+  } else {
+    abs = path.resolve(realRoot, p);
+  }
 
   let realBase;
   try {
