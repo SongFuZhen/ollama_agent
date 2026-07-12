@@ -9,6 +9,31 @@
 
 ## 前端开发规范
 
+### ⚠️ UI 组件规则（强制）
+
+**所有 UI 组件必须基于 `lib/simpui` 库构建，禁止写原生样式！**
+
+- 按钮：使用 `.simpui-btn` 及其变体（primary/secondary/danger 等）
+- 输入框：使用 `.simpui-input`, `.simpui-textarea`
+- 下拉菜单：使用 `.simpui-select`, `.dropdown-menu`
+- 弹窗：使用 `.simpui-dialog-*`
+- 复选框：使用 `.simpui-checkbox`
+- 徽章：使用 `.simpui-badge`
+- Toast：使用 `simpui-toast`
+
+**图标统一从 `lib/lucide` 获取，禁止使用其他图标库！**
+
+### 组件复用规则
+
+**可复用组件保存到 `public/components/` 目录：**
+- 封装通用的 HTML + CSS + JS 组件
+- 组件命名：`组件名.html`（如 `topbar.html`, `status-bar.html`）
+- 页面通过 `<include>` 或 JS 动态加载复用
+
+自定义样式只能覆盖 simpui 变量或添加布局样式，不能重写组件本身。
+
+## 前端开发规范
+
 ### 命名规范
 
 | 类型 | 规范 | 示例 |

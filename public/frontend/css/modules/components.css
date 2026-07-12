@@ -1,153 +1,198 @@
-/* components.css - 组件样式（文件树、工具调用等） */
+/* components.css - 组件样式 */
+/* 设计方向：Technical Laboratory - 等宽标签、左边框强调 */
 
 /* ---------- 过程步骤 ---------- */
 .step {
   font-size: 12px;
-  color: var(--text-dim);
-  border-left: 3px solid var(--border);
-  padding: 10px 14px;
-  margin: 8px 0;
+  color: var(--ash);
+  border-left: 3px solid var(--panel-3);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-2) 0;
   max-width: 820px;
-  background: var(--surface);
-  border-radius: 0 12px 12px 0;
+  background: var(--panel);
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
   line-height: 1.5;
 }
-.step.tool { border-left-color: var(--cyan); }
-.step.thought { border-left-color: var(--amber); }
-.step.error { border-left-color: var(--red); color: #fca5a5; }
-.step.confirm { border-left-color: var(--violet); }
-.step.answer { border-left-color: var(--green); color: var(--text); font-weight: 500; }
 
-/* 思考块样式（在步骤容器内） */
+.step.tool {
+  border-left-color: var(--cyan);
+}
+
+.step.thought {
+  border-left-color: var(--amber);
+}
+
+.step.error {
+  border-left-color: var(--err);
+  color: #fca5a5;
+}
+
+.step.confirm {
+  border-left-color: var(--amber);
+}
+
+.step.answer {
+  border-left-color: var(--volt);
+  color: var(--chalk);
+  font-weight: 500;
+}
+
+/* ---------- 思考块（步骤容器内） ---------- */
 .think-block {
   margin: 0;
-  border-radius: 8px;
-  background: rgba(245, 165, 36, 0.06);
-  border: 1px solid rgba(245, 165, 36, 0.15);
+  border-left: 3px solid var(--volt);
+  background: var(--panel);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
+
 .think-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel-2);
   cursor: pointer;
   user-select: none;
-  transition: background 0.15s;
+  transition: background var(--duration-fast) var(--ease);
 }
+
 .think-header:hover {
-  background: rgba(245, 165, 36, 0.1);
+  background: var(--panel-3);
 }
+
 .think-arrow {
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--amber);
-  transition: transform 0.2s;
+  color: var(--mist);
+  transition: transform var(--duration-fast) var(--ease);
   flex-shrink: 0;
 }
+
 .think-label {
-  font-size: 13px;
-  color: var(--amber);
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--volt);
 }
+
 .think-body {
   display: none;
-  padding: 0 14px 12px 14px;
-  color: var(--text-dim);
+  padding: var(--space-3);
+  color: var(--ash);
   font-size: 13px;
   line-height: 1.6;
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  border-top: 1px solid rgba(245, 165, 36, 0.1);
+  border-top: 1px solid var(--panel-3);
 }
+
 .think-block[data-collapsed="false"] .think-body {
   display: block;
 }
+
 .think-block[data-collapsed="false"] .think-arrow {
   transform: rotate(90deg);
 }
 
-/* 工具调用块样式（在步骤容器内） */
+/* ---------- 工具调用块（步骤容器内） ---------- */
 .tool-block {
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--cyan);
+  background: var(--panel);
+  border-radius: var(--radius-sm);
 }
+
 .tool-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 13px;
   cursor: pointer;
   user-select: none;
 }
+
 .tool-arrow {
   display: inline-block;
   width: 14px;
   height: 14px;
   text-align: center;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-dim);
-  transition: transform 0.2s;
+  color: var(--mist);
+  transition: transform var(--duration-fast) var(--ease);
 }
+
 .tool-block[data-collapsed="true"] .tool-arrow {
   transform: rotate(0deg);
 }
+
 .tool-block[data-collapsed="false"] .tool-arrow,
 .tool-block:not([data-collapsed="true"]) .tool-arrow {
   transform: rotate(90deg);
 }
+
 .tool-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-}
-.tool-name {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
   color: var(--cyan);
-  background: rgba(56, 189, 248, 0.1);
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(56, 189, 248, 0.2);
 }
+
+.tool-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: var(--cyan-dim);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--cyan);
+}
+
 .tool-params {
-  margin-top: 6px;
-  padding: 8px 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--ash);
   white-space: pre;
   overflow-x: auto;
-  transition: max-height 0.2s, opacity 0.2s, margin 0.2s, padding 0.2s;
+  transition: max-height var(--duration-fast) var(--ease), opacity var(--duration-fast) var(--ease), margin var(--duration-fast) var(--ease), padding var(--duration-fast) var(--ease);
   max-height: 400px;
   opacity: 1;
 }
+
 .tool-result {
-  margin-top: 8px;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 13px;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--ink);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  color: var(--chalk);
+  font-family: var(--font-mono);
+  font-size: 12px;
   line-height: 1.6;
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  transition: max-height 0.2s, opacity 0.2s, margin 0.2s, padding 0.2s;
+  transition: max-height var(--duration-fast) var(--ease), opacity var(--duration-fast) var(--ease), margin var(--duration-fast) var(--ease), padding var(--duration-fast) var(--ease);
 }
+
 .tool-block[data-collapsed="true"] .tool-params,
 .tool-block[data-collapsed="true"] .tool-result {
   max-height: 0;
@@ -158,142 +203,188 @@
   overflow: hidden;
   border-color: transparent;
 }
+
 .tool-result.loading {
-  color: var(--text-mute);
+  color: var(--mist);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
+
 .tool-result-loading {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border: 2px solid var(--panel-3);
+  border-top-color: var(--volt);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-.tool-result.open { display: block; }
 
-.confirm-card {
-  background: var(--surface);
-  border: 1px solid var(--violet);
-  border-radius: 20px;
-  padding: 20px;
-  margin: 12px auto;
-  max-width: 820px;
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.12);
+.tool-result.open {
+  display: block;
 }
+
+/* ---------- 确认卡片 ---------- */
+.confirm-card {
+  background: var(--panel);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  margin: var(--space-3) auto;
+  max-width: 820px;
+}
+
 .confirm-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--violet) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--violet) 25%, transparent);
-  border-radius: 14px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--amber-dim);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
 }
+
 .confirm-icon {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
+
 .confirm-title {
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
   font-weight: 600;
-  color: var(--violet);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
 }
+
 .confirm-card pre {
-  background: var(--surface-2);
-  padding: 14px;
+  background: var(--ink);
+  padding: var(--space-3);
   overflow: auto;
   max-height: 220px;
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-3);
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
   word-break: break-word;
   white-space: pre-wrap;
-  color: var(--text);
-  border: 1px solid var(--border);
+  color: var(--chalk);
 }
+
 .confirm-card .btns {
-  margin-top: 16px;
+  margin-top: var(--space-3);
   display: flex;
-  gap: 12px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
+
 .confirm-card button {
-  padding: 9px 22px;
+  padding: var(--space-2) var(--space-4);
   border: none;
-  border-radius: 24px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 600;
-  transition: transform 0.12s, box-shadow 0.15s, background 0.15s;
+  transition: all var(--duration-fast) var(--ease);
 }
-.confirm-card button:hover { transform: translateY(-1px); }
-.confirm-card button:active { transform: scale(0.97); }
+
+.confirm-card button:hover {
+  transform: translateY(-1px);
+}
+
+.confirm-card button:active {
+  transform: scale(0.97);
+}
+
 .confirm-card .yes {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+  background: var(--volt);
+  color: var(--ink);
 }
+
 .confirm-card .yes:hover {
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.45);
+  filter: brightness(1.06);
 }
+
 .confirm-card .no {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--chalk);
+  border: 1px solid var(--panel-3);
 }
+
 .confirm-card .no:hover {
-  background: var(--surface);
-  border-color: var(--violet);
-  color: var(--violet);
+  background: var(--panel-3);
 }
 
 /* ---------- Dark mode 覆盖 simpui ---------- */
 body.dark .simpui-btn {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--chalk);
+  border-color: var(--panel-3);
   box-shadow: none;
 }
+
 body.dark .simpui-btn:hover:not(:disabled) {
-  background: var(--surface-3);
-  color: var(--text);
+  background: var(--panel-3);
+  color: var(--chalk);
 }
 
-/* ---------- 会话状态栏（对话框下方） ---------- */
+/* ---------- 会话状态栏 ---------- */
 .session-state {
   flex-shrink: 0;
-  height: 34px;
+  height: var(--status-bar-h);
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 12px;
+  border-top: 1px solid var(--panel-3);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 11px;
   line-height: 1.7;
-  color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  padding: 0 14px;
+  color: var(--ash);
+  padding: 0 var(--space-4);
 }
+
 .ss-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   cursor: pointer;
 }
-.ss-sep { color: var(--text-mute); }
-.ss-model { color: var(--accent); font-weight: 600; }
-.ss-dir { color: var(--text); }
-.ss-dir em { color: var(--text-mute); font-style: normal; }
-.ss-tools .ok { color: var(--green); }
-.ss-more { margin-left: auto; color: var(--text-mute); }
+
+.ss-sep {
+  color: var(--panel-3);
+}
+
+.ss-model {
+  color: var(--volt);
+  font-weight: 600;
+}
+
+.ss-dir {
+  color: var(--chalk);
+}
+
+.ss-dir em {
+  color: var(--mist);
+  font-style: normal;
+}
+
+.ss-tools .ok {
+  color: var(--volt);
+}
+
+.ss-more {
+  margin-left: auto;
+  color: var(--mist);
+}

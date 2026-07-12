@@ -1,10 +1,11 @@
 /* dialog.css - 弹窗组件 */
+/* 设计方向：Technical Laboratory - 尖角、网格边框 */
 
 /* 遮罩层 */
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: 1000;
@@ -12,7 +13,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  animation: dialog-fade-in 0.15s ease;
+  animation: dialog-fade-in var(--duration-fast) var(--ease);
 }
 
 .dialog-overlay.hidden {
@@ -21,16 +22,16 @@
 
 /* 弹窗容器 */
 .dialog {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  background: var(--panel);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
   width: 100%;
   max-width: 480px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
-  animation: dialog-slide-in 0.15s ease;
+  animation: dialog-slide-in var(--duration-fast) var(--ease);
 }
 
 /* 弹窗头部 */
@@ -39,13 +40,16 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--panel-3);
 }
 
 .dialog-title {
-  font-size: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
 }
 
 .dialog-close {
@@ -57,14 +61,14 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--mist);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast) var(--ease);
 }
 
 .dialog-close:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--panel-2);
+  color: var(--chalk);
 }
 
 /* 弹窗内容 */
@@ -81,13 +85,17 @@
   justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--panel-3);
 }
 
 /* 动画 */
 @keyframes dialog-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes dialog-slide-in {
@@ -136,9 +144,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--warning-soft);
+  background: var(--amber-dim);
   border-radius: var(--radius-full);
-  color: var(--warning);
+  color: var(--amber);
 }
 
 .confirm-icon svg {
@@ -147,15 +155,18 @@
 }
 
 .confirm-title {
-  font-size: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
   margin-bottom: var(--space-2);
 }
 
 .confirm-message {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--ash);
 }
 
 .confirm-actions {

@@ -1,38 +1,47 @@
-/* file-tree.css - 文件树组件（Terminal/Markdown 风格） */
+/* file-tree.css - 文件树组件（Terminal 风格） */
+/* 设计方向：Technical Laboratory - 终端美学 */
 
 .file-tree {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 0;
-  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  padding: var(--space-3) 0;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
 }
 
 /* 滚动条 */
-.file-tree::-webkit-scrollbar { width: 6px; }
+.file-tree::-webkit-scrollbar {
+  width: 6px;
+}
+
 .file-tree::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--panel-3);
   border-radius: 3px;
 }
+
 .file-tree::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--mist);
 }
-.file-tree { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+.file-tree {
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-3) transparent;
+}
 
 /* 树节点 */
 .file-tree .node {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 16px;
+  padding: 3px var(--space-4);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.1s;
+  transition: background var(--duration-fast) var(--ease);
   position: relative;
 }
 
@@ -44,38 +53,38 @@
   bottom: 0;
   width: 3px;
   background: transparent;
-  transition: background 0.1s;
+  transition: background var(--duration-fast) var(--ease);
 }
 
 .file-tree .node:hover {
-  background: var(--surface-2);
+  background: var(--panel-2);
 }
 
 .file-tree .node:hover::before {
-  background: var(--accent);
+  background: var(--volt);
 }
 
 .file-tree .node:active {
-  background: var(--surface-3);
+  background: var(--panel-3);
 }
 
 /* 目录 */
 .file-tree .dir {
-  color: var(--text);
+  color: var(--chalk);
   font-weight: 500;
 }
 
 .file-tree .dir .tree-icon {
-  color: var(--accent);
+  color: var(--volt);
 }
 
 /* 文件 */
 .file-tree .file {
-  color: var(--text-secondary);
+  color: var(--ash);
 }
 
 .file-tree .file .tree-icon {
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 /* 图标 */
@@ -88,11 +97,11 @@
 
 /* 子目录容器 */
 .file-tree .local-children {
-  padding-left: 16px;
+  padding-left: var(--space-4);
   position: relative;
 }
 
-/* 连接线（Markdown 树风格） */
+/* 连接线（终端风格） */
 .file-tree .local-children::before {
   content: '';
   position: absolute;
@@ -100,32 +109,33 @@
   top: 0;
   bottom: 8px;
   width: 1px;
-  background: var(--border);
+  background: var(--panel-3);
 }
 
 /* 加载状态 */
 .file-tree .node.loading {
-  color: var(--text-muted);
+  color: var(--mist);
   font-style: italic;
   cursor: default;
 }
 
 /* 空状态提示 */
 .file-tree-empty {
-  padding: 24px 16px;
+  padding: var(--space-6) var(--space-4);
   text-align: center;
-  color: var(--text-muted);
-  font-family: inherit;
+  color: var(--mist);
+  font-family: var(--font-body);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .file-tree-empty code {
   display: block;
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: var(--surface-2);
-  border-radius: 6px;
-  font-family: inherit;
-  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--ash);
 }

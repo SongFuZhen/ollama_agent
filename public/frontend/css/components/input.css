@@ -1,4 +1,5 @@
 /* input.css - 输入框组件 */
+/* 设计方向：Technical Laboratory - 尖角、网格边框 */
 
 /* 兼容 simpui-input 旧类名 */
 .simpui-input {
@@ -6,28 +7,28 @@
   width: 100%;
   height: 36px;
   padding: 0 var(--space-3);
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  color: var(--chalk);
+  background: var(--panel);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
 }
 
 .simpui-input::placeholder {
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 .simpui-input:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  border-color: var(--mist);
 }
 
 .simpui-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--volt);
+  box-shadow: 0 0 0 3px var(--volt-dim);
 }
 
 .simpui-input:disabled {
@@ -37,7 +38,7 @@
 
 select.simpui-input {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
@@ -49,28 +50,28 @@ select.simpui-input {
   width: 100%;
   height: 36px;
   padding: 0 var(--space-3);
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  color: var(--chalk);
+  background: var(--panel);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
 }
 
 .input::placeholder {
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 .input:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  border-color: var(--mist);
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--volt);
+  box-shadow: 0 0 0 3px var(--volt-dim);
 }
 
 .input:disabled {
@@ -80,16 +81,16 @@ select.simpui-input {
 
 /* 错误状态 */
 .input-error {
-  border-color: var(--error);
+  border-color: var(--err);
 }
 
 .input-error:focus {
-  box-shadow: 0 0 0 3px var(--error-soft);
+  box-shadow: 0 0 0 3px var(--err-dim);
 }
 
 /* 成功状态 */
 .input-success {
-  border-color: var(--success);
+  border-color: var(--volt);
 }
 
 /* 尺寸 */
@@ -111,29 +112,29 @@ select.simpui-input {
   width: 100%;
   min-height: 80px;
   padding: var(--space-2) var(--space-3);
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  color: var(--chalk);
+  background: var(--panel);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
   resize: vertical;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
 }
 
 .textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 .textarea:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  border-color: var(--mist);
 }
 
 .textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--volt);
+  box-shadow: 0 0 0 3px var(--volt-dim);
 }
 
 /* 输入框组 */
@@ -163,7 +164,7 @@ select.simpui-input {
   transform: translateY(-50%);
   width: 16px;
   height: 16px;
-  color: var(--text-muted);
+  color: var(--mist);
   pointer-events: none;
 }
 
@@ -171,21 +172,26 @@ select.simpui-input {
 .label {
   display: block;
   margin-bottom: var(--space-2);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chalk);
 }
 
 /* 帮助文本 */
 .help-text {
   margin-top: var(--space-1);
-  font-size: 12px;
-  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mist);
 }
 
 /* 错误信息 */
 .error-text {
   margin-top: var(--space-1);
-  font-size: 12px;
-  color: var(--error);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
 }

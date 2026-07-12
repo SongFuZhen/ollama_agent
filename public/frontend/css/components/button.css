@@ -1,4 +1,5 @@
 /* button.css - 按钮组件 */
+/* 设计方向：Technical Laboratory - 绿色主按钮、尖角 */
 
 /* 兼容 simpui-btn 旧类名 */
 .simpui-btn {
@@ -8,14 +9,14 @@
   gap: var(--space-2);
   height: 36px;
   padding: 0 var(--space-4);
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 500;
   line-height: 1;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease);
   white-space: nowrap;
   user-select: none;
 }
@@ -27,44 +28,44 @@
 }
 
 .simpui-btn.primary {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
+  background: var(--volt);
+  color: var(--ink);
+  border-color: var(--volt);
 }
 
 .simpui-btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  filter: brightness(1.06);
 }
 
 .simpui-btn.secondary {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--chalk);
+  border-color: var(--panel-3);
 }
 
 .simpui-btn.secondary:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--panel-3);
 }
 
 .simpui-btn.light {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ash);
   border-color: transparent;
 }
 
 .simpui-btn.light:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--panel-2);
+  color: var(--chalk);
 }
 
 .simpui-btn.danger {
-  background: var(--error);
+  background: var(--err);
   color: white;
-  border-color: var(--error);
+  border-color: var(--err);
 }
 
 .simpui-btn.danger:hover:not(:disabled) {
-  background: #dc2626;
+  filter: brightness(1.1);
 }
 
 .simpui-btn.sm {
@@ -93,14 +94,14 @@
   gap: var(--space-2);
   height: 36px;
   padding: 0 var(--space-4);
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 500;
   line-height: 1;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease);
   white-space: nowrap;
   user-select: none;
 }
@@ -113,14 +114,13 @@
 
 /* Primary - 主要操作 */
 .btn-primary {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
+  background: var(--volt);
+  color: var(--ink);
+  border-color: var(--volt);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  filter: brightness(1.06);
 }
 
 .btn-primary:active:not(:disabled) {
@@ -129,38 +129,37 @@
 
 /* Secondary - 次要操作 */
 .btn-secondary {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--chalk);
+  border-color: var(--panel-3);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--surface-3);
-  border-color: var(--text-muted);
+  background: var(--panel-3);
+  border-color: var(--mist);
 }
 
 /* Ghost - 幽灵按钮 */
 .btn-ghost {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ash);
   border-color: transparent;
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--panel-2);
+  color: var(--chalk);
 }
 
 /* Danger - 危险操作 */
 .btn-danger {
-  background: var(--error);
+  background: var(--err);
   color: white;
-  border-color: var(--error);
+  border-color: var(--err);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
+  filter: brightness(1.1);
 }
 
 /* 尺寸 */
@@ -212,7 +211,7 @@
 /* 链接样式 */
 .btn-link {
   background: transparent;
-  color: var(--accent);
+  color: var(--volt);
   border: none;
   padding: 0;
   height: auto;
@@ -220,6 +219,5 @@
 }
 
 .btn-link:hover:not(:disabled) {
-  color: var(--accent-hover);
   text-decoration: underline;
 }

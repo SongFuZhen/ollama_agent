@@ -1,4 +1,5 @@
 /* topbar.css - 顶栏样式 */
+/* 设计方向：Technical Laboratory - 48px 纤细顶栏 */
 
 .topbar {
   height: var(--topbar-h);
@@ -7,51 +8,54 @@
   align-items: center;
   gap: var(--space-4);
   padding: 0 var(--space-5);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-3);
 }
 
 /* 品牌 */
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .brand .logo {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: white;
+  background: var(--volt);
+  color: var(--ink);
   border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-display);
 }
 
 .brand h1 {
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.2px;
+  font-weight: 700;
+  color: var(--chalk);
+  letter-spacing: -0.3px;
 }
 
-/* 状态栏 */
+/* 状态胶囊 */
 .status {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 28px;
+  height: 26px;
   padding: 0 var(--space-3);
-  background: var(--surface-2);
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
   border-radius: var(--radius-full);
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--ash);
   overflow: hidden;
 }
 
@@ -59,26 +63,27 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--mist);
   flex-shrink: 0;
 }
 
 .status.ok .status-dot {
-  background: var(--success);
-  box-shadow: 0 0 0 3px var(--success-soft);
+  background: var(--volt);
+  box-shadow: 0 0 0 3px var(--volt-dim);
+  animation: status-pulse 2s ease-in-out infinite;
 }
 
 .status.warn .status-dot {
-  background: var(--warning);
+  background: var(--amber);
 }
 
 .status.err .status-dot {
-  background: var(--error);
+  background: var(--err);
 }
 
 .status.boot .status-dot {
-  background: var(--text-muted);
-  animation: pulse 1.2s ease-in-out infinite;
+  background: var(--mist);
+  animation: status-pulse 1.2s ease-in-out infinite;
 }
 
 .status-text {
@@ -87,9 +92,9 @@
   text-overflow: ellipsis;
 }
 
-@keyframes pulse {
+@keyframes status-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  50% { opacity: 0.4; }
 }
 
 /* 用户下拉菜单 */
@@ -103,18 +108,19 @@
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13px;
-  color: var(--text-secondary);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ash);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast) var(--ease);
 }
 
 .user-info:hover {
-  background: var(--surface-2);
-  border-color: var(--text-muted);
-  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--mist);
+  color: var(--chalk);
 }
 
 .user-icon,
@@ -128,7 +134,7 @@
   width: 12px;
   height: 12px;
   margin-left: auto;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast) var(--ease);
 }
 
 .user-dropdown.open .chevron-icon {
@@ -149,9 +155,9 @@
   right: 0;
   margin-top: var(--space-1);
   min-width: 160px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   z-index: 100;
   overflow: hidden;
@@ -159,7 +165,7 @@
 
 .user-dropdown.open .dropdown-menu {
   display: block;
-  animation: dropdown-in 0.1s ease;
+  animation: dropdown-in var(--duration-fast) var(--ease);
 }
 
 @keyframes dropdown-in {
@@ -181,26 +187,26 @@
   padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
-  color: var(--text);
+  color: var(--chalk);
   font-size: 13px;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.1s;
+  transition: background var(--duration-fast) var(--ease);
 }
 
 .dropdown-item:hover {
-  background: var(--surface-2);
+  background: var(--panel-2);
 }
 
 .item-icon {
   width: 14px;
   height: 14px;
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 .dropdown-sep {
   height: 1px;
-  background: var(--border);
+  background: var(--panel-3);
   margin: var(--space-1) 0;
 }
 
@@ -218,7 +224,7 @@
 
 .theme-label {
   font-size: 13px;
-  color: var(--text);
+  color: var(--chalk);
 }
 
 .theme-switch-wrap {
@@ -230,7 +236,7 @@
 .theme-text-icon {
   width: 14px;
   height: 14px;
-  color: var(--text-muted);
+  color: var(--mist);
 }
 
 .theme-switch {
@@ -249,10 +255,10 @@
 .theme-switch .slider {
   position: absolute;
   inset: 0;
-  background: var(--surface-3);
+  background: var(--panel-3);
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--duration-fast) var(--ease);
 }
 
 .theme-switch .slider::before {
@@ -262,13 +268,13 @@
   height: 16px;
   left: 2px;
   bottom: 2px;
-  background: white;
+  background: var(--chalk);
   border-radius: 50%;
-  transition: transform 0.2s;
+  transition: transform var(--duration-fast) var(--ease);
 }
 
 .theme-switch input:checked + .slider {
-  background: var(--accent);
+  background: var(--volt);
 }
 
 .theme-switch input:checked + .slider::before {

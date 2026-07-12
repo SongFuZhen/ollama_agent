@@ -321,13 +321,12 @@ async function handleFsRead(req, res) {
   }
 }
 
-// 上传图片：保存到 root/.agent-uploads/<日期>/<对话ID>/<时间戳>_<名>
-// 返回相对 root 的路径，便于随对话持久化、历史回放直接加载
-const UPLOAD_SUBDIR = '.agent-uploads';
+// 上传图片：保存到 启动目录/photos/<日期>/<对话ID>/<时间戳>_<名>
+// 返回相对路径，便于随对话持久化、历史回放直接加载
+const UPLOAD_DIR = 'photos';
 async function handleUpload(req, res) {
   try {
     const body = await parseBody(req);
-    const root = body.root || (await getProjectRoot());
     const convId = (body.convId || 'unknown').replace(/[^A-Za-z0-9_\-]/g, '_');
     const name = (body.name || 'image.png').replace(/[^A-Za-z0-9_.\-]/g, '_');
     const data = body.data;
@@ -343,13 +342,9 @@ async function handleUpload(req, res) {
 
     const datePart = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const safeName = `${Date.now()}-${name}`;
-    const relDir = path.join(UPLOAD_SUBDIR, datePart, convId);
-    const targetDir = path.resolve(root, relDir);
-    // 二次校验：目标必须在 root 内
-    const rootAbs = path.resolve(root);
-    if (targetDir !== rootAbs && !targetDir.startsWith(rootAbs + path.sep)) {
-      return sendJSON(res, 400, { error: '路径越界' });
-    }
+    const relDir = path.join(UPLOAD_DIR, datePart, convId);
+    // 存储在启动目录下（process.cwd()），而非项目目录
+    const targetDir = path.resolve(process.cwd(), relDir);
     await fsp.mkdir(targetDir, { recursive: true });
     const targetAbs = path.join(targetDir, safeName);
     await fsp.writeFile(targetAbs, buf);
@@ -361,13 +356,16 @@ async function handleUpload(req, res) {
   }
 }
 
-// 读取已保存的图片（沙箱限制，仅 root 内），按扩展名返回 content-type
+// 读取已保存的图片，按扩展名返回 content-type
+// 支持两种路径：photos/ 开头从启动目录读取，其他从项目目录读取
 async function handleFile(req, res) {
   const params = new URL(req.url, 'http://x').searchParams;
   const urlPath = params.get('path') || '';
   const root = params.get('root') || (await getProjectRoot());
   try {
-    const abs = await safeResolve(urlPath, root);
+    // photos/ 开头的路径从启动目录读取
+    const basePath = urlPath.startsWith('photos/') ? process.cwd() : root;
+    const abs = await safeResolve(urlPath, basePath);
     const stat = await fsp.stat(abs);
     if (stat.isDirectory()) return sendJSON(res, 400, { error: '目标是目录' });
     const ext = path.extname(abs).toLowerCase();
