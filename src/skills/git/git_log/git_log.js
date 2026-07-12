@@ -29,7 +29,7 @@ module.exports = {
 
   async run({ max, path }, ctx = {}) {
     const n = Math.min(parseInt(max, 10) || 20, 100);
-    const fmt = '--pretty=format:%h %ad %an %s --date=short';
+    const fmt = `--pretty=format:'%h %ad %an %s' --date=short`;
     const target = path ? `-- ${path}` : '';
     return truncate(git(`log -n ${n} ${fmt} ${target}`, ctx.root));
   },

@@ -1,8 +1,10 @@
 'use strict';
 
 const { chat, chatStream } = require('./ollama');
+const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
-const { MAX_STEPS, JSON_RETRY, NUM_CTX } = require('../config');
+const { buildOllamaTools } = require('../tools/schema');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX, NATIVE_TOOLS_MODELS } = require('../config');
 
 // 粗略 token 估算：中文约 1.5 字符/token，英文约 4 字符/token，取偏保守 2.5
 function estimateTokens(text) {
@@ -63,6 +65,7 @@ function stripJSONComments(json) {
 }
 
 // 宽松 JSON 解析：容忍模型输出里的代码块、多余文本、注释
+// 兼容两种格式：{action,params} 和 {name,parameters}（MFDoom/社区模型）
 function parseToolCall(text) {
   let m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   let candidate = m ? m[1] : text;
@@ -72,7 +75,11 @@ function parseToolCall(text) {
   let json = candidate.slice(s, e + 1);
   json = stripJSONComments(json);
   try {
-    return JSON.parse(json);
+    const obj = JSON.parse(json);
+    if (obj.action) return obj;
+    // MFDoom/社区模型格式：{name, parameters} → {action, params}
+    if (obj.name) return { action: obj.name, params: obj.parameters || obj.arguments || obj.args || {} };
+    return null;
   } catch (err) {
     return null;
   }
@@ -87,8 +94,33 @@ function systemPrompt(specs) {
     '可用工具：',
     specStr,
     '',
-    '需要读取数据时，输出纯JSON调用工具：{"action":"工具名","params":{}}',
-    '能直接回答时，用markdown格式输出答案。一次只调一个工具。',
+    '只有在需要查看文件、搜索代码或执行命令时，才输出JSON调用工具：{"action":"工具名","params":{}}',
+    '普通对话、问候、解释、分析等不需要操作文件的场合，直接用markdown回答，不要调用工具。一次只调一个工具。',
+  ].join('\n');
+}
+
+// 检测模型是否支持 Ollama 原生 tools API
+function supportsNativeTools(model) {
+  return model && NATIVE_TOOLS_MODELS.some((p) => model.includes(p));
+}
+
+// 消息格式辅助：原生 tools 路线用 role:"tool"，prompt 路线用 role:"user"
+function addStepMessages(messages, useNative, text, nativeToolCalls, feedback) {
+  if (useNative && nativeToolCalls) {
+    messages.push({ role: 'assistant', content: text, tool_calls: nativeToolCalls });
+    messages.push({ role: 'tool', content: feedback });
+  } else {
+    messages.push({ role: 'assistant', content: text });
+    messages.push({ role: 'user', content: feedback });
+  }
+}
+
+// 原生 tools 模型的 system prompt（不含工具列表，工具通过 tools 字段传递）
+function nativeSystemPrompt() {
+  return [
+    '你是 Ason Agent，一个 AI 编程助手。',
+    '需要读取或操作文件时，使用提供的工具函数。',
+    '能直接回答时，用 markdown 格式输出答案。一次只调一个工具。',
   ].join('\n');
 }
 
@@ -98,6 +130,8 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   const emit = emitInput || (() => {});
   const specs = specsFor();
   const hasTools = specs.length > 0;
+  const useNativeTools = hasTools && supportsNativeTools(model);
+  const ollamaTools = useNativeTools ? buildOllamaTools(specs) : null;
   const chatOpts = ollamaHost ? { ollamaHost } : {};
   // 沙箱根：用户「选择目录」下发的目录，否则默认 PROJECT_ROOT
   const toolCtx = { root: projectRoot || PROJECT_ROOT };
@@ -117,7 +151,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())
     : [];
   let messages = [
-    { role: 'system', content: systemPrompt(specs) },
+    { role: 'system', content: useNativeTools ? nativeSystemPrompt() : systemPrompt(specs) },
     ...validHistory,
     userMessage,
   ];
@@ -136,15 +170,14 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     let thinkBuffer = '';
     let answerBuffer = '';
     let thinkEmitted = false;
+    let nativeToolCalls = null;
 
     for (let r = 0; r <= JSON_RETRY; r++) {
       try {
-        raw = await chatStream(model, messages, {
+        const streamOpts = {
           ...chatOpts,
           onToken: (token) => {
-            // 检测 think 块的开始和结束
             if (!inThinkBlock) {
-              // 检查是否进入 think 块
               if (token.includes('<think>')) {
                 inThinkBlock = true;
                 thinkBuffer = token;
@@ -155,7 +188,6 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
               }
             } else {
               thinkBuffer += token;
-              // 检查是否离开 think 块
               if (token.includes('</think>')) {
                 inThinkBlock = false;
                 const { think } = stripThink(thinkBuffer);
@@ -170,7 +202,15 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
           onStats: (stats) => {
             emit({ type: 'stats', step, ttft: stats.ttft, total: stats.total, promptTokens: stats.promptTokens, completionTokens: stats.completionTokens });
           }
-        });
+        };
+
+        if (useNativeTools) {
+          const response = await chatStreamWithTools(model, messages, ollamaTools, streamOpts);
+          raw = response.content;
+          nativeToolCalls = response.tool_calls;
+        } else {
+          raw = await chatStream(model, messages, streamOpts);
+        }
 
         // 流结束时 think 块仍未闭合（部分模型省略 </think>）：
         // 把已缓冲的思考内容作为思考过程吐出，避免整段被吞掉
@@ -207,46 +247,72 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       return text.trim();
     }
 
-    // 优先从 rest 解析工具调用；若模型把 JSON 包在 <think> 内，则回退用 raw 解析一次
-    let call = parseToolCall(text);
-    if (!call || !call.action) {
-      const { think } = stripThink(raw);
-      if (think) {
-        call = parseToolCall(raw);
+    // 提取工具调用：原生 tools 路线从 tool_calls 取，失败则回退到文本解析
+    let action, params;
+    if (useNativeTools) {
+      if (nativeToolCalls && nativeToolCalls.length > 0) {
+        emit({ type: 'thought', step, content: text.trim() });
+        const tc = nativeToolCalls[0];
+        action = tc.function.name;
+        params = tc.function.arguments;
+        if (typeof params === 'string') {
+          try { params = JSON.parse(params); } catch (e) { params = {}; }
+        }
+      } else {
+        // 回退：模型可能把工具调用写在 content 文本里
+        let call = parseToolCall(text);
+        if (!call || !call.action) {
+          const { think } = stripThink(raw);
+          if (think) call = parseToolCall(raw);
+        }
+        if (!call || !call.action) {
+          lastAnswer = text.trim();
+          emit({ type: 'answer', content: lastAnswer });
+          return lastAnswer;
+        }
+        emit({ type: 'thought', step, content: text.trim() });
+        action = call.action;
+        params = call.params;
+        // 标记本次非原生 tool_calls，后续消息用 prompt-based 格式
+        nativeToolCalls = null;
       }
+    } else {
+      let call = parseToolCall(text);
+      if (!call || !call.action) {
+        const { think } = stripThink(raw);
+        if (think) {
+          call = parseToolCall(raw);
+        }
+      }
+      if (!call || !call.action) {
+        lastAnswer = text.trim();
+        emit({ type: 'answer', content: lastAnswer });
+        return lastAnswer;
+      }
+      emit({ type: 'thought', step, content: text.trim() });
+      action = call.action;
+      params = call.params;
     }
-    if (!call || !call.action) {
-      lastAnswer = text.trim();
-      emit({ type: 'answer', content: lastAnswer });
-      return lastAnswer;
-    }
-
-    emit({ type: 'thought', step, content: text.trim() });
 
     // 白名单校验：未知工具直接拒绝
-    if (!isAllowed(call.action)) {
-      // 部分模型把直接回答包在 JSON 里（如 {"action":"chat","message":"你好"}），
-      // 取出 message/content/reply 字段当作纯文本答案，不再继续工具循环
-      const msgField = call.message || call.content || call.reply || call.text || call.response;
+    if (!isAllowed(action)) {
+      const msgField = params && (params.message || params.content || params.reply || params.text || params.response);
       if (msgField && typeof msgField === 'string' && msgField.trim()) {
         emit({ type: 'answer', content: msgField.trim() });
         return msgField.trim();
       }
-      emit({ type: 'error', step, msg: '工具不存在，已拒绝: ' + call.action });
-      messages.push({ role: 'assistant', content: text });
-      messages.push({ role: 'user', content: `工具 ${call.action} 不可用，请改用可用工具或回答。` });
+      emit({ type: 'error', step, msg: '工具不存在，已拒绝: ' + action });
+      addStepMessages(messages, useNativeTools, text, nativeToolCalls, `工具 ${action} 不可用，请改用可用工具或回答。`);
       continue;
     }
 
-    const tool = TOOLS[call.action];
+    const tool = TOOLS[action];
 
-    // 重复调用检测：同一工具连续出现时，模型多半陷入循环（如反复 tree 逐级下钻）。
-    // 第 2 次重复即提示收尾，第 3 次强制用已有结果回答，避免无谓的多轮工具调用。
-    // 探索类工具（tree/list_dir）即使换了 depth/path 参数也属于重复下钻，按 action 维度计。
+    // 重复调用检测
     const REPEAT_PRONE = new Set(['tree', 'list_dir']);
-    const callKey = REPEAT_PRONE.has(call.action)
-      ? call.action
-      : call.action + ':' + JSON.stringify(call.params || {});
+    const callKey = REPEAT_PRONE.has(action)
+      ? action
+      : action + ':' + JSON.stringify(params || {});
     if (callKey === lastCallKey) {
       repeatCount += 1;
     } else {
@@ -254,45 +320,39 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       repeatCount = 1;
     }
     if (repeatCount >= 3) {
-      const final = lastAnswer || `（已连续 ${repeatCount} 次调用 ${call.action}，强制收尾）请基于已获取的数据回答。`;
+      const final = lastAnswer || `（已连续 ${repeatCount} 次调用 ${action}，强制收尾）请基于已获取的数据回答。`;
       emit({ type: 'answer', content: final });
       return final;
     }
     if (repeatCount === 2) {
-      messages.push({ role: 'assistant', content: text });
-      messages.push({
-        role: 'user',
-        content: `你已连续多次调用 ${call.action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`,
-      });
+      addStepMessages(messages, useNativeTools, text, nativeToolCalls, `你已连续多次调用 ${action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`);
       continue;
     }
 
-    // 写操作：每次单独弹确认（V1 白名单不含写工具，此处为 V2 预留）
+    // 写操作确认
     if (tool.needConfirm) {
-      const ok = await confirm({ action: call.action, params: call.params });
+      const ok = await confirm({ action, params });
       if (!ok) {
         emit({ type: 'confirm_result', step, ok: false });
-        messages.push({ role: 'assistant', content: text });
-        messages.push({ role: 'user', content: '用户拒绝了该写操作，请改用其他方法或说明。' });
+        addStepMessages(messages, useNativeTools, text, nativeToolCalls, '用户拒绝了该写操作，请改用其他方法或说明。');
         continue;
       }
       emit({ type: 'confirm_result', step, ok: true });
     }
 
-    emit({ type: 'tool', step, action: call.action, params: call.params, root: toolCtx.root });
+    emit({ type: 'tool', step, action, params, root: toolCtx.root });
     let result;
     try {
-      result = await tool.run(call.params, toolCtx);
+      result = await tool.run(params, toolCtx);
     } catch (e) {
       result = '工具执行错误: ' + e.message;
     }
     const resultStr = String(result);
-    // 工具结果预览与回灌模型使用同一上限，避免不一致地静默丢信息
     const RESULT_MAX = 6000;
-    emit({ type: 'tool_result', step, action: call.action, result: resultStr.slice(0, RESULT_MAX) });
+    emit({ type: 'tool_result', step, action, result: resultStr.slice(0, RESULT_MAX) });
 
-    messages.push({ role: 'assistant', content: text });
-    messages.push({ role: 'user', content: `工具 ${call.action} 返回:\n${resultStr.slice(0, RESULT_MAX)}` });
+    addStepMessages(messages, useNativeTools, text, nativeToolCalls,
+      useNativeTools ? resultStr.slice(0, RESULT_MAX) : `工具 ${action} 返回:\n${resultStr.slice(0, RESULT_MAX)}`);
   }
 
   // 循环结束（达最大步数或整体超时）：若过程中模型曾给出过纯文本回答则回显，否则提示收尾

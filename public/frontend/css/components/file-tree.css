@@ -109,7 +109,7 @@
   top: 0;
   bottom: 8px;
   width: 1px;
-  background: var(--simpui-text-light);
+  background: var(--simpui-input-border);
 }
 
 /* 加载状态 */

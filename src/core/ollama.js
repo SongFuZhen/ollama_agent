@@ -194,4 +194,4 @@ async function chatStream(model, messages, opts = {}) {
   });
 }
 
-module.exports = { chat, chatStream, listModels };
+module.exports = { chat, chatStream, listModels, hostParts, TIMEOUT_MS };

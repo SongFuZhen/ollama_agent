@@ -399,12 +399,15 @@ $('#new-chat').onclick = () => {
   if (state.session) state.session.innerHTML = '';
   messagesEl.innerHTML = '';
   if (state.session) messagesEl.appendChild(state.session);
-  // 清除项目目录绑定，生成新对话 ID（新对话回退到默认沙箱根）
+  // 生成新对话 ID，保留已有项目目录
   state.currentProjectRoot = effectiveRoot();
   state.conversationId = generateConvId();
   state.conversationTitle = '';
   setConvName('');
   updateProjectRootUI();
+  // 空状态页预填已有 project root
+  const rootInput = document.getElementById('empty-root-input');
+  if (rootInput) rootInput.value = state.currentProjectRoot || '';
   syncUrl();
   resetSessionStats();
   renderSessionState();

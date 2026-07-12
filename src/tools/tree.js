@@ -39,7 +39,7 @@ module.exports = {
     // 默认完整遍历：一次调用即返回全部层级，避免模型为下钻而反复调用 tree。
     // 仅当显式传入 depth 时才作为上限截断。
     const maxDepth = depth ? parseInt(depth, 10) : Infinity;
-    if (!Number.isFinite(maxDepth) || maxDepth < 1) throw new Error('depth 必须是 >=1 的整数');
+    if (maxDepth !== Infinity && (!Number.isFinite(maxDepth) || maxDepth < 1)) throw new Error('depth 必须是 >=1 的整数');
 
     const lines = [path.relative(root, abs) || '.'];
     await walk(abs, root, 1, maxDepth, '', lines);

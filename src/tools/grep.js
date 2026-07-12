@@ -86,7 +86,7 @@ module.exports = {
   params: { 
     pattern: '搜索模式（支持正则表达式）',
     path: '搜索目录，默认项目根',
-    include: '文件名过滤（如 *.js）',
+    include: '文件名过滤，可选（如 *.js）',
   },
   needConfirm: false,
   
