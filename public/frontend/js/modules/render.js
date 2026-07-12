@@ -169,7 +169,9 @@ function renderMarkdownIt(text) {
     // markdown-it 未加载：降级到 marked（仍渲染，不转义）
     return renderWithMarked(text);
   }
-  const html = md.render(normalizeTables(text));
+  let normalized;
+  try { normalized = normalizeTables(text); } catch (e) { normalized = text; }
+  const html = md.render(normalized);
   // markdown-it 输出已由 DOMPurify 兜底净化，阻断 XSS
   return (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
 }
