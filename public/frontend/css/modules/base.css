@@ -80,8 +80,7 @@
   --accent-dim: rgba(59, 108, 246, .18);
   --surface-2: #eef1f6;        /* 代码块 / 工具块底色 */
   --border-soft: #e2e6ee;      /* 分割线 / 边框 */
-  --divider: rgba(0, 0, 0, .08);
-  --simpui-input-border: var(--divider);
+  --simpui-input-border: rgba(0, 0, 0, .08);
   --danger: #dc2626;
   --warning: #b45309;
   --warning-dim: rgba(180, 83, 9, .12);
@@ -94,8 +93,7 @@
   --accent-dim: rgba(59, 130, 246, .25);
   --surface-2: #151515;
   --border-soft: #2a2f3a;
-  --divider: rgba(255, 255, 255, .08);
-  --simpui-input-border: rgba(255, 255, 255, .1);
+  --simpui-input-border: rgba(255, 255, 255, .08);
   --danger: #f87171;
   --warning: #fbbf24;
   --warning-dim: rgba(251, 191, 36, .15);

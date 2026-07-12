@@ -1,312 +1,539 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ason Agent</title>
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.svg">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <!-- Meta -->
-  <meta name="description" content="Ason Agent - AI 智能助手">
-  <meta name="theme-color" content="#0a0a0b">
-  <!-- 第三方库样式（先加载） -->
-  <link rel="stylesheet" href="/lib/typeset/typeset.css">
-  <link rel="stylesheet" href="/lib/simpui/css/simpui.css">
-  <link rel="stylesheet" href="/lib/simpui/css/simpicker.css">
-  <link id="hljs-theme-light" rel="stylesheet" href="/lib/highlight/github.min.css" disabled>
-  <link id="hljs-theme-dark" rel="stylesheet" href="/lib/highlight/github-dark.min.css">
-  <!-- 基础变量 -->
-  <link rel="stylesheet" href="/css/modules/base.css">
-  <!-- 组件样式 -->
-  <link rel="stylesheet" href="/css/components/button.css">
-  <link rel="stylesheet" href="/css/components/dialog.css">
-  <link rel="stylesheet" href="/css/components/file-tree.css">
-  <link rel="stylesheet" href="/css/modules/components.css">
-  <!-- 页面样式（最后加载，覆盖第三方库） -->
-  <link rel="stylesheet" href="/css/modules/topbar.css">
-  <link rel="stylesheet" href="/css/modules/layout.css">
-  <link rel="stylesheet" href="/css/modules/chat.css">
-  <link rel="stylesheet" href="/css/modules/input.css">
-  <link rel="stylesheet" href="/css/modules/status-bar.css">
-  <link rel="stylesheet" href="/css/modules/modal.css">
-  <link rel="stylesheet" href="/css/modules/drawer.css">
-  <link rel="stylesheet" href="/css/modules/responsive.css">
-  <script src="/lib/simpui/js/simpicker.js"></script>
-</head>
-<body class="dark">
-  <!-- Lucide Icons -->
-  <script src="/lib/lucide.js?v=1.24.0"></script>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Ason Agent</title>
+        <!-- Favicon -->
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/favicon-32.svg"
+        />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/apple-touch-icon.png"
+        />
+        <!-- Meta -->
+        <meta name="description" content="Ason Agent - AI 智能助手" />
+        <meta name="theme-color" content="#0a0a0b" />
+        <!-- 第三方库样式（先加载） -->
+        <link rel="stylesheet" href="/lib/typeset/typeset.css" />
+        <link rel="stylesheet" href="/lib/simpui/css/simpui.css" />
+        <link rel="stylesheet" href="/lib/simpui/css/simpicker.css" />
+        <link
+            id="hljs-theme-light"
+            rel="stylesheet"
+            href="/lib/highlight/github.min.css"
+            disabled
+        />
+        <link
+            id="hljs-theme-dark"
+            rel="stylesheet"
+            href="/lib/highlight/github-dark.min.css"
+        />
+        <!-- 基础变量 -->
+        <link rel="stylesheet" href="/css/modules/base.css" />
+        <!-- 组件样式 -->
+        <link rel="stylesheet" href="/css/components/button.css" />
+        <link rel="stylesheet" href="/css/components/dialog.css" />
+        <link rel="stylesheet" href="/css/components/file-tree.css" />
+        <link rel="stylesheet" href="/css/modules/components.css" />
+        <!-- 页面样式（最后加载，覆盖第三方库） -->
+        <link rel="stylesheet" href="/css/modules/topbar.css" />
+        <link rel="stylesheet" href="/css/modules/layout.css" />
+        <link rel="stylesheet" href="/css/modules/chat.css" />
+        <link rel="stylesheet" href="/css/modules/input.css" />
+        <link rel="stylesheet" href="/css/modules/status-bar.css" />
+        <link rel="stylesheet" href="/css/modules/modal.css" />
+        <link rel="stylesheet" href="/css/modules/drawer.css" />
+        <link rel="stylesheet" href="/css/modules/responsive.css" />
+        <script src="/lib/simpui/js/simpicker.js"></script>
+    </head>
+    <body class="dark">
+        <!-- Lucide Icons -->
+        <script src="/lib/lucide.js?v=1.24.0"></script>
 
-  <!-- ===== 顶栏 ===== -->
-  <header class="topbar">
-    <div class="brand">
-      <img src="/favicon.svg" alt="Ason Agent" class="brand-logo">
-      <h1>Ason Agent</h1>
-    </div>
-    <div class="topbar-divider"></div>
-
-    <div id="debug-info" class="debug-info">
-      <span class="debug-item">
-        <i data-lucide="activity" class="debug-icon ready" id="debug-icon"></i>
-        <span>Ollama: <span id="ollama-status">连接中</span></span>
-      </span>
-    </div>
-
-    <div class="topbar-spacer"></div>
-
-    <div class="topbar-actions">
-      <button id="theme-toggle" class="simpui-btn sm" title="切换主题">
-        <i data-lucide="moon"></i>
-        <span>主题</span>
-      </button>
-      <div class="divider"></div>
-      <div class="user-dropdown">
-        <button id="user-btn" class="simpui-btn sm">
-          <i data-lucide="user"></i>
-          <span id="user-name">用户</span>
-          <i data-lucide="chevron-down"></i>
-        </button>
-        <div class="dropdown-menu">
-          <button id="settings-btn" class="dropdown-item">
-            <i data-lucide="settings"></i>
-            <span>设置</span>
-          </button>
-          <a href="/device.html" class="dropdown-item">
-            <i data-lucide="smartphone"></i>
-            <span>设备信息</span>
-          </a>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <!-- ===== 主体布局 ===== -->
-  <div class="layout">
-    <!-- 侧边栏 -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">文件</span>
-        <button id="fs-refresh" class="simpui-btn sm" aria-label="刷新">
-          <i data-lucide="refresh-cw"></i>
-          <span>刷新</span>
-        </button>
-      </div>
-      <div id="file-tree" class="file-tree"></div>
-    </aside>
-
-    <!-- 主内容区 -->
-    <main class="main-content">
-      <!-- 会话栏 -->
-      <div class="session-bar">
-        <input type="text" class="conv-name" id="conv-name" placeholder="新对话" maxlength="60" spellcheck="false">
-        <div class="session-actions">
-          <button id="history-btn" class="simpui-btn sm">
-            <i data-lucide="history"></i>
-            <span>历史</span>
-          </button>
-          <div class="divider"></div>
-          <button id="new-chat" class="simpui-btn primary sm">
-            <i data-lucide="plus"></i>
-            <span>新对话</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 聊天区 -->
-      <div class="chat-area" id="chat-area">
-        <!-- 空状态 -->
-        <div id="empty" class="empty">
-          <h2>开始一个新任务</h2>
-          <p class="empty-sub">选择沙箱目录并绑定到本次对话，模型只能读取该目录下的文件。</p>
-          <div class="empty-root">
-            <div class="empty-root-row">
-              <input id="empty-root-input" class="simpui-input" type="text" placeholder="粘贴绝对路径，或点击右侧选择目录">
-              <button id="empty-root-pick" class="simpui-btn primary" type="button">选择目录</button>
+        <!-- ===== 顶栏 ===== -->
+        <header class="topbar">
+            <div class="brand">
+                <img src="/favicon.svg" alt="Ason Agent" class="brand-logo" />
+                <h1>Ason Agent</h1>
             </div>
-            <input id="empty-root-dirinput" type="file" webkitdirectory directory multiple hidden>
-            <div id="empty-root-status" class="empty-root-status"></div>
-          </div>
+            <div class="topbar-divider"></div>
 
-          <!-- 目录选择器抽屉 -->
-          <div id="dir-picker" class="dir-picker hidden">
-            <div class="dir-picker-mask" data-close></div>
-            <div class="dir-picker-panel">
-              <div class="dir-picker-head">
-                <span>选择沙箱目录</span>
-                <button class="dir-picker-close" type="button" data-close>×</button>
-              </div>
-              <div class="dir-picker-path">
-                <button id="dir-picker-up" class="dir-picker-up" type="button" title="上一级">↑</button>
-                <span id="dir-picker-current" class="dir-picker-current"></span>
-              </div>
-              <div id="dir-picker-list" class="dir-picker-list">
-                <div class="dir-picker-loading">加载中…</div>
-              </div>
-              <div class="dir-picker-foot">
-                <button id="dir-picker-here" class="simpui-btn primary" type="button">选择当前目录</button>
-                <button class="simpui-btn" type="button" data-close>取消</button>
-              </div>
+            <div id="debug-info" class="debug-info">
+                <span class="debug-item">
+                    <i
+                        data-lucide="activity"
+                        class="debug-icon ready"
+                        id="debug-icon"
+                    ></i>
+                    <span>Ollama: <span id="ollama-status">连接中</span></span>
+                </span>
             </div>
-          </div>
-        </div>
-        <div id="messages" class="messages"></div>
-        <div id="thinking" class="thinking hidden" role="status" aria-live="polite">
-          <span class="thinking-dot"></span>
-          <span class="thinking-label">思考中</span>
-          <span id="think-secs">0</span>s
-        </div>
-      </div>
 
-      <!-- 输入区 -->
-      <footer class="composer">
-        <div class="composer-box">
-          <textarea id="input" class="composer-input" placeholder="输入消息..." rows="1" maxlength="20000"></textarea>
-          <span class="char-count" id="char-count">0 / 20000</span>
-          <div class="composer-actions">
-            <button id="img-btn" class="simpui-btn sm" title="选择图片" aria-label="选择图片">
-              <i data-lucide="paperclip"></i>
-              <span>图片</span>
-            </button>
-            <button id="send" class="simpui-btn primary sm" title="发送">
-              <i data-lucide="send"></i>
-              <span>发送</span>
-            </button>
-          </div>
-        </div>
-        <input id="img-input" type="file" accept="image/*" multiple hidden>
-        <button id="scroll-bottom" class="simpui-btn scroll-bottom hidden" title="滚动到底部" aria-label="滚动到底部">
-          <i data-lucide="chevrons-down" class="scroll-bottom-icon"></i>
-        </button>
-      </footer>
+            <div class="topbar-spacer"></div>
 
-      <!-- 状态栏 -->
-      <div class="status-bar">
-        <div class="status-left">
-          <span class="status-item status-ready">
-            <i data-lucide="circle" class="status-dot"></i>
-            <span>就绪</span>
-          </span>
-          <span class="status-sep">|</span>
-          <span class="status-item" id="ss-model">qwen2.5-coder</span>
-          <span class="status-sep">|</span>
-          <span class="status-item context-bar" id="ss-context" title="上下文用量">
-            <span class="context-label">Context</span>
-            <span class="context-meter"><span class="context-fill" id="ss-context-fill"></span></span>
-            <span class="context-text" id="ss-context-text">—</span>
-          </span>
-          <span class="status-sep">|</span>
-          <span class="status-item clickable" id="ss-tools" title="点击查看工具">Tools: 0</span>
-          <span class="status-sep">|</span>
-          <span class="status-item clickable" id="ss-skills" title="点击查看技能">Skills: 0</span>
-          <span class="status-sep">|</span>
-          <span class="status-item" id="ss-chars">0 字</span>
-        </div>
-        <div class="status-right">
-          <span class="status-item" id="ss-git">git:—</span>
-          <span class="status-sep">|</span>
-          <span class="status-item" id="ss-dir">/path/to/project</span>
-          <span class="status-sep">|</span>
-          <span class="status-more" id="ss-more">详情</span>
-        </div>
-      </div>
-    </main>
-  </div>
+            <div class="topbar-actions">
+                <button
+                    id="theme-toggle"
+                    class="simpui-btn sm"
+                    title="切换主题"
+                >
+                    <i data-lucide="moon"></i>
+                    <span>主题</span>
+                </button>
+                <div class="divider"></div>
+                <div class="user-dropdown">
+                    <button id="user-btn" class="simpui-btn sm">
+                        <i data-lucide="user"></i>
+                        <span id="user-name">用户</span>
+                        <i data-lucide="chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button id="settings-btn" class="dropdown-item">
+                            <i data-lucide="settings"></i>
+                            <span>设置</span>
+                        </button>
+                        <a href="/device.html" class="dropdown-item">
+                            <i data-lucide="smartphone"></i>
+                            <span>设备信息</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
 
-  <!-- ===== 历史对话 Drawer ===== -->
-  <div id="history-drawer" class="drawer hidden">
-    <div class="drawer-overlay" id="drawer-overlay"></div>
-    <div class="drawer-content">
-      <div class="drawer-header">
-        <h3>历史对话</h3>
-        <button id="drawer-close" class="simpui-btn sm" aria-label="关闭">✕</button>
-      </div>
-      <div id="history-list" class="history-list">
-        <div class="history-empty">
-          <i data-lucide="message-square-dashed"></i>
-          <div class="history-empty-title">暂无历史对话</div>
-          <div class="history-empty-sub">开始新对话后会显示在这里</div>
-        </div>
-      </div>
-    </div>
-  </div>
+        <!-- ===== 主体布局 ===== -->
+        <div class="layout">
+            <!-- 侧边栏 -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">文件</span>
+                    <button
+                        id="fs-refresh"
+                        class="simpui-btn sm"
+                        aria-label="刷新"
+                    >
+                        <i data-lucide="refresh-cw"></i>
+                        <span>刷新</span>
+                    </button>
+                </div>
+                <div id="file-tree" class="file-tree"></div>
+            </aside>
 
-  <!-- ===== 删除历史对话确认弹窗 ===== -->
-  <div id="delete-confirm" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="确认删除">
-    <div class="simpui-dialog-panel sm">
-      <div class="simpui-dialog-header">
-        <h3 class="simpui-dialog-title">删除对话</h3>
-        <button id="delete-cancel-x" class="simpui-dialog-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="simpui-dialog-body">
-        <p>确定要删除对话「<span id="delete-confirm-name"></span>」吗？此操作不可撤销。</p>
-      </div>
-      <div class="simpui-dialog-actions">
-        <button id="delete-cancel" class="simpui-btn" type="button">取消</button>
-        <button id="delete-confirm-btn" class="simpui-btn danger" type="button">删除</button>
-      </div>
-    </div>
-  </div>
+            <!-- 主内容区 -->
+            <main class="main-content">
+                <!-- 会话栏 -->
+                <div class="session-bar">
+                    <input
+                        type="text"
+                        class="conv-name"
+                        id="conv-name"
+                        placeholder="新对话"
+                        maxlength="60"
+                        spellcheck="false"
+                    />
+                    <div class="session-actions">
+                        <button id="history-btn" class="simpui-btn sm">
+                            <i data-lucide="history"></i>
+                            <span>历史</span>
+                        </button>
+                        <div class="divider"></div>
+                        <button id="new-chat" class="simpui-btn primary sm">
+                            <i data-lucide="plus"></i>
+                            <span>新对话</span>
+                        </button>
+                    </div>
+                </div>
 
-  <!-- ===== 设置弹窗 ===== -->
-  <div id="settings-modal" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="设置">
-    <div class="simpui-dialog-panel md">
-      <div class="simpui-dialog-header">
-        <h3 class="simpui-dialog-title">设置</h3>
-        <button id="settings-close" class="simpui-dialog-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="simpui-dialog-body">
-        <div class="field">
-          <label for="set-ollama">Ollama 地址</label>
-          <input id="set-ollama" class="simpui-input" type="text" placeholder="http://localhost:11434">
-        </div>
-        <div class="field">
-          <label for="set-root">项目目录（绝对路径，留空用默认沙箱）</label>
-          <input id="set-root" class="simpui-input" type="text" placeholder="/abs/path/to/your/project">
-        </div>
-        <div class="field">
-          <label for="set-md-engine">Markdown 渲染引擎</label>
-          <select id="set-md-engine" class="simpui-input">
-            <option value="markdownit">markdown-it + 代码高亮（当前默认）</option>
-            <option value="marked">marked</option>
-          </select>
-        </div>
-      </div>
-      <div class="simpui-dialog-actions">
-        <button id="settings-save" class="simpui-btn primary">保存</button>
-        <span id="settings-msg" class="hint"></span>
-      </div>
-    </div>
-  </div>
+                <!-- 聊天区 -->
+                <div class="chat-area" id="chat-area">
+                    <!-- 空状态 -->
+                    <div id="empty" class="empty">
+                        <h2>开始一个新任务</h2>
+                        <p class="empty-sub">
+                            选择沙箱目录并绑定到本次对话，模型只能读取该目录下的文件。
+                        </p>
+                        <div class="empty-root">
+                            <div class="empty-root-row">
+                                <input
+                                    id="empty-root-input"
+                                    class="simpui-input"
+                                    type="text"
+                                    placeholder="粘贴绝对路径，或点击右侧选择目录"
+                                />
+                                <button
+                                    id="empty-root-pick"
+                                    class="simpui-btn primary"
+                                    type="button"
+                                >
+                                    选择目录
+                                </button>
+                            </div>
+                            <input
+                                id="empty-root-dirinput"
+                                type="file"
+                                webkitdirectory
+                                directory
+                                multiple
+                                hidden
+                            />
+                            <div
+                                id="empty-root-status"
+                                class="empty-root-status"
+                            ></div>
+                        </div>
 
-  <!-- ===== 会话状态弹框 ===== -->
-  <div id="state-modal" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="会话状态">
-    <div class="simpui-dialog-panel sm">
-      <div class="simpui-dialog-header">
-        <h3 class="simpui-dialog-title">会话状态</h3>
-        <button id="state-modal-close" class="simpui-dialog-close" aria-label="关闭">✕</button>
-      </div>
-      <div id="state-modal-body" class="simpui-dialog-body"></div>
-    </div>
-  </div>
+                        <!-- 目录选择器抽屉 -->
+                        <div id="dir-picker" class="dir-picker hidden">
+                            <div class="dir-picker-mask" data-close></div>
+                            <div class="dir-picker-panel">
+                                <div class="dir-picker-head">
+                                    <span>选择沙箱目录</span>
+                                    <button
+                                        class="dir-picker-close"
+                                        type="button"
+                                        data-close
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div class="dir-picker-path">
+                                    <button
+                                        id="dir-picker-up"
+                                        class="dir-picker-up"
+                                        type="button"
+                                        title="上一级"
+                                    >
+                                        ↑
+                                    </button>
+                                    <span
+                                        id="dir-picker-current"
+                                        class="dir-picker-current"
+                                    ></span>
+                                </div>
+                                <div
+                                    id="dir-picker-list"
+                                    class="dir-picker-list"
+                                >
+                                    <div class="dir-picker-loading">
+                                        加载中…
+                                    </div>
+                                </div>
+                                <div class="dir-picker-foot">
+                                    <button
+                                        id="dir-picker-here"
+                                        class="simpui-btn primary"
+                                        type="button"
+                                    >
+                                        选择当前目录
+                                    </button>
+                                    <button
+                                        class="simpui-btn"
+                                        type="button"
+                                        data-close
+                                    >
+                                        取消
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="messages" class="messages"></div>
+                    <div
+                        id="thinking"
+                        class="thinking hidden"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <span class="thinking-dot"></span>
+                        <span class="thinking-label">思考中</span>
+                        <span id="think-secs">0</span>s
+                    </div>
+                </div>
 
-  <script src="/lib/marked.min.js"></script>
-  <script src="/lib/purify.min.js"></script>
-  <script src="/lib/markdown-it/markdown-it.min.js"></script>
-  <script src="/lib/highlight/highlight.min.js"></script>
-  <script src="/lib/mermaid/mermaid.min.js"></script>
-  <script src="/js/modules/utils.js"></script>
-  <script src="/js/modules/state.js"></script>
-  <script src="/js/modules/api.js"></script>
-  <script src="/js/modules/render.js"></script>
-  <script src="/js/modules/commands.js"></script>
-  <script src="/js/modules/file-browser.js"></script>
-  <script src="/js/modules/theme.js"></script>
-  <script src="/js/modules/settings.js"></script>
-  <script src="/js/app.js"></script>
-  <script src="/lib/simpui/js/simpui.js"></script>
-  <div id="simpui-toast-container"></div>
-  <script>lucide.createIcons();</script>
-</body>
+                <!-- 输入区 -->
+                <footer class="composer">
+                    <div class="composer-box">
+                        <textarea
+                            id="input"
+                            class="composer-input"
+                            placeholder="请输入消息，可以使用 / 执行命令"
+                            rows="1"
+                            maxlength="20000"
+                        ></textarea>
+                        <span class="char-count" id="char-count"
+                            >0 / 20000</span
+                        >
+                        <div class="composer-actions">
+                            <button
+                                id="img-btn"
+                                class="simpui-btn sm"
+                                title="选择图片"
+                                aria-label="选择图片"
+                            >
+                                <i data-lucide="paperclip"></i>
+                                <span>图片</span>
+                            </button>
+                            <button
+                                id="send"
+                                class="simpui-btn primary sm"
+                                title="发送"
+                            >
+                                <i data-lucide="send"></i>
+                                <span>发送</span>
+                            </button>
+                        </div>
+                    </div>
+                    <input
+                        id="img-input"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                    />
+                    <button
+                        id="scroll-bottom"
+                        class="simpui-btn scroll-bottom hidden"
+                        title="滚动到底部"
+                        aria-label="滚动到底部"
+                    >
+                        <i
+                            data-lucide="chevrons-down"
+                            class="scroll-bottom-icon"
+                        ></i>
+                    </button>
+                </footer>
+
+                <!-- 状态栏 -->
+                <div class="status-bar">
+                    <div class="status-left">
+                        <span class="status-item status-ready">
+                            <i data-lucide="circle" class="status-dot"></i>
+                            <span>就绪</span>
+                        </span>
+                        <span class="status-sep">|</span>
+                        <span class="status-item" id="ss-model"
+                            >qwen2.5-coder</span
+                        >
+                        <span class="status-sep">|</span>
+                        <span
+                            class="status-item context-bar"
+                            id="ss-context"
+                            title="上下文用量"
+                        >
+                            <span class="context-label">Context</span>
+                            <span class="context-meter"
+                                ><span
+                                    class="context-fill"
+                                    id="ss-context-fill"
+                                ></span
+                            ></span>
+                            <span class="context-text" id="ss-context-text"
+                                >—</span
+                            >
+                        </span>
+                        <span class="status-sep">|</span>
+                        <span
+                            class="status-item clickable"
+                            id="ss-tools"
+                            title="点击查看工具"
+                            >Tools: 0</span
+                        >
+                        <span class="status-sep">|</span>
+                        <span
+                            class="status-item clickable"
+                            id="ss-skills"
+                            title="点击查看技能"
+                            >Skills: 0</span
+                        >
+                        <span class="status-sep">|</span>
+                        <span class="status-item" id="ss-chars">0 字</span>
+                    </div>
+                    <div class="status-right">
+                        <span class="status-item" id="ss-git">git:—</span>
+                        <span class="status-sep">|</span>
+                        <span class="status-item" id="ss-dir"
+                            >/path/to/project</span
+                        >
+                        <span class="status-sep">|</span>
+                        <span class="status-more" id="ss-more">详情</span>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- ===== 历史对话 Drawer ===== -->
+        <div id="history-drawer" class="drawer hidden">
+            <div class="drawer-overlay" id="drawer-overlay"></div>
+            <div class="drawer-content">
+                <div class="drawer-header">
+                    <h3>历史对话</h3>
+                    <button
+                        id="drawer-close"
+                        class="simpui-btn sm"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <div class="history-empty">
+                        <i data-lucide="message-square-dashed"></i>
+                        <div class="history-empty-title">暂无历史对话</div>
+                        <div class="history-empty-sub">
+                            开始新对话后会显示在这里
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 删除历史对话确认弹窗 ===== -->
+        <div
+            id="delete-confirm"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认删除"
+        >
+            <div class="simpui-dialog-panel sm">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">删除对话</h3>
+                    <button
+                        id="delete-cancel-x"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <p>
+                        确定要删除对话「<span id="delete-confirm-name"></span
+                        >」吗？此操作不可撤销。
+                    </p>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="delete-cancel" class="simpui-btn" type="button">
+                        取消
+                    </button>
+                    <button
+                        id="delete-confirm-btn"
+                        class="simpui-btn danger"
+                        type="button"
+                    >
+                        删除
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 设置弹窗 ===== -->
+        <div
+            id="settings-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="设置"
+        >
+            <div class="simpui-dialog-panel md">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">设置</h3>
+                    <button
+                        id="settings-close"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="field">
+                        <label for="set-ollama">Ollama 地址</label>
+                        <input
+                            id="set-ollama"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="http://localhost:11434"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="set-root"
+                            >项目目录（绝对路径，留空用默认沙箱）</label
+                        >
+                        <input
+                            id="set-root"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="/abs/path/to/your/project"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="set-md-engine">Markdown 渲染引擎</label>
+                        <select id="set-md-engine" class="simpui-input">
+                            <option value="markdownit">
+                                markdown-it + 代码高亮（当前默认）
+                            </option>
+                            <option value="marked">marked</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="settings-save" class="simpui-btn primary">
+                        保存
+                    </button>
+                    <span id="settings-msg" class="hint"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 会话状态弹框 ===== -->
+        <div
+            id="state-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="会话状态"
+        >
+            <div class="simpui-dialog-panel sm">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">会话状态</h3>
+                    <button
+                        id="state-modal-close"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div id="state-modal-body" class="simpui-dialog-body"></div>
+            </div>
+        </div>
+
+        <script src="/lib/marked.min.js"></script>
+        <script src="/lib/purify.min.js"></script>
+        <script src="/lib/markdown-it/markdown-it.min.js"></script>
+        <script src="/lib/highlight/highlight.min.js"></script>
+        <script src="/lib/mermaid/mermaid.min.js"></script>
+        <script src="/js/modules/utils.js"></script>
+        <script src="/js/modules/state.js"></script>
+        <script src="/js/modules/api.js"></script>
+        <script src="/js/modules/render.js"></script>
+        <script src="/js/modules/commands.js"></script>
+        <script src="/js/modules/file-browser.js"></script>
+        <script src="/js/modules/theme.js"></script>
+        <script src="/js/modules/settings.js"></script>
+        <script src="/js/app.js"></script>
+        <script src="/lib/simpui/js/simpui.js"></script>
+        <div id="simpui-toast-container"></div>
+        <script>
+            lucide.createIcons();
+        </script>
+    </body>
 </html>
