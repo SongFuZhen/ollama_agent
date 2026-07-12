@@ -568,7 +568,7 @@ function renderContextBar() {
     ssContextFill.classList.remove('warn', 'danger');
     if (pct >= 90) ssContextFill.classList.add('danger');
     else if (pct >= 70) ssContextFill.classList.add('warn');
-    ssContextText.textContent = `${formatTokenCount(used)}/${formatTokenCount(limit)}`;
+    ssContextText.textContent = `${formatTokenCount(used)}/${formatTokenCount(limit)} ${pct}%`;
   } else {
     ssContextFill.style.width = '0%';
     ssContextFill.classList.remove('warn', 'danger');
