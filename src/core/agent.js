@@ -74,6 +74,8 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   ];
 
   let lastAnswer = '';
+  let lastCallKey = '';
+  let repeatCount = 0;
   for (let step = 1; step <= MAX_STEPS; step++) {
     if (Date.now() > deadline) {
       emit({ type: 'error', step, msg: `已达整体超时（${WALL_MS / 1000}s），强制收尾` });
@@ -180,6 +182,33 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     }
 
     const tool = TOOLS[call.action];
+
+    // 重复调用检测：同一工具连续出现时，模型多半陷入循环（如反复 tree 逐级下钻）。
+    // 第 2 次重复即提示收尾，第 3 次强制用已有结果回答，避免无谓的多轮工具调用。
+    // 探索类工具（tree/list_dir）即使换了 depth/path 参数也属于重复下钻，按 action 维度计。
+    const REPEAT_PRONE = new Set(['tree', 'list_dir']);
+    const callKey = REPEAT_PRONE.has(call.action)
+      ? call.action
+      : call.action + ':' + JSON.stringify(call.params || {});
+    if (callKey === lastCallKey) {
+      repeatCount += 1;
+    } else {
+      lastCallKey = callKey;
+      repeatCount = 1;
+    }
+    if (repeatCount >= 3) {
+      const final = lastAnswer || `（已连续 ${repeatCount} 次调用 ${call.action}，强制收尾）请基于已获取的数据回答。`;
+      emit({ type: 'answer', content: final });
+      return final;
+    }
+    if (repeatCount === 2) {
+      messages.push({ role: 'assistant', content: text });
+      messages.push({
+        role: 'user',
+        content: `你已连续多次调用 ${call.action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`,
+      });
+      continue;
+    }
 
     // 写操作：每次单独弹确认（V1 白名单不含写工具，此处为 V2 预留）
     if (tool.needConfirm) {
