@@ -20,6 +20,16 @@ const SLASH_COMMANDS = [
     desc: '列出已安装的 Ollama 模型',
     run: showModels,
   },
+  {
+    name: 'help',
+    desc: '显示所有可用命令',
+    run: showHelp,
+  },
+  {
+    name: 'clear',
+    desc: '清空当前对话',
+    run: clearChat,
+  },
 ];
 
 let cmdPaletteEl = null;
@@ -126,23 +136,23 @@ function runCommand(cmd) {
 function openListModal(title, rows) {
   let modal = $('#cmd-modal');
   if (!modal) {
-    modal = el('div', 'modal hidden');
+    modal = el('div', 'simpui-dialog-backdrop hidden');
     modal.id = 'cmd-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.innerHTML = `
-      <div class="modal-box cmd-modal-box">
-        <div class="modal-head">
-          <span id="cmd-modal-title"></span>
-          <button id="cmd-modal-close" class="simpui-btn light sm" aria-label="关闭">✕</button>
+      <div class="simpui-dialog-panel md">
+        <div class="simpui-dialog-header">
+          <h3 class="simpui-dialog-title" id="cmd-modal-title"></h3>
+          <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
         </div>
-        <div id="cmd-modal-body" class="cmd-modal-body"></div>
+        <div id="cmd-modal-body" class="simpui-dialog-body"></div>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.classList.add('hidden');
     });
-    modal.querySelector('#cmd-modal-close').onclick = () => modal.classList.add('hidden');
+    modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
   }
   modal.querySelector('#cmd-modal-title').textContent = title;
   const body = modal.querySelector('#cmd-modal-body');
@@ -178,7 +188,7 @@ function buildRow(r) {
   const row = el('div', 'cmd-row');
   const head = el('div', 'cmd-row-head');
   head.appendChild(el('span', 'cmd-row-name', r.name));
-  if (r.tag) head.appendChild(el('span', 'cmd-row-tag', r.tag));
+  if (r.tag) head.appendChild(el('span', 'simpui-badge warning sm', r.tag));
   if (r.onClick) {
     row.addEventListener('click', () => r.onClick(r.name));
     row.classList.add('clickable');
@@ -243,4 +253,18 @@ function showModels() {
     },
   }));
   openListModal('已安装模型（' + rows.length + '）', rows);
+}
+
+function showHelp() {
+  const rows = SLASH_COMMANDS.map((cmd) => ({
+    name: '/' + cmd.name,
+    desc: cmd.desc,
+  }));
+  openListModal('可用命令', rows);
+}
+
+function clearChat() {
+  const newChatBtn = $('#new-chat');
+  if (newChatBtn) newChatBtn.click();
+  showSimpuiToast('已清空', '当前对话已清空');
 }

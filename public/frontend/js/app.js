@@ -110,7 +110,7 @@ async function loadHistoryConversation(convId) {
     const data = await res.json();
 
     if (!data.messages || data.messages.length === 0) {
-      alert('对话内容为空');
+      showSimpuiToast('提示', '对话内容为空');
       return;
     }
 
@@ -247,7 +247,7 @@ if (deleteConfirmBtn) {
       // 重新拉取列表（保持在抽屉内）
       loadHistoryList();
     } catch (e) {
-      alert('删除失败: ' + e.message);
+      showSimpuiToast('错误', '删除失败: ' + e.message);
     }
   };
 }

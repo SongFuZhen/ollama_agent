@@ -1,5 +1,4 @@
 /* modal.css - 弹窗、抽屉 */
-/* 设计方向：Technical Laboratory - 尖角、网格边框 */
 
 /* ---------- SimpUI 主题变量覆盖 ---------- */
 :root {
@@ -51,7 +50,42 @@ select, textarea {
   color: var(--volt);
 }
 
-/* ---------- 弹窗通用 ---------- */
+/* ---------- simpui-dialog 覆盖 ---------- */
+.simpui-dialog-backdrop.hidden {
+  display: none;
+}
+
+.simpui-dialog-panel {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-3);
+}
+
+.simpui-dialog-header {
+  border-bottom-color: var(--panel-3);
+}
+
+.simpui-dialog-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.simpui-dialog-close {
+  color: var(--mist);
+}
+
+.simpui-dialog-close:hover {
+  color: var(--chalk);
+}
+
+.simpui-dialog-actions {
+  border-top-color: var(--panel-3);
+}
+
+/* ---------- 兼容旧 .modal 类（备用） ---------- */
 .modal {
   position: fixed;
   inset: 0;
@@ -63,49 +97,11 @@ select, textarea {
   z-index: 50;
 }
 
-#delete-confirm.modal {
-  z-index: 1200;
-}
-
 .modal.hidden {
   display: none;
 }
 
-.modal-box {
-  background: var(--panel);
-  border: 1px solid var(--panel-3);
-  border-radius: var(--radius-sm);
-  padding: var(--space-5);
-  width: 420px;
-  max-width: 92vw;
-  box-shadow: var(--shadow-lg);
-  animation: modal-in var(--duration-normal) var(--ease);
-}
-
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash);
-  margin-bottom: var(--space-4);
-}
-
+/* ---------- 表单字段 ---------- */
 .field {
   margin-bottom: var(--space-3);
 }
@@ -139,35 +135,6 @@ select, textarea {
   box-shadow: 0 0 0 3px var(--volt-dim);
 }
 
-.field-group {
-  margin: var(--space-2) 0;
-  border: 1px solid var(--panel-3);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-4);
-}
-
-.field-group summary {
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mist);
-  padding: var(--space-2) 0;
-}
-
-.field-group .field:last-child {
-  margin-bottom: var(--space-3);
-}
-
-.modal-actions {
-  margin-top: var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .hint {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -175,11 +142,7 @@ select, textarea {
 }
 
 /* ---------- 会话状态弹框 ---------- */
-.state-modal-box {
-  width: 460px;
-}
-
-.state-modal-body {
+#state-modal-body {
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.8;
@@ -234,29 +197,6 @@ select, textarea {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ash);
-}
-
-/* 删除确认弹窗 */
-.delete-confirm-box {
-  max-width: 380px;
-}
-
-.delete-confirm-text {
-  font-size: 14px;
-  color: var(--chalk);
-  line-height: 1.6;
-  margin: var(--space-4) 0;
-}
-
-.delete-confirm-text span {
-  color: var(--volt);
-  font-weight: 500;
-}
-
-.delete-confirm-btns {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
 }
 
 /* 共享旋转加载图标 */

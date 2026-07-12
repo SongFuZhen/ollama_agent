@@ -1,13 +1,21 @@
 'use strict';
 
-/* theme.js - 主题切换 */
+/* theme.js - 主题切换（支持系统偏好） */
 
 const THEME_KEY = 'local-agent-theme';
 const themeSwitch = $('#theme-switch');
 
-// 当前存储的模式：'light' | 'dark'（缺省视为 dark）
+// 当前存储的模式：'light' | 'dark' | 'auto'（缺省视为 auto）
 function storedTheme() {
-  return localStorage.getItem(THEME_KEY) || 'dark';
+  return localStorage.getItem(THEME_KEY) || 'auto';
+}
+
+// 获取实际应用的主题
+function getResolvedTheme(stored) {
+  if (stored === 'auto') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return stored;
 }
 
 function applyTheme(theme) {
@@ -15,11 +23,9 @@ function applyTheme(theme) {
   const body = document.body;
 
   if (theme === 'light') {
-    // 明亮主题
     root.setAttribute('data-theme', 'light');
     body.classList.remove('dark');
   } else {
-    // 暗色主题（默认）
     root.removeAttribute('data-theme');
     body.classList.add('dark');
   }
@@ -37,9 +43,10 @@ function applyTheme(theme) {
 }
 
 // 初始化主题
-applyTheme(storedTheme());
+const stored = storedTheme();
+applyTheme(getResolvedTheme(stored));
 
-// 监听主题切换
+// 监听主题切换（checkbox 手动切换）
 if (themeSwitch) {
   themeSwitch.addEventListener('change', () => {
     const next = themeSwitch.checked ? 'light' : 'dark';
@@ -47,3 +54,10 @@ if (themeSwitch) {
     applyTheme(next);
   });
 }
+
+// 监听系统主题变化（仅 auto 模式下跟随）
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (storedTheme() === 'auto') {
+    applyTheme(e.matches ? 'dark' : 'light');
+  }
+});
