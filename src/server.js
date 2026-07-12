@@ -409,6 +409,7 @@ const server = http.createServer((req, res) => {
   // 对话 API
   if (req.method === 'GET' && url === '/api/device') return handleGetDevice(req, res);
   if (req.method === 'GET' && url.startsWith('/api/conversations')) return handleGetConversations(req, res);
+  if (req.method === 'GET' && url.startsWith('/api/conversation/') && url.endsWith('/stats')) return handleGetConversationStats(req, res);
   if (req.method === 'GET' && url.startsWith('/api/conversation/')) return handleGetConversation(req, res);
   if (req.method === 'POST' && url === '/api/conversation') return handleSaveConversation(req, res);
   if (req.method === 'PATCH' && url.startsWith('/api/conversation/')) return handleRenameConversation(req, res);
@@ -485,7 +486,15 @@ async function handleGetConversation(req, res) {
   const conversation = db.getConversation(id);
   if (!conversation) return sendJSON(res, 404, { error: 'not found' });
   const messages = db.getMessages(id);
-  sendJSON(res, 200, { ...conversation, messages });
+  const stats = db.getConversationStats(id);
+  sendJSON(res, 200, { ...conversation, messages, stats });
+}
+
+async function handleGetConversationStats(req, res) {
+  const id = req.url.split('/api/conversation/')[1]?.split('/stats')[0];
+  if (!id) return sendJSON(res, 400, { error: 'id required' });
+  const stats = db.getConversationStats(id);
+  sendJSON(res, 200, stats);
 }
 
 async function handleSaveConversation(req, res) {

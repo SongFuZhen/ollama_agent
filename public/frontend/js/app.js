@@ -147,6 +147,21 @@ async function loadHistoryConversation(convId) {
     state.currentProjectRoot = validRoot;
     updateProjectRootUI();
     
+    // 加载会话统计（TTFT、总耗时等）
+    try {
+      const statsRes = await fetch(`/api/conversation/${convId}/stats`);
+      const statsData = await statsRes.json();
+      if (statsData && !statsData.error) {
+        state.sessionStats.ttftSum = statsData.ttftSum || 0;
+        state.sessionStats.ttftCount = statsData.ttftCount || 0;
+        state.sessionStats.totalTimeSum = statsData.totalTimeSum || 0;
+        state.sessionStats.toolCounts = statsData.toolCounts || {};
+        renderSessionState();
+      }
+    } catch (e) {
+      console.warn('加载会话统计失败:', e);
+    }
+    
     // 如果对话有有效的 project_root，加载对应的文件树
     if (validRoot) {
       // 先检查本地缓存
@@ -500,7 +515,6 @@ function formatElapsed(ms) {
 
 // 渲染状态栏
 function renderSessionState() {
-  console.log('[DEBUG] renderSessionState called, sessionStats:', state.sessionStats);
   const model = state.activeModel || state.defaultModel || '—';
   const root = effectiveRoot();
   const dirName = root ? lastSeg(root) : '默认沙箱';
@@ -637,7 +651,6 @@ function handleEvent(ev) {
       
     case 'stats': {
       // 显示连接统计（直接定位当前答案气泡底部，避免依赖已被清空的 streamingHead）
-      console.log('[DEBUG] stats event received:', ev);
       const fmt = `TTFT: ${ev.ttft}ms | 总耗时: ${ev.total}ms`;
       const footer = document.querySelector('.msg.agent.answer-card:last-of-type .answer-footer');
       const statsEl = footer && footer.querySelector('.stats');
