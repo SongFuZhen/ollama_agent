@@ -184,12 +184,12 @@ function getConversationStats(conversationId) {
   for (const r of rows) {
     if (r.stats) {
       const s = JSON.parse(r.stats);
-      if (typeof s.ttft === 'number') {
-        ttftSum += s.ttft;
+      if (!isNaN(Number(s.ttft))) {
+        ttftSum += Number(s.ttft);
         ttftCount++;
       }
-      if (typeof s.total === 'number') {
-        totalTimeSum += s.total;
+      if (!isNaN(Number(s.total))) {
+        totalTimeSum += Number(s.total);
       }
     }
     if (r.tools) {

@@ -21,6 +21,9 @@ const state = {
     startTs: null,          // 会话起始时间（毫秒）
     toolCounts: {},         // { 工具名: 次数 }
     msgCount: 0,            // 消息数
+    ttftSum: 0,             // TTFT 累计毫秒
+    ttftCount: 0,           // TTFT 样本数
+    totalTimeSum: 0,        // 总耗时累计毫秒
   },
   bootDone: false,          // 启动序列完成
   activeModel: null,        // 当前下拉选中的模型（来自 Ollama 已安装列表）

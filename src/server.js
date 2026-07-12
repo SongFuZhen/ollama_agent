@@ -2,7 +2,7 @@
 
 const http = require('http');
 const fs = require('fs');
-const { execFile } = require('child_process');
+const { execFile, execSync, spawnSync } = require('child_process');
 const fsp = require('fs/promises');
 const path = require('path');
 const { runAgent } = require('./core/agent');
@@ -300,18 +300,22 @@ async function handleFsDirs(req, res) {
 }
 
 // 读取 git 分支名（用于状态栏展示，非 git 仓库返回空）
-async function handleGitBranch(req, res) {
+function handleGitBranch(req, res) {
   const params = new URL(req.url, 'http://x').searchParams;
-  const root = params.get('root') || (await getProjectRoot());
-  try {
-    const abs = await safeResolve('.', root);
-    execFile('git', ['-C', abs, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000 }, (err, stdout) => {
-      if (err) return sendJSON(res, 200, { branch: '' });
-      sendJSON(res, 200, { branch: (stdout || '').trim() });
-    });
-  } catch (e) {
-    sendJSON(res, 200, { branch: '' });
+  const root = params.get('root') || PROJECT_ROOT;
+  const dirs = [root, process.cwd()];
+  const seen = new Set();
+
+  for (const dir of dirs) {
+    if (!dir || seen.has(dir)) continue;
+    seen.add(dir);
+    const r = spawnSync('git', ['-C', dir, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000, encoding: 'utf8' });
+    if (r.status === 0 && r.stdout) {
+      const branch = r.stdout.trim();
+      if (branch) return sendJSON(res, 200, { branch });
+    }
   }
+  sendJSON(res, 200, { branch: '' });
 }
 
 // 读取文件内容（受沙箱限制，仅 root 内）

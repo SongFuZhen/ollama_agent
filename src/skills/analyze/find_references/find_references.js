@@ -1,7 +1,7 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const { truncate } = require('../utils');
+const { truncate } = require('../../utils');
 
 // 用 grep 查找符号的所有引用位置
 function grepRefs(symbol, root, path) {

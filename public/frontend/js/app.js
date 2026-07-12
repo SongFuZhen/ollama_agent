@@ -21,6 +21,7 @@ const userNameEl = $('#user-name');
 const ssModelEl = $('#ss-model');
 const ssCharsEl = $('#ss-chars');
 const ssDirEl = $('#ss-dir');
+const ssGitEl = $('#ss-git');
 const ssToolsEl = $('#ss-tools');
 const ssSkillsEl = $('#ss-skills');
 const ssMoreEl = $('#ss-more');
@@ -156,7 +157,6 @@ async function loadHistoryConversation(convId) {
         state.sessionStats.ttftCount = statsData.ttftCount || 0;
         state.sessionStats.totalTimeSum = statsData.totalTimeSum || 0;
         state.sessionStats.toolCounts = statsData.toolCounts || {};
-        renderSessionState();
       }
     } catch (e) {
       console.warn('加载会话统计失败:', e);
@@ -230,6 +230,7 @@ async function loadHistoryConversation(convId) {
     
     closeDrawer();
     showEmptyIfEmpty();
+    renderSessionState();
     scrollDown();
   } catch (e) {
     console.error('加载对话失败:', e);
@@ -501,7 +502,6 @@ let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
 
 function resetSessionStats() {
   state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0 };
-  state.gitBranch = '';
 }
 
 function formatElapsed(ms) {
@@ -518,15 +518,15 @@ function renderSessionState() {
   const model = state.activeModel || state.defaultModel || '—';
   const root = effectiveRoot();
   const dirName = root ? lastSeg(root) : '默认沙箱';
-  const counts = state.sessionStats.toolCounts || {};
-  const toolCount = Object.keys(counts).length;
-  const skillCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'skill').length;
+  const toolCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'tool').length;
+  const skillCount = (state.tools || []).filter(t => t.kind === 'skill').length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
   const avgTtft = state.sessionStats.ttftCount > 0 ? Math.round(state.sessionStats.ttftSum / state.sessionStats.ttftCount) : 0;
   const totalTime = state.sessionStats.totalTimeSum;
 
   if (ssModelEl) ssModelEl.textContent = model;
   if (ssCharsEl) ssCharsEl.textContent = `${msgCount} 条 | TTFT: ${avgTtft}ms | 总耗时: ${formatElapsed(totalTime)}`;
+  if (ssGitEl) ssGitEl.textContent = 'git:' + (state.gitBranch || '—');
   if (ssDirEl) ssDirEl.textContent = dirName;
   if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
   if (ssSkillsEl) ssSkillsEl.textContent = 'Skills: ' + skillCount;
@@ -785,6 +785,7 @@ async function send() {
   }
 
   appendUser(text || '（图片）', imgs);
+  renderSessionState();
   setBusy(true);
 
   // 首次输入时保存对话

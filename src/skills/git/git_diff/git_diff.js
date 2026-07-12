@@ -1,7 +1,7 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const { truncate } = require('../utils');
+const { truncate } = require('../../utils');
 
 function git(args, root) {
   try {

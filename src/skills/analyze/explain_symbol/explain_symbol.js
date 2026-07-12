@@ -1,7 +1,7 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const { truncate } = require('../utils');
+const { truncate } = require('../../utils');
 
 // 用 grep 查找符号的定义处（含上下文行），帮助理解其用途与签名
 function grepDef(symbol, root, path) {

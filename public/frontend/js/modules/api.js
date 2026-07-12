@@ -61,8 +61,8 @@ async function saveConversation() {
       const statsEl = msg.querySelector('.answer-footer .stats');
       if (statsEl && (statsEl.dataset.ttft || statsEl.dataset.total)) {
         stats = {
-          ttft: statsEl.dataset.ttft || null,
-          total: statsEl.dataset.total || null,
+          ttft: statsEl.dataset.ttft ? Number(statsEl.dataset.ttft) : null,
+          total: statsEl.dataset.total ? Number(statsEl.dataset.total) : null,
         };
       }
       messages.push({

@@ -434,6 +434,9 @@ function finalizeAnswer(content) {
 
   // 执行结束：清理可能残留的「执行中…」占位
   clearToolLoading();
+
+  // 更新状态栏
+  if (typeof renderSessionState === 'function') renderSessionState();
   
   // 保存对话到数据库
   saveConversation();
