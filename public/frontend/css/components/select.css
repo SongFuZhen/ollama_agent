@@ -1,0 +1,197 @@
+/* select.css - 下拉选择器组件 */
+
+.select {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  padding-right: 32px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
+}
+
+.select-trigger:hover {
+  border-color: var(--text-muted);
+}
+
+.select-trigger:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.select-trigger::after {
+  content: '';
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-muted);
+  pointer-events: none;
+  transition: transform 0.15s;
+}
+
+.select.open .select-trigger::after {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* 下拉面板 */
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  max-height: 240px;
+  overflow-y: auto;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: all 0.15s;
+}
+
+.select.open .select-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* 下拉选项 */
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.select-option:hover {
+  background: var(--surface-2);
+}
+
+.select-option.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.select-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 选项分组 */
+.select-group-label {
+  padding: var(--space-2) var(--space-3);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 分割线 */
+.select-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
+}
+
+/* 空状态 */
+.select-empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 搜索框 */
+.select-search {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.select-search .input {
+  height: 32px;
+}
+
+/* 尺寸 */
+.select-sm .select-trigger {
+  height: 28px;
+  padding: 0 var(--space-2);
+  padding-right: 28px;
+  font-size: 12px;
+}
+
+.select-lg .select-trigger {
+  height: 44px;
+  padding: 0 var(--space-4);
+  padding-right: 36px;
+  font-size: 15px;
+}
+
+/* 多选 */
+.select-multi .select-trigger {
+  height: auto;
+  min-height: 36px;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+}
+
+.select-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.select-tag-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.select-tag-remove:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
