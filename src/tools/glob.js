@@ -31,12 +31,15 @@ async function matchGlob(dir, pattern, root, results = []) {
 // 简单的 glob 模式匹配
 // 支持: *, **, ?
 function matchPattern(filePath, pattern) {
-  // 将 glob 转换为正则
+  // 将 glob 转换为正则：分隔符用 path.sep 兼容 Windows（\ 需转义为 \\）
+  const sep = path.sep;
+  const neg = '[^' + (sep === '\\' ? '\\\\' : '/') + ']*';
+  const one = '[^' + (sep === '\\' ? '\\\\' : '/') + ']';
   const regexStr = pattern
     .replace(/\./g, '\\.')
     .replace(/\*\*/g, '{{GLOBSTAR}}')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '[^/]')
+    .replace(/\*/g, neg)
+    .replace(/\?/g, one)
     .replace(/\{\{GLOBSTAR\}\}/g, '.*');
   
   const regex = new RegExp(`^${regexStr}$`);

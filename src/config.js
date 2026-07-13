@@ -19,6 +19,9 @@ const NUM_CTX = Number(process.env.NUM_CTX) || 16384; // context window，agent 
 const CTX_RESERVE = 2048;     // 为模型输出预留的 token 数
 const TOOL_RESULT_MAX = 6000; // 工具结果回传模型的最大字符数
 const TRUNCATE_MIN = 200;     // 单条消息可保留的最小字符数（小于则整条丢弃）
+const VERIFY_EVERY = 2;       // 执行模式下每 N 步自动跑一次验证器（run_tests/run_lint）
+const COMPACT_RECENT_K = 6;    // 压缩时保留最近 K 条消息不摘要
+const COMPACT_THRESHOLD = 0.7; // prompt token 越过 NUM_CTX*该比例时触发压缩
 
 // 支持原生 Ollama tools API 的模型（按名称前缀匹配）
 // 注意：大多数社区 tool-calling 模型只是文本输出 JSON，不适合走原生 tools
@@ -38,5 +41,8 @@ module.exports = {
   CTX_RESERVE,
   TOOL_RESULT_MAX,
   TRUNCATE_MIN,
+  VERIFY_EVERY,
+  COMPACT_RECENT_K,
+  COMPACT_THRESHOLD,
   PORT: process.env.PORT || 3000,
 };

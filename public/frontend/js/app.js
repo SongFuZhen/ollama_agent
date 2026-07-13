@@ -908,6 +908,7 @@ async function send() {
   }
 
   const body = { message: text, images: imgs.map((i) => i.b64), history };
+  if (state.conversationId) body.conversationId = state.conversationId;
   if (state.activeModel) body.model = state.activeModel;    // 下拉选中的模型
   const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
 
@@ -989,7 +990,7 @@ function setBusy(flag) {
   } else {
     // 空闲时：恢复发送按钮（纸飞机图标）
     sendBtn.className = 'send-btn-round simpui-btn primary sm';
-    sendBtn.innerHTML = '<i data-lucide="send" class="send-icon"></i>';
+    sendBtn.innerHTML = '<i data-lucide="send" class="send-icon"></i><span>发送</span>';
     sendBtn.title = '发送';
     sendBtn.onclick = send;
     currentAbortController = null;

@@ -109,7 +109,7 @@
   - `agent.js` - Agent 主循环（工具调用、推理）
   - `ollama.js` - Ollama 调用（含超时）
 - `storage/` - 持久化
-  - `db.js` - SQLite 对话存储
+  - `db.js` - SQLite 对话存储（sql.js/WASM，零原生编译依赖）
   - `rootstore.js` - 项目根目录持久化 + 校验
 - `device/` - 设备信息
   - `device.js` - 设备详情 / ID

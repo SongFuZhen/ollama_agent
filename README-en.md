@@ -90,7 +90,7 @@ ollama_agent/
 │   │   └── count_loc.js         Line count
 │   ├── ollama.js                Ollama client
 │   ├── config.js                Scenario & model config
-│   ├── db.js                    SQLite persistence
+│   ├── db.js                    SQLite persistence (sql.js/WASM, zero native build)
 │   ├── rootstore.js             Project directory management
 │   └── device.js                Device info
 │

@@ -4,7 +4,14 @@ const { chat, chatStream } = require('./ollama');
 const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
 const { buildOllamaTools } = require('../tools/schema');
-const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS } = require('../config');
+const { buildRecallPrompt } = require('../memory/recall');
+const { addMemory } = require('../storage/db');
+const { compactMessages } = require('./compact');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY } = require('../config');
+
+// 规划/执行模式下的工具分类（Plan Mode 仅允许只读工具）
+const READONLY = new Set(['read_file', 'list_dir', 'grep', 'glob', 'tree', 'read_lines', 'search_files', 'count_loc']);
+const WRITE = new Set(['write_file', 'edit_file', 'bash']);
 
 // 粗略 token 估算：中文约 1.5 字符/token，英文约 4 字符/token，取偏保守 2.5
 // 多模态消息（content 为字符串 + images 数组）按文本长度估算，图片不计入
@@ -16,10 +23,12 @@ function estimateTokens(msg) {
 
 // 截断消息列表，保证动态预算（非 system 消息）总 token 不超过 NUM_CTX - reserve
 // system 消息固定保留且不计入动态预算，避免被后续消息挤掉首条 user 问题
-function truncateMessages(messages, reserve = CTX_RESERVE) {
+// knownPromptTokens：若已拿到 Ollama 真实 prompt_eval_count，直接用其值做预算（不再逐条粗估累加）
+function truncateMessages(messages, reserve = CTX_RESERVE, knownPromptTokens = null) {
   const limit = NUM_CTX - reserve;
   const kept = [];
   let total = 0;
+  if (knownPromptTokens != null) total = knownPromptTokens; // 真实数优先
   for (const m of messages) {
     if (m.role === 'system') {
       kept.push(m); // system 永远保留，不计入动态预算
@@ -41,9 +50,11 @@ function truncateMessages(messages, reserve = CTX_RESERVE) {
       break; // 非 user 的旧消息超限，直接丢弃后续（从旧到新遍历）
     }
   }
-  // 兜底：system 之外的消息全被挤掉（如 system 接近上限）时，至少保留一条截断后的 user
+  // 兜底：仅当「未拿到真实 token 数」时，若 system 把非 system 消息全挤掉，
+  // 至少保留一条截断后的 user，避免模型完全无输入。
+  // 若 knownPromptTokens 已知且确已超限，则不再强塞（上下文确实超出预算）。
   const hasNonSystem = kept.some((m) => m.role !== 'system');
-  if (!hasNonSystem && messages.length > 1) {
+  if (knownPromptTokens == null && !hasNonSystem && messages.length > 1) {
     const sys = messages.find((m) => m.role === 'system');
     const user = [...messages].reverse().find((m) => m.role === 'user');
     if (sys && user) {
@@ -68,12 +79,21 @@ function stripThink(text) {
 }
 
 // 移除 JSON 中的 JS 风格注释（小模型经常在 JSON 里加注释导致解析失败）
+// 关键点：先抽离字符串字面量再做注释剥离，避免误伤字符串内的 //（如 https://...）
 function stripJSONComments(json) {
-  return json
+  const strings = [];
+  // 抽离 '...'、"..." 和反引号 `...`，用占位符替换，剥离后再还原
+  const withPlaceholders = json.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, (m) => {
+    strings.push(m);
+    return `\u0000${strings.length - 1}\u0000`;
+  });
+  const stripped = withPlaceholders
     .replace(/\/\*[\s\S]*?\*\//g, '')  // 移除块注释 /* ... */
     .replace(/\/\/[^\n]*/g, '')         // 移除行注释 // ...
     .replace(/,\s*}/g, '}')             // 移除尾部逗号 { "a": 1, }
     .replace(/,\s*]/g, ']');            // 移除尾部逗号 [1, 2, ]
+  // 还原字符串字面量
+  return stripped.replace(/\u0000(\d+)\u0000/g, (_, i) => strings[Number(i)]);
 }
 
 // 宽松 JSON 解析：容忍模型输出里的代码块、多余文本、注释
@@ -144,10 +164,12 @@ function nativeSystemPrompt() {
 }
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
-// opts: { model, confirm, images }
-async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history } = {}, emitInput) {
+// opts: { model, confirm, images, mode: 'execute'|'plan', conversationId }
+async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId } = {}, emitInput) {
   const emit = emitInput || (() => {});
-  const specs = specsFor();
+  const isPlan = mode === 'plan';
+  // Plan Mode：仅暴露只读工具，避免任何写操作
+  const specs = isPlan ? specsFor().filter((s) => READONLY.has(s.name)) : specsFor();
   const hasTools = specs.length > 0;
   const useNativeTools = hasTools && supportsNativeTools(model);
   const ollamaTools = useNativeTools ? buildOllamaTools(specs) : null;
@@ -174,15 +196,45 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     ...validHistory,
     userMessage,
   ];
-  messages = truncateMessages(messages);
+  messages = truncateMessages(messages, CTX_RESERVE, lastPromptTokens || null);
+
+  // Plan Mode：追加约束"只调研、不改动"，并限制为只读工具（specs 已过滤）
+  if (isPlan) {
+    const sys = messages.find((m) => m.role === 'system');
+    if (sys) {
+      sys.content += '\n\n[规划模式] 你当前处于只读规划阶段：只能使用只读调研工具（read_file/list_dir/grep/glob/tree/read_lines/search_files/count_loc），严禁调用任何写操作（write_file/edit_file/bash）。请充分调研后，输出一份清晰、可确认的执行计划（分步骤、说明每步意图与预期结果），不要修改任何文件。';
+    }
+  }
+
+  // 三级记忆注入（L2/L3）：首轮根据用户输入语义召回历史片段，拼进 system。
+  // 异步进行，不阻塞首 token；若 Ollama 不可用则静默跳过。
+  if (opts.conversationId && /[\u4e00-\u9fa5a-zA-Z]{4,}/.test(userInput)) {
+    buildRecallPrompt(userInput, { ollamaHost })
+      .then((recallText) => {
+        if (recallText) {
+          const sys = messages.find((m) => m.role === 'system');
+          if (sys) sys.content += '\n\n' + recallText;
+        }
+      })
+      .catch(() => {});
+  }
 
   let lastAnswer = '';
   let lastCallKey = '';
   let repeatCount = 0;
+  let lastPromptTokens = 0; // 真实 prompt token（Ollama prompt_eval_count），用于压缩/预算判断
   for (let step = 1; step <= MAX_STEPS; step++) {
     if (Date.now() > deadline) {
       emit({ type: 'error', step, msg: `已达整体超时（${WALL_MS / 1000}s），强制收尾` });
       break;
+    }
+    // 上下文压缩：真实 prompt token 越过阈值时，把中间历史压成摘要，
+    // 保住早期上下文（而非 truncateMessages 直接硬丢）。
+    if (lastPromptTokens > NUM_CTX * COMPACT_THRESHOLD) {
+      try {
+        messages = await compactMessages(messages, { model, ollamaHost });
+        emit({ type: 'compact', step, msg: '上下文已压缩（中间历史摘要化）' });
+      } catch (e) { /* 压缩失败不阻断 */ }
     }
     let raw = '';
     let inThinkBlock = false;
@@ -222,6 +274,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
             }
           },
           onStats: (stats) => {
+            if (stats.promptTokens) lastPromptTokens = stats.promptTokens; // 真实 token 预算（替代粗估）
             emit({ type: 'stats', step, ttft: stats.ttft, total: stats.total, promptTokens: stats.promptTokens, completionTokens: stats.completionTokens });
           }
         };
@@ -289,7 +342,8 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
         }
         if (!call || !call.action) {
           lastAnswer = text.trim();
-          emit({ type: 'answer', content: lastAnswer });
+          // Plan Mode：最终回答作为可确认的执行计划返回，不进入 execute
+          emit({ type: isPlan ? 'plan' : 'answer', content: lastAnswer });
           return lastAnswer;
         }
         emit({ type: 'thought', step, content: text.trim() });
@@ -352,9 +406,11 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       continue;
     }
 
-    // 写操作确认
+    // 写操作确认（confirm 解析为 {ok, answer}：写工具只看 ok；ask_user 用 answer）
+    let confirmResp = null;
     if (tool.needConfirm) {
-      const ok = await confirm({ action, params });
+      confirmResp = await confirm({ action, params });
+      const ok = confirmResp && confirmResp.ok;
       if (!ok) {
         emit({ type: 'confirm_result', step, ok: false });
         addStepMessages(messages, stepUsedNative, text, nativeToolCalls, '用户拒绝了该写操作，请改用其他方法或说明。');
@@ -365,26 +421,72 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
 
     emit({ type: 'tool', step, action, params, root: toolCtx.root });
     let result;
-    try {
-      result = await tool.run(params, toolCtx);
-    } catch (e) {
-      result = '工具执行错误: ' + e.message;
+    if (action === 'ask_user' && confirmResp && confirmResp.answer != null) {
+      // ask_user：工具结果即用户回答（而非原样回显问题）
+      result = `用户回答：「${String(confirmResp.answer)}」`;
+    } else {
+      try {
+        result = await tool.run(params, toolCtx);
+      } catch (e) {
+        result = '工具执行错误: ' + e.message;
+      }
     }
     const resultStr = String(result);
     emit({ type: 'tool_result', step, action, result: resultStr.slice(0, TOOL_RESULT_MAX) });
 
     addStepMessages(messages, stepUsedNative, text, nativeToolCalls,
       useNativeTools ? resultStr.slice(0, TOOL_RESULT_MAX) : `工具 ${action} 返回:\n${resultStr.slice(0, TOOL_RESULT_MAX)}`);
+
+    // Verifier（验证器闭环）：执行模式下，每 VERIFY_EVERY 步且刚做了写操作，
+    // 自动真跑 run_tests / run_lint，把结果作为反馈喂回主循环，模型据此再修。
+    // 失败判定：输出含"退出码"（工具约定失败报"退出码: N"）。
+    if (!isPlan && WRITE.has(action) && step % VERIFY_EVERY === 0) {
+      try {
+        emit({ type: 'verify', step, status: 'running' });
+        const tOut = String(await runTool('run_tests', {}, toolCtx) || '');
+        const lOut = String(await runTool('run_lint', {}, toolCtx) || '');
+        const failed = /退出码/.test(tOut) || /退出码/.test(lOut);
+        const merged = `【验证结果 ${failed ? '失败' : '通过'}】\n--- run_tests ---\n${tOut.slice(0, TOOL_RESULT_MAX / 2)}\n--- run_lint ---\n${lOut.slice(0, TOOL_RESULT_MAX / 2)}`;
+        emit({ type: 'verify', step, status: failed ? 'fail' : 'pass', output: merged.slice(0, TOOL_RESULT_MAX) });
+        addStepMessages(messages, stepUsedNative, text, nativeToolCalls,
+          useNativeTools ? merged.slice(0, TOOL_RESULT_MAX) : `工具 验证 返回:\n${merged.slice(0, TOOL_RESULT_MAX)}`);
+      } catch (e) {
+        emit({ type: 'verify', step, status: 'error', output: e.message });
+      }
+    }
   }
 
   // 循环结束（达最大步数或整体超时）：若过程中模型曾给出过纯文本回答则回显，否则提示收尾
-  if (lastAnswer) {
-    emit({ type: 'answer', content: lastAnswer });
-    return lastAnswer;
+  let finalAnswer = lastAnswer;
+  if (!finalAnswer) {
+    const reason = Date.now() > deadline ? '超时' : '最大步数 ' + MAX_STEPS;
+    finalAnswer = `（已达${reason}，强制收尾）请参考上述工具调用过程，或换用更擅长工具调用的模型。`;
   }
-  const reason = Date.now() > deadline ? '超时' : '最大步数 ' + MAX_STEPS;
-  emit({ type: 'answer', content: `（已达${reason}，强制收尾）请参考上述工具调用过程，或换用更擅长工具调用的模型。` });
-  return lastAnswer || '（强制收尾）';
+  emit({ type: 'answer', content: finalAnswer });
+
+  // 三级记忆写入（异步，不阻塞返回）：把本轮 user 提问 + 最终回答存为记忆片段，
+  // 供后续会话语义召回。仅在有 conversationId 时生效；embedding 失败不影响落库（降级关键词）。
+  if (opts.conversationId) {
+    recordMemory(opts.conversationId, userInput, finalAnswer, ollamaHost);
+  }
+
+  return finalAnswer;
 }
 
-module.exports = { runAgent, systemPrompt };
+// 异步把一轮对话写入 memory_chunks（用户提问 + 助手回答各一段；embedding 可选）
+function recordMemory(convId, userInput, answer, ollamaHost) {
+  const { embed } = require('./ollama');
+  const chatOpts = ollamaHost ? { ollamaHost } : {};
+  // 用户提问片段
+  const uText = (userInput || '').trim();
+  if (uText.length > 0) {
+    embed(uText, chatOpts).then((e) => addMemory(convId, 'user', uText, e)).catch(() => addMemory(convId, 'user', uText, null));
+  }
+  // 助手回答片段（去 think 标记、截断过长）
+  const aText = (answer || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim().slice(0, 2000);
+  if (aText.length > 0) {
+    embed(aText, chatOpts).then((e) => addMemory(convId, 'assistant', aText, e)).catch(() => addMemory(convId, 'assistant', aText, null));
+  }
+}
+
+module.exports = { runAgent, systemPrompt, READONLY, WRITE, truncateMessages };
