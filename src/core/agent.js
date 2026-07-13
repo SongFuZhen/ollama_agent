@@ -4,43 +4,55 @@ const { chat, chatStream } = require('./ollama');
 const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
 const { buildOllamaTools } = require('../tools/schema');
-const { MAX_STEPS, JSON_RETRY, NUM_CTX, NATIVE_TOOLS_MODELS } = require('../config');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS } = require('../config');
 
 // 粗略 token 估算：中文约 1.5 字符/token，英文约 4 字符/token，取偏保守 2.5
-function estimateTokens(text) {
+// 多模态消息（content 为字符串 + images 数组）按文本长度估算，图片不计入
+function estimateTokens(msg) {
+  const text = typeof msg === 'string' ? msg : (msg && msg.content) || '';
   if (!text) return 0;
   return Math.ceil(String(text).length / 2.5);
 }
 
-// 截断消息列表，保证总 token 数不超过 NUM_CTX - reserve（留给模型输出）
-function truncateMessages(messages, reserve = 2048) {
+// 截断消息列表，保证动态预算（非 system 消息）总 token 不超过 NUM_CTX - reserve
+// system 消息固定保留且不计入动态预算，避免被后续消息挤掉首条 user 问题
+function truncateMessages(messages, reserve = CTX_RESERVE) {
   const limit = NUM_CTX - reserve;
-  let total = 0;
   const kept = [];
-  // 从旧到新累加，超限时丢掉最旧的非 system 消息
+  let total = 0;
   for (const m of messages) {
-    const t = estimateTokens(m.content);
-    if (total + t <= limit || m.role === 'system') {
+    if (m.role === 'system') {
+      kept.push(m); // system 永远保留，不计入动态预算
+      continue;
+    }
+    const t = estimateTokens(m);
+    if (total + t <= limit) {
       kept.push(m);
       total += t;
     } else if (m.role === 'user' && kept.length > 0) {
       // 当前消息太大：截断 content 并加提示
       const maxChars = Math.floor((limit - total) * 2.5);
-      if (maxChars > 200) {
+      if (maxChars > TRUNCATE_MIN) {
         m.content = m.content.slice(0, maxChars) + '\n\n[输入过长，已截断...]';
         kept.push(m);
       }
       break;
+    } else {
+      break; // 非 user 的旧消息超限，直接丢弃后续（从旧到新遍历）
     }
   }
-  // 如果第一条 user 消息都没放进去（system 太大或输入超大），至少保留 system + 截断后的 user
-  if (kept.length <= 1 && messages.length > 1) {
-    const sys = messages[0];
-    const user = messages[messages.length - 1];
-    const sysTokens = estimateTokens(sys.content);
-    const maxUserChars = Math.floor((limit - sysTokens) * 2.5);
-    if (maxUserChars > 100) {
-      return [sys, { role: 'user', content: user.content.slice(0, maxUserChars) + '\n\n[输入过长，已截断...]' }];
+  // 兜底：system 之外的消息全被挤掉（如 system 接近上限）时，至少保留一条截断后的 user
+  const hasNonSystem = kept.some((m) => m.role !== 'system');
+  if (!hasNonSystem && messages.length > 1) {
+    const sys = messages.find((m) => m.role === 'system');
+    const user = [...messages].reverse().find((m) => m.role === 'user');
+    if (sys && user) {
+      const maxUserChars = Math.floor(limit * 2.5);
+      const truncated = [
+        sys,
+        { role: 'user', content: user.content.slice(0, maxUserChars) + '\n\n[输入过长，已截断...]' },
+      ];
+      return truncated;
     }
   }
   return kept;
@@ -48,10 +60,10 @@ function truncateMessages(messages, reserve = 2048) {
 
 // 剥离 deepseek-r1 的 <think:6124c78e>...</think:6124c78e> 推理块，返回 { think, rest }
 function stripThink(text) {
-  const m = text.match(/[\s\S]*?(<think>[\s\S]*?<\/think>)[\s\S]*/i);
+  const m = text.match(/<think>([\s\S]*?)<\/think>/i);
   if (!m) return { think: '', rest: text };
-  const think = m[1].replace(/<\/?think>/gi, '').trim();
-  const rest = text.replace(m[1], '').trim();
+  const think = m[1].trim();
+  const rest = text.replace(m[0], '').trim();
   return { think, rest };
 }
 
@@ -67,22 +79,29 @@ function stripJSONComments(json) {
 // 宽松 JSON 解析：容忍模型输出里的代码块、多余文本、注释
 // 兼容两种格式：{action,params} 和 {name,parameters}（MFDoom/社区模型）
 function parseToolCall(text) {
-  let m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  let candidate = m ? m[1] : text;
-  const s = candidate.indexOf('{');
-  const e = candidate.lastIndexOf('}');
-  if (s === -1 || e === -1) return null;
-  let json = candidate.slice(s, e + 1);
-  json = stripJSONComments(json);
-  try {
-    const obj = JSON.parse(json);
-    if (obj.action) return obj;
-    // MFDoom/社区模型格式：{name, parameters} → {action, params}
-    if (obj.name) return { action: obj.name, params: obj.parameters || obj.arguments || obj.args || {} };
-    return null;
-  } catch (err) {
-    return null;
+  // 收集所有 ``` 代码块，优先匹配含 action/name 的块，避免模型示例块干扰
+  const blocks = [];
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/g;
+  let fm;
+  while ((fm = fenceRe.exec(text)) !== null) blocks.push(fm[1]);
+  if (blocks.length === 0) blocks.push(text);
+
+  for (const candidate of blocks) {
+    const s = candidate.indexOf('{');
+    const e = candidate.lastIndexOf('}');
+    if (s === -1 || e === -1) continue;
+    let json = candidate.slice(s, e + 1);
+    json = stripJSONComments(json);
+    try {
+      const obj = JSON.parse(json);
+      if (obj.action) return obj;
+      // MFDoom/社区模型格式：{name, parameters} → {action, params}
+      if (obj.name) return { action: obj.name, params: obj.parameters || obj.arguments || obj.args || {} };
+    } catch (err) {
+      // 继续尝试下一个候选块
+    }
   }
+  return null;
 }
 
 function systemPrompt(specs) {
@@ -171,6 +190,9 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     let answerBuffer = '';
     let thinkEmitted = false;
     let nativeToolCalls = null;
+    // 本步实际使用的消息格式：仅当走原生 tool_calls 时为 true，
+    // 回退到文本解析时降级为 prompt-based，保证同一步内 assistant/tool 消息格式一致
+    let stepUsedNative = useNativeTools;
 
     for (let r = 0; r <= JSON_RETRY; r++) {
       try {
@@ -273,8 +295,9 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
         emit({ type: 'thought', step, content: text.trim() });
         action = call.action;
         params = call.params;
-        // 标记本次非原生 tool_calls，后续消息用 prompt-based 格式
+        // 回退到文本解析：本步降级为 prompt-based 格式，避免混用 role:'tool' 与无 tool_calls 的 assistant
         nativeToolCalls = null;
+        stepUsedNative = false;
       }
     } else {
       let call = parseToolCall(text);
@@ -302,7 +325,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
         return msgField.trim();
       }
       emit({ type: 'error', step, msg: '工具不存在，已拒绝: ' + action });
-      addStepMessages(messages, useNativeTools, text, nativeToolCalls, `工具 ${action} 不可用，请改用可用工具或回答。`);
+      addStepMessages(messages, stepUsedNative, text, nativeToolCalls, `工具 ${action} 不可用，请改用可用工具或回答。`);
       continue;
     }
 
@@ -325,7 +348,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       return final;
     }
     if (repeatCount === 2) {
-      addStepMessages(messages, useNativeTools, text, nativeToolCalls, `你已连续多次调用 ${action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`);
+      addStepMessages(messages, stepUsedNative, text, nativeToolCalls, `你已连续多次调用 ${action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`);
       continue;
     }
 
@@ -334,7 +357,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       const ok = await confirm({ action, params });
       if (!ok) {
         emit({ type: 'confirm_result', step, ok: false });
-        addStepMessages(messages, useNativeTools, text, nativeToolCalls, '用户拒绝了该写操作，请改用其他方法或说明。');
+        addStepMessages(messages, stepUsedNative, text, nativeToolCalls, '用户拒绝了该写操作，请改用其他方法或说明。');
         continue;
       }
       emit({ type: 'confirm_result', step, ok: true });
@@ -348,11 +371,10 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
       result = '工具执行错误: ' + e.message;
     }
     const resultStr = String(result);
-    const RESULT_MAX = 6000;
-    emit({ type: 'tool_result', step, action, result: resultStr.slice(0, RESULT_MAX) });
+    emit({ type: 'tool_result', step, action, result: resultStr.slice(0, TOOL_RESULT_MAX) });
 
-    addStepMessages(messages, useNativeTools, text, nativeToolCalls,
-      useNativeTools ? resultStr.slice(0, RESULT_MAX) : `工具 ${action} 返回:\n${resultStr.slice(0, RESULT_MAX)}`);
+    addStepMessages(messages, stepUsedNative, text, nativeToolCalls,
+      useNativeTools ? resultStr.slice(0, TOOL_RESULT_MAX) : `工具 ${action} 返回:\n${resultStr.slice(0, TOOL_RESULT_MAX)}`);
   }
 
   // 循环结束（达最大步数或整体超时）：若过程中模型曾给出过纯文本回答则回显，否则提示收尾
