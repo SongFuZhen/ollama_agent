@@ -6,7 +6,7 @@ const { execFile, execSync, spawnSync } = require('child_process');
 const fsp = require('fs/promises');
 const path = require('path');
 const { runAgent } = require('./core/agent');
-const { listModels } = require('./core/ollama');
+const { listModels, hostParts } = require('./core/ollama');
 const { safeResolve, allSpecs } = require('./tools/index');
 const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./storage/rootstore');
 const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST } = require('./config');
@@ -34,6 +34,8 @@ const MIME = {
 
 // 待确认的写操作请求：key=reqId -> resolve
 const pendingConfirm = new Map();
+// ask_user 问答请求：key=reqId -> resolve(answer)
+const pendingAsk = new Map();
 let confirmSeq = 0;
 
 function sendJSON(res, code, obj) {
@@ -166,9 +168,18 @@ function handleChat(req, res) {
   send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs() });
 
   readBody(req).then(async (body) => {
-    const { message, images, model: bodyModel, ollamaHost, projectRoot, history } = body;
+    const { message, images, model: bodyModel, ollamaHost, projectRoot, history, conversationId } = body;
     const model = bodyModel || DEFAULT_MODEL; // 前端可覆盖模型名
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
+
+    // 规划模式入口：消息以 "/plan " 开头时，剥离前缀并以 mode:'plan' 调用，
+    // 只调研不改动，最终返回可确认的执行计划（前端据此二次确认再 execute）。
+    let mode = 'execute';
+    let planMessage = message;
+    if (typeof message === 'string' && message.trim().startsWith('/plan')) {
+      mode = 'plan';
+      planMessage = message.trim().slice(5).replace(/^\s+/, '') || message;
+    }
 
     // 解析生效的项目根：前端下发的绝对路径优先（校验有效才用），否则用持久化/默认沙箱
     let effectiveRoot = PROJECT_ROOT;
@@ -180,15 +191,28 @@ function handleChat(req, res) {
         if (aborted) return resolve(false);
         const id = ++confirmSeq;
         currentConfirmId = id;
-        pendingConfirm.set(id, (ok) => {
+        pendingConfirm.set(id, (payload) => {
           currentConfirmId = null;
           pendingConfirm.delete(id);
-          resolve(ok);
+          // payload 可为布尔（写操作确认）或 {ok, answer}（ask_user 问答）
+          resolve(payload);
         });
         send({ type: 'confirm_request', id, ...reqInfo });
       });
 
-    runAgent(message, { model, confirm, images: images || [], ollamaHost, projectRoot: effectiveRoot, history }, send)
+    // ask_user 问答通道：emit 一个问题事件，等前端以 {id, answer} 回应，返回 answer 文本
+    const askUser = (question) =>
+      new Promise((resolve) => {
+        if (aborted) return resolve('（已中断）');
+        const id = ++confirmSeq;
+        pendingAsk.set(id, (answer) => {
+          pendingAsk.delete(id);
+          resolve(typeof answer === 'string' ? answer : '');
+        });
+        send({ type: 'ask_user_request', id, question });
+      });
+
+    runAgent(planMessage, { model, confirm, askUser, images: images || [], ollamaHost, projectRoot: effectiveRoot, history, conversationId, mode }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
@@ -198,10 +222,20 @@ function handleChat(req, res) {
 
 function handleConfirm(req, res) {
   readBody(req).then((body) => {
-    const { id, ok } = body;
+    const { id, ok, answer } = body;
     const fn = pendingConfirm.get(Number(id));
-    if (fn) { pendingConfirm.delete(Number(id)); fn(Boolean(ok)); sendJSON(res, 200, { ok: true }); }
+    if (fn) { pendingConfirm.delete(Number(id)); fn({ ok: Boolean(ok), answer: answer != null ? String(answer) : '' }); sendJSON(res, 200, { ok: true }); }
     else sendJSON(res, 404, { ok: false, msg: '确认请求不存在或已过期' });
+  }).catch((e) => sendJSON(res, 400, { ok: false, msg: e.message }));
+}
+
+// ask_user 回答：前端把用户文本回传，resolve 对应提问
+function handleAskUser(req, res) {
+  readBody(req).then((body) => {
+    const { id, answer } = body;
+    const fn = pendingAsk.get(Number(id));
+    if (fn) { pendingAsk.delete(Number(id)); fn(answer != null ? String(answer) : ''); sendJSON(res, 200, { ok: true }); }
+    else sendJSON(res, 404, { ok: false, msg: '提问请求不存在或已过期' });
   }).catch((e) => sendJSON(res, 400, { ok: false, msg: e.message }));
 }
 
@@ -233,17 +267,50 @@ function handleConfig(res) {
   sendJSON(res, 200, { ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT, tools: allSpecs() });
 }
 
+// 显式语义召回：/api/recall?query=...&k=5
+// 返回命中的历史记忆片段（含 embedding 时语义排序，否则关键词降级）。
+async function handleRecall(req, res) {
+  const u = new URL(req.url, 'http://x');
+  const query = u.searchParams.get('query') || '';
+  const k = Math.max(1, Math.min(20, Number(u.searchParams.get('k')) || 5));
+  const ollamaHost = u.searchParams.get('ollamaHost') || '';
+  try {
+    const { buildRecallPrompt, setEmbedAvailable } = require('./memory/recall');
+    const text = await buildRecallPrompt(query, ollamaHost ? { ollamaHost } : {});
+    // 同时返回结构化片段，便于前端展示
+    const db = require('./storage/db');
+    let chunks = [];
+    if (query) {
+      const { embed } = require('./core/ollama');
+      try {
+        const q = await embed(query, ollamaHost ? { ollamaHost } : {});
+        const all = db.getAllMemory();
+        chunks = require('./memory/recall').cosineTopK(all, Float32Array.from(q), k).map(c => ({ role: c.role, content: c.content }));
+      } catch (e) {
+        chunks = db.searchMemoryKeyword(query, k).map(c => ({ role: c.role, content: c.content }));
+      }
+    } else {
+      chunks = db.getAllMemory().slice(-k).map(c => ({ role: c.role, content: c.content }));
+    }
+    sendJSON(res, 200, { ok: true, query, count: chunks.length, prompt: text, chunks });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, error: e.message });
+  }
+}
+
 // 查询模型的 context window 大小（通过 Ollama /api/show）
 function handleModelContext(req, res) {
   const model = new URL(req.url, 'http://x').searchParams.get('model') || '';
   if (!model) return sendJSON(res, 400, { error: '缺少 model 参数' });
 
-  const { host, port } = (() => {
+  // 复用 ollama.js 的 host 解析（统一格式校验，错误不再静默降级到 localhost）
+  let host, port;
+  try {
     const oh = new URL(req.url, 'http://x').searchParams.get('ollamaHost') || OLLAMA_HOST;
-    const m = oh.match(/^https?:\/\/([^:]+):(\d+)$/);
-    if (!m) return { host: '127.0.0.1', port: 11434 };
-    return { host: m[1], port: parseInt(m[2], 10) };
-  })();
+    ({ host, port } = hostParts(oh));
+  } catch (e) {
+    return sendJSON(res, 400, { model, contextSize: 0, error: e.message });
+  }
 
   const body = JSON.stringify({ name: model });
   const r = http.request(
@@ -443,16 +510,17 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
   if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
+  if (req.method === 'GET' && url === '/api/recall') return handleRecall(req, res);
   if (req.method === 'GET' && url === '/api/model/context') return handleModelContext(req, res);
   if (req.method === 'GET' && url === '/api/root') return handleRootGet(res);
   if (req.method === 'POST' && url === '/api/root') return handleRootSave(req, res);
   if (req.method === 'POST' && url === '/api/chat') return handleChat(req, res);
   if (req.method === 'POST' && url === '/api/confirm') return handleConfirm(req, res);
+  if (req.method === 'POST' && url === '/api/ask-user') return handleAskUser(req, res);
   if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
   if (req.method === 'GET' && url === '/api/fs/dirs') return handleFsDirs(req, res);
   if (req.method === 'GET' && url === '/api/fs/read') return handleFsRead(req, res);
   if (req.method === 'GET' && url === '/api/fs/git-branch') return handleGitBranch(req, res);
-  if (req.method === 'GET' && url === '/api/fs/search-dir') return handleSearchDir(req, res);
   if (req.method === 'POST' && url === '/api/upload') return handleUpload(req, res);
   if (req.method === 'GET' && url === '/api/file') return handleFile(req, res);
   // 对话 API
@@ -485,17 +553,43 @@ function broadcastHotreload() {
     try { res.write('event: reload\ndata: 1\n\n'); } catch (e) { hotClients.delete(res); }
   }
 }
-// 监听 public/ 目录（仅文件内容变更，忽略子目录深层以减少开销）
+// 监听 public/ 目录变更并触发热重载。
+// 跨平台：recursive:true 仅 macOS/Windows 支持，Linux 上被忽略，
+// 因此 Linux 走「递归 fs.watch 每个子目录」兜底。
 let hotTimer = null;
+const hotWatchDirs = new Set();
+function onHotEvent(filename) {
+  if (filename && filename.includes('project-root.json')) return;
+  clearTimeout(hotTimer);
+  hotTimer = setTimeout(broadcastHotreload, 120); // 去抖
+}
+function watchOneDir(dir) {
+  if (hotWatchDirs.has(dir)) return;
+  hotWatchDirs.add(dir);
+  try {
+    fs.watch(dir, (eventType, filename) => onHotEvent(filename));
+  } catch (e) { /* 目录可能已删除或平台不支持，忽略 */ }
+}
 function startHotwatch() {
   const watchDir = path.resolve(__dirname, '..', 'public');
-  fs.watch(watchDir, { recursive: true }, (eventType, filename) => {
-    if (!filename) return;
-    // 跳过持久化数据文件与临时文件
-    if (filename.includes('project-root.json')) return;
-    clearTimeout(hotTimer);
-    hotTimer = setTimeout(broadcastHotreload, 120); // 去抖，避免编辑器多次写触发多次刷新
-  });
+  // 递归收集所有子目录（含根），跳过 node_modules 与隐藏目录（.git/.omo 等），避免监听过多/循环
+  const dirs = [watchDir];
+  (function collect(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch (e) { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const sub = path.join(dir, e.name);
+      dirs.push(sub);
+      collect(sub);
+    }
+  })(watchDir);
+  // 对每个目录（含根）单独 watch（不带 recursive），个别目录失败不中断整体
+  for (const dir of dirs) {
+    watchOneDir(dir);
+  }
 }
 
 // ---------- 设备 API ----------
@@ -558,9 +652,7 @@ async function handleSaveConversation(req, res) {
       if (title) db.updateConversationTitle(id, title);
       // 更新 project_root（如果提供了新值）
       if (projectRoot !== undefined) {
-        const { getDB } = db;
-        getDB().prepare('UPDATE conversations SET project_root = ?, updated_at = ? WHERE id = ?')
-          .run(projectRoot, Date.now(), id);
+        db.updateConversationRoot(id, projectRoot);
       }
     }
     
@@ -600,10 +692,16 @@ async function handleDeleteConversation(req, res) {
 db.initDB().then(() => {
   const deviceId = getDeviceId();
   const deviceInfo = getDevice();
-  
+
   // 记录设备信息
   db.upsertDevice(deviceId, deviceInfo);
-  
+
+  // 进程退出前同步落盘，避免防抖窗口内的数据丢失
+  const shutdown = () => { try { db.closeDB(); } catch (e) {} process.exit(0); };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  process.on('beforeExit', () => { try { db.closeDB(); } catch (e) {} });
+
   server.listen(PORT, () => {
     console.log('Ason Agent 已启动: http://localhost:' + PORT);
     console.log('设备 ID: ' + deviceId);

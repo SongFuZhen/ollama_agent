@@ -113,20 +113,24 @@ Agent 循环的消息结构：
 
 ### 2.3 持久化存储 (`src/storage/db.js`)
 
-SQLite（better-sqlite3），WAL 模式。三张核心表：
+使用 **sql.js**（SQLite 编译为 WASM，纯 JS 加载，零原生编译依赖）。
+相比 better-sqlite3 无需 node-gyp 编译，连同 `node_modules` 一起 U 盘拷贝即可跨机运行；数据为标准 SQLite 单文件 `data/conversations.db`，可用任意 SQLite 工具查看。
+对外 API（`initDB` / `createConversation` / `addMessage` / `getConversationStats` 等）与原 better-sqlite3 版保持一致。
+
+数据表：
 
 ```
 devices (id, hostname, username, platform, arch, mac, first_seen, last_seen)
-  → 设备注册和追踪
-
 conversations (id, device_id, title, project_root, created_at, updated_at)
-  → 对话元信息，关联设备
-
 messages (id, conversation_id, role, content, tools, thinks, images, stats, timestamp)
-  → 完整消息记录，JSON 字段存储工具调用/思考/性能
 ```
 
-**消息字段：**
+- 写操作防抖（debounce 200ms）合并落盘，避免高频保存阻塞主流程；
+- 落盘先 `db.export()` 导出为临时文件再 `rename`，原子写防止半截损坏；
+- 进程退出（SIGINT/SIGTERM/beforeExit）前 `closeDB()` 同步落盘，避免防抖窗口内丢数据；
+- 数据库文件缺失或解析失败时新建空库并建表，不崩溃。
+
+**消息字段（`tools/thinks/images/stats` 以 JSON 文本存储）：**
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `content` | TEXT | 消息正文 |

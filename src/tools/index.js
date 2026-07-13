@@ -12,6 +12,12 @@ const edit_file = require('./edit_file');
 const read_lines = require('./read_lines');
 const tree = require('./tree');
 const count_loc = require('./count_loc');
+const apply_diff = require('./apply_diff');
+const semantic_grep = require('./semantic_grep');
+const repo_map = require('./repo_map');
+const ask_user = require('./ask_user');
+const notes = require('./notes');
+const todos = require('./todos');
 
 // 测试 / Lint 工具
 const run_tests = require('./test/run_tests');
@@ -35,6 +41,12 @@ const TOOLS = {
   count_loc,
   run_tests,
   run_lint,
+  apply_diff,
+  semantic_grep,
+  repo_map,
+  ask_user,
+  notes,
+  todos,
 };
 
 // 合并工具与技能，供统一调度 / 展示

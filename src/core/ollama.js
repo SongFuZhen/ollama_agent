@@ -194,4 +194,42 @@ async function chatStream(model, messages, opts = {}) {
   });
 }
 
-module.exports = { chat, chatStream, listModels, hostParts, TIMEOUT_MS };
+// 本地 embedding：走 Ollama /api/embeddings（不引 npm 包、纯离线）
+// model 默认 nomic-embed-text（维度 768）；缺失时上层降级为关键词检索。
+function embed(text, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const { host, port } = hostParts(opts.ollamaHost);
+    const model = opts.model || process.env.EMBED_MODEL || 'nomic-embed-text';
+    const body = JSON.stringify({ model, prompt: text });
+    const req = http.request(
+      { host, port, path: '/api/embeddings', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          clearTimeout(timer);
+          if (!data) return reject(new Error('Ollama embeddings 返回空'));
+          try {
+            const json = JSON.parse(data);
+            if (json.error) return reject(new Error(json.error));
+            const emb = json.embedding;
+            if (!Array.isArray(emb)) return reject(new Error('Ollama embeddings 无 embedding 字段'));
+            resolve(emb);
+          } catch (e) { reject(new Error('Ollama embeddings 解析失败: ' + data.slice(0, 200))); }
+        });
+      }
+    );
+    const timer = setTimeout(() => {
+      req.destroy(new Error('Ollama embeddings 超时（>' + TIMEOUT_MS + 'ms）'));
+    }, TIMEOUT_MS);
+    req.on('error', (e) => {
+      clearTimeout(timer);
+      reject(new Error('无法连接 Ollama (' + (opts.ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+module.exports = { chat, chatStream, listModels, embed, hostParts, TIMEOUT_MS };

@@ -1,23 +1,17 @@
 'use strict';
 
-const { execSync } = require('child_process');
 const { truncate } = require('../../utils');
+const { grepFiles } = require('../../../tools/grep');
 
-// 用 grep 查找符号的所有引用位置
-function grepRefs(symbol, root, path) {
-  const target = path ? ` ${path}` : '';
-  try {
-    return execSync(`grep -rEn --include='*' "${symbol}"${target}`, {
-      cwd: root,
-      timeout: 20000,
-      maxBuffer: 2 * 1024 * 1024,
-      encoding: 'utf8',
-    }) || '(无引用)';
-  } catch (e) {
-    const out = e.stdout || '';
-    if (out) return out;
-    return '(未找到符号 ' + symbol + ' 的引用)';
-  }
+// 用纯 JS 递归 grep 查找符号的所有引用位置
+async function grepRefs(symbol, root, path) {
+  const searchRoot = path ? require('path').resolve(root, path) : root;
+  const hits = await grepFiles(searchRoot, symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), {
+    include: '*',
+    maxResults: 500,
+  });
+  if (hits.length === 0) return '(未找到符号 ' + symbol + ' 的引用)';
+  return hits.map(h => `${h.file}:${h.line}: ${h.text}`).join('\n');
 }
 
 module.exports = {
@@ -31,6 +25,6 @@ module.exports = {
 
   async run({ symbol, path }, ctx = {}) {
     if (!symbol || !symbol.trim()) return '错误：symbol 不能为空';
-    return truncate(grepRefs(symbol.trim(), ctx.root, path));
+    return truncate(await grepRefs(symbol.trim(), ctx.root, path));
   },
 };

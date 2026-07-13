@@ -38,13 +38,16 @@ ollama pull deepseek-r1:8b
 ollama pull llama3.1:8b
 ollama pull gemma3:4b
 
-# 2. 启动（无需 npm install）
-./start.sh
-# 或直接： node src/server.js
+# 2. 启动（无需 npm install，三端通用）
+npm start
+# 等价于： node src/server.js
+# Windows 也可双击 start.ps1 或 start.bat；macOS/Linux 可用 ./start.sh
 
 # 3. 浏览器打开
 http://localhost:3000
 ```
+
+> 三端统一入口：`npm start`（= `node src/server.js`）。无任何原生编译依赖，U 盘直拷到 Windows/macOS/Linux 上 `npm start` 即可运行。
 
 ## 配置
 
@@ -90,7 +93,7 @@ ollama_agent/
 │   │   └── count_loc.js          行数统计
 │   ├── ollama.js                 Ollama 对接
 │   ├── config.js                 场景与模型配置
-│   ├── db.js                     SQLite 持久化
+│   ├── db.js                     SQLite 持久化（sql.js/WASM，零原生编译依赖）
 │   ├── rootstore.js              项目目录管理
 │   └── device.js                 设备信息
 │
@@ -120,6 +123,12 @@ ollama_agent/
 |---|---|
 | [README-en.md](./README-en.md) | 项目概述与快速开始（英文） |
 | [docs/CLAUDE.md](./docs/CLAUDE.md) | 开发规范与编码标准 |
+| [docs/agent-design.md](./docs/agent-design.md) | Agent 引擎架构设计 |
 | [docs/产品设计书.md](./docs/产品设计书.md) | 详细产品设计文档 |
 | [docs/UI-SPEC.md](./docs/UI-SPEC.md) | UI 设计规范 |
 | [docs/1-UI-REVIEW.md](./docs/1-UI-REVIEW.md) | UI 审计报告 |
+| [docs/discussions/claudette-analysis-and-compare.md](./docs/discussions/claudette-analysis-and-compare.md) | 与 Claudette 项目的横向分析与对比 |
+
+> 文档分两类，避免混淆：
+> - **`docs/discussions/`** — 讨论 / 对比分析类（如与同类项目的横向分析），非正式设计决策。
+> - **`docs/superpowers/plans/`** — 实施计划类（ concret 的任务拆解与步骤），落地执行用。
