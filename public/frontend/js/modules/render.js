@@ -28,6 +28,7 @@ const TOOL_ICONS = {
   ask_user: 'MessageCircleQuestion',
   notes: 'StickyNote',
   todos: 'ListTodo',
+  delegate: 'Split',
   run_tests: 'Play',
   run_lint: 'ShieldCheck',
   // skills

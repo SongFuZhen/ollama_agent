@@ -135,6 +135,7 @@ function systemPrompt(specs) {
     '',
     '只有在需要查看文件、搜索代码或执行命令时，才输出JSON调用工具：{"action":"工具名","params":{}}',
     '普通对话、问候、解释、分析等不需要操作文件的场合，直接用markdown回答，不要调用工具。一次只调一个工具。',
+    '遇到需要多步、跨文件的大任务时，可调用 delegate 把其中「一步」委派给子代理独立完成（用 tools 参数限定其工具范围），再汇总子代理返回的精简结论；不要试图在主循环里一口气做完所有步骤。',
   ].join('\n');
 }
 
@@ -160,22 +161,31 @@ function nativeSystemPrompt() {
     '你是 Ason Agent，一个 AI 编程助手。',
     '需要读取或操作文件时，使用提供的工具函数。',
     '能直接回答时，用 markdown 格式输出答案。一次只调一个工具。',
+    '遇到需要多步、跨文件的大任务时，可调用 delegate 把其中一步委派给子代理独立完成，再汇总其结论。',
   ].join('\n');
 }
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, confirm, images, mode: 'execute'|'plan', conversationId }
-async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId } = {}, emitInput) {
+async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools } = {}, emitInput) {
   const emit = emitInput || (() => {});
   const isPlan = mode === 'plan';
-  // Plan Mode：仅暴露只读工具，避免任何写操作
-  const specs = isPlan ? specsFor().filter((s) => READONLY.has(s.name)) : specsFor();
+  // 工具集过滤优先级：allowedTools（委派时主代理显式限定）> plan 只读约束 > 全部
+  let specs = specsFor();
+  if (Array.isArray(allowedTools) && allowedTools.length) {
+    const allowSet = new Set(allowedTools);
+    specs = specs.filter((s) => allowSet.has(s.name));
+  }
+  if (isPlan) {
+    // Plan Mode：仅暴露只读工具（与 allowedTools 取交集），避免任何写操作
+    specs = specs.filter((s) => READONLY.has(s.name));
+  }
   const hasTools = specs.length > 0;
   const useNativeTools = hasTools && supportsNativeTools(model);
   const ollamaTools = useNativeTools ? buildOllamaTools(specs) : null;
   const chatOpts = ollamaHost ? { ollamaHost } : {};
   // 沙箱根：用户「选择目录」下发的目录，否则默认 PROJECT_ROOT
-  const toolCtx = { root: projectRoot || PROJECT_ROOT };
+  const toolCtx = { root: projectRoot || PROJECT_ROOT, model, ollamaHost, projectRoot: projectRoot || PROJECT_ROOT };
 
   // 整体墙钟超时：即使模型在 Agent 循环里反复调工具不收敛，也强制收尾，
   // 避免前端一直 setBusy(true) 卡死、输入框停用。默认 90s，可用 AGENT_TIMEOUT_MS 覆盖。

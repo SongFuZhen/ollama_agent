@@ -18,6 +18,7 @@ const repo_map = require('./repo_map');
 const ask_user = require('./ask_user');
 const notes = require('./notes');
 const todos = require('./todos');
+const delegate = require('./delegate');
 
 // 测试 / Lint 工具
 const run_tests = require('./test/run_tests');
@@ -47,6 +48,7 @@ const TOOLS = {
   ask_user,
   notes,
   todos,
+  delegate,
 };
 
 // 合并工具与技能，供统一调度 / 展示
