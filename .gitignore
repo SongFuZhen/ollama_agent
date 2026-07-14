@@ -5,7 +5,7 @@ workspace/
 data/
 
 # 依赖（本项目零依赖；若日后引入则保留）
-node_modules/
+#node_modules/
 
 # 系统/编辑器元数据
 .DS_Store
