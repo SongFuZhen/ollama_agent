@@ -586,3 +586,48 @@ function showConfirm(card) {
   c.appendChild(btns);
   appendToActive(c);
 }
+
+// ---------- 验证器结果（run_tests / run_lint 闭环） ----------
+function appendVerify(ev) {
+  let text;
+  if (ev.status === 'running') text = '⏳ 验证中：运行测试 / Lint…';
+  else if (ev.status === 'pass') text = '✓ 验证通过';
+  else if (ev.status === 'fail') text = '✗ 验证失败';
+  else text = '⚠ 验证异常：' + (ev.output || '');
+  if (ev.output && ev.status !== 'running') {
+    text += '\n' + String(ev.output).slice(0, 1200);
+  }
+  appendStep(ev.status === 'fail' ? 'error' : 'verify', text);
+}
+
+// ---------- ask_user 提问卡片（模型向用户澄清） ----------
+function showAskUser(card) {
+  const { id, question } = card;
+  const c = el('div', 'confirm-card ask-user-card');
+  const head = el('div', 'confirm-head');
+  head.appendChild(el('span', 'confirm-icon', '❓'));
+  head.appendChild(el('span', 'confirm-title', '模型提问'));
+  c.appendChild(head);
+  const q = el('div', 'ask-question', question || '');
+  c.appendChild(q);
+
+  const input = el('textarea', 'ask-input');
+  input.placeholder = '输入你的回答…';
+  c.appendChild(input);
+
+  const btns = el('div', 'btns');
+  const send = el('button', 'yes simpui-btn primary sm', '发送回答');
+  send.onclick = () => {
+    const answer = input.value;
+    fetch('/api/ask-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, answer }),
+    });
+    c.remove();
+  };
+  btns.appendChild(send);
+  c.appendChild(btns);
+  appendToActive(c);
+  input.focus();
+}

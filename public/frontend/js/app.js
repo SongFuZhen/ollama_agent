@@ -694,11 +694,13 @@ function handleEvent(ev) {
     case 'meta':
       state.tools = Array.isArray(ev.tools) ? ev.tools : [];
       if (ev.model) state.currentStreamModel = ev.model;
+      // 服务端已收到请求并准备好（位于真正调用模型之前）：标记为「已连接」
+      toggleThinking(true, '已连接 · 准备中');
       break;
       
     case 'thinking_start':
-      // 开始新的思考块，创建消息容器
-      toggleThinking(true, '模型思考中');
+      // 模型已开始流式返回（推理/思考阶段）：说明已真正交给模型
+      toggleThinking(true, '模型推理中' + phaseStep(ev.step));
       ensureMessageContainer();
       appendThinkBlock();
       break;
@@ -715,8 +717,8 @@ function handleEvent(ev) {
       break;
       
     case 'tool':
-      // 工具调用，追加到当前消息容器
-      toggleThinking(true, '执行工具');
+      // 工具调用，追加到当前消息容器；标签明确显示正在跑哪个工具
+      toggleThinking(true, '执行工具：' + ev.action + phaseStep(ev.step));
       ensureMessageContainer();
       appendToolCall(ev.action, ev.params, null, ev.root || effectiveRoot() || '');
       // 累计工具调用次数到状态栏
@@ -725,13 +727,14 @@ function handleEvent(ev) {
       break;
       
     case 'tool_result':
-      // 更新最后一个工具调用的结果
+      // 工具跑完，结果交回模型继续推理
+      toggleThinking(true, '工具返回 · 模型整合中' + phaseStep(ev.step));
       updateToolResult(ev.result);
       break;
       
     case 'token':
       // 流式输出 token，开始输出最终答案
-      toggleThinking(false);
+      toggleThinking(true, '生成回答中' + phaseStep(ev.step));
       ensureMessageContainer();
       appendToken(ev.content);
       break;
@@ -785,10 +788,43 @@ function handleEvent(ev) {
       break;
     }
       
+    case 'verify':
+      // 验证器闭环：自动跑测试/Lint（此前前端未处理该事件）
+      if (ev.status === 'running') {
+        toggleThinking(true, '验证中 · 运行测试/Lint' + phaseStep(ev.step));
+      } else {
+        toggleThinking(true, (ev.status === 'pass' ? '验证通过' : ev.status === 'fail' ? '验证失败' : '验证异常') + phaseStep(ev.step));
+      }
+      appendVerify(ev);
+      break;
+
+    case 'compact':
+      // 上下文压缩（长任务时触发，此前前端未处理）
+      toggleThinking(true, '压缩上下文 · 摘要历史' + phaseStep(ev.step));
+      appendStep('system', '↧ ' + (ev.msg || '上下文已压缩'));
+      break;
+
+    case 'plan':
+      // 规划模式最终返回的纯计划（此前前端未处理，走 answer 兜底）
+      toggleThinking(false);
+      finalizeAnswer(ev.content, true);
+      break;
+
+    case 'ask_user_request':
+      // 模型通过 ask_user 向用户提问（此前前端未处理）
+      toggleThinking(true, '等待你回答…');
+      showAskUser(ev);
+      break;
+
     case 'error':
       appendStep('error', '⚠ ' + ev.msg + (ev.content ? '\n' + ev.content : ''));
       break;
   }
+}
+
+// 阶段标签里的「第 N 步」后缀（模型每轮工具循环 +1），让长任务进度可见
+function phaseStep(step) {
+  return typeof step === 'number' && step > 0 ? `（第 ${step} 步）` : '';
 }
 
 // ---------- 图片粘贴 / 拖拽（仅随消息发送，不落工作目录） ----------
