@@ -268,11 +268,21 @@ function imageSrc(img) {
   return (img && img.dataUrl) || '';
 }
 
+// 检测文本是否包含 markdown 语法（表格、代码块、标题、列表、链接、加粗、斜体、引用、分隔线、行内代码）
+function hasMarkdown(text) {
+  if (!text) return false;
+  return /(\|.*\|)|(```)|(^#{1,6}\s)|(^[-*+]\s)|(^\d+\.\s)|(\[.*\]\(.*\))|(\*\*.*\*\*)|(\*[^*].*\*)|(__.*__)|(^>\s)|(^[-*_]{3,}\s*$)|(`[^`]+`)/m.test(text);
+}
+
 // 用户气泡
 function appendUser(text, images) {
   const m = el('div', 'msg user');
   const bubble = el('div', 'bubble');
-  bubble.innerHTML = renderMarkdown(text || '');
+  if (hasMarkdown(text)) {
+    bubble.innerHTML = renderMarkdown(text || '');
+  } else {
+    bubble.textContent = text || '';
+  }
   m.appendChild(bubble);
 
   // 发送的图片：在气泡内以网格展示，限制大小

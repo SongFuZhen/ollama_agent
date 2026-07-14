@@ -13,6 +13,8 @@ module.exports = {
   async run({ path: p }, ctx = {}) {
     const abs = await safeResolve(p || '.', ctx.root);
     const root = ctx.root || PROJECT_ROOT;
+    const st = await fsp.stat(abs);
+    if (!st.isDirectory()) throw new Error('不是目录: ' + (p || '.'));
     const entries = await fsp.readdir(abs, { withFileTypes: true });
     
     const dirs = entries.filter(e => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));

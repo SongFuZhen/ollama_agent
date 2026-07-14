@@ -6,59 +6,55 @@
 
 > A local AI assistant for air-gapped intranets. Weak model + strong constraints + real data = no hallucination.
 
-A local agent that runs entirely on your own machine: models infer locally via Ollama, tool calls are confined to a single project directory, and every answer is grounded in real data returned by tools—no making things up. Built with plain Node built-in modules, so there is no `npm install`; just copy it onto a USB stick and run.
+A local agent that runs entirely on your own machine: models infer locally via Ollama, tool calls are confined to a single project directory, and every answer is grounded in real data returned by tools. Built with plain Node built-in modules — no `npm install` needed; copy onto a USB stick and run.
 
 ---
 
 ## Features
 
-- **Scenario tabs**: Code completion, logic debugging, general chat, and image recognition—each bound to the most suitable local model.
-- **Agent mode**: reads real data through tools before answering, instead of guessing.
+- **Local Agent**: reads real data through tools before answering — no guessing.
 - **Single-directory sandbox**: tools can only read/write one project directory; out-of-bounds paths are blocked automatically.
-- **Zero dependencies**: pure Node built-in modules—no install step, works out of the box.
-- **Transparent**: thinking chains and tool calls are shown live and can be collapsed.
+- **Context compaction**: automatically summarizes long conversations to stay within the model's context window.
+- **Memory recall**: three-tier memory based on semantic similarity (L1 recent / L2 semantic recall / L3 associative).
+- **Plan mode**: read-only exploration phase — only read tools allowed, outputs a plan for approval before any changes.
+- **Verification loop**: automatically runs tests/lint after write operations to validate changes.
+- **Zero dependencies**: pure Node built-in modules + sql.js/WASM — no install step, works out of the box.
+- **Transparent process**: thinking chains, tool calls, and verification results displayed live and collapsible.
+- **Cross-platform**: unified entry point for Windows / macOS / Linux — copy and run from a USB stick.
 
-## Scenarios & Models
+## Model
 
-| Tab | Model | Use |
-|---|---|---|
-| Code completion / explain | `qwen2.5-coder:7b` | read code, explain functions and modules |
-| Logic debugging / find bugs | `deepseek-r1:8b` | read logs, trace call stacks, locate exceptions |
-| General chat | `llama3.1:8b` | doc summarization, report drafting, small talk |
-| Image recognition | `gemma3:4b` | paste/drag images, multimodal Q&A |
-
-> Model names can be overridden in the settings page or via environment variables.
+Select a model from the settings dropdown (populated from your Ollama installed list), or set the `MODEL` environment variable for a default (falls back to `deepseek-r1:8b`). You can switch models mid-conversation.
 
 ## Quick Start
 
 ```bash
-# 1. Make sure Ollama is running and the models are pulled
-ollama pull qwen2.5-coder:7b
+# 1. Make sure Ollama is running and models are pulled
 ollama pull deepseek-r1:8b
-ollama pull llama3.1:8b
-ollama pull gemma3:4b
 
 # 2. Start (no npm install needed)
-./start.sh
-# or directly: node src/server.js
+npm start
+# Equivalent to: node src/server.js
+# Windows: double-click start.ps1 or start.bat; macOS/Linux: ./start.sh
 
-# 3. Open in the browser
+# 3. Open in browser
 http://localhost:3000
 ```
+
+> Unified entry point: `npm start` (= `node src/server.js`). Zero native compilation dependencies — copy the folder to any Windows/macOS/Linux machine and run `npm start`.
 
 ## Configuration
 
 ### Environment Variables
 
-| Var | Default | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama address; can point to another machine on the LAN |
-| `PROJECT_ROOT` | `./workspace` | Sandbox root directory (single directory) |
-| `MODEL_CODER` | `qwen2.5-coder:7b` | Code scenario model |
-| `MODEL_DEBUG` | `deepseek-r1:8b` | Debug scenario model |
-| `MODEL_GENERAL` | `llama3.1:8b` | General scenario model |
-| `MODEL_VISION` | `gemma3:4b` | Image scenario model |
-| `OLLAMA_TIMEOUT_MS` | `120000` | Ollama call timeout (ms) |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama address; can point to another machine on LAN |
+| `MODEL` | `deepseek-r1:8b` | Default chat model |
+| `PROJECT_ROOT` | `./workspace` | Sandbox root directory |
+| `NUM_CTX` | `16384` | Model context window size |
+| `AGENT_TIMEOUT_MS` | `90000` | Agent overall timeout (ms) |
+| `OLLAMA_TIMEOUT_MS` | `90000` | Single Ollama call timeout (ms) |
 | `PORT` | `3000` | Server port |
 
 ### Frontend Settings
@@ -67,60 +63,121 @@ After startup, configure in the settings page (top-right menu):
 
 - Ollama address
 - Project directory (absolute path)
-- Per-scenario model names
+- Model selection (from Ollama installed list)
+- Markdown rendering engine (markdown-it / marked)
+
+## Tools & Skills
+
+### Tools
+
+| Tool | Description | Confirm |
+|------|-------------|---------|
+| `read_file` | Read file contents | - |
+| `read_lines` | Read specific line range | - |
+| `list_dir` | List directory contents | - |
+| `tree` | Display directory tree | - |
+| `search_files` | Search files by name | - |
+| `glob` | Glob pattern file matching | - |
+| `grep` | Search file contents (regex) | - |
+| `count_loc` | Count lines of code | - |
+| `semantic_grep` | Semantic code search | - |
+| `repo_map` | Generate repository structure map | - |
+| `write_file` | Write / overwrite file | ✓ |
+| `edit_file` | Precise edit (find & replace) | ✓ |
+| `apply_diff` | Apply diff patch | ✓ |
+| `bash` | Execute shell command | ✓ |
+| `run_tests` | Auto-run tests | ✓ |
+| `run_lint` | Auto-run lint | ✓ |
+| `todos` | Task list management | ✓ |
+| `notes` | Note management | ✓ |
+| `ask_user` | Ask the user a question | - |
+
+### Skills
+
+| Skill | Description |
+|-------|-------------|
+| `git_status` | Show working tree status |
+| `git_diff` | Show file diffs |
+| `git_log` | Show commit history |
+| `git_show` | Show a specific commit |
+| `explain_symbol` | Explain a symbol definition |
+| `find_references` | Find symbol references |
 
 ## Directory Structure
 
 ```
 ollama_agent/
-├── src/                          Backend source
-│   ├── server.js                HTTP server + SSE chat
-│   ├── agent.js                 Agent main loop
-│   ├── tools/                   Tool registry and implementations
-│   │   ├── index.js             Tool entry
-│   │   ├── read_file.js         Read file
-│   │   ├── list_dir.js          List directory
-│   │   ├── read_lines.js        Read a line range
-│   │   ├── edit_file.js         Precise edit (find & replace)
-│   │   ├── write_file.js        Write file
-│   │   ├── tree.js              Directory tree
-│   │   ├── search_files.js      Search files
-│   │   ├── glob.js              Glob match
-│   │   ├── grep.js              Content search
-│   │   └── count_loc.js         Line count
-│   ├── ollama.js                Ollama client
-│   ├── config.js                Scenario & model config
-│   ├── db.js                    SQLite persistence (sql.js/WASM, zero native build)
-│   ├── rootstore.js             Project directory management
-│   └── device.js                Device info
+├── src/                              Backend source
+│   ├── server.js                     HTTP server + SSE chat
+│   ├── config.js                     Global configuration
+│   ├── core/                         Agent engine
+│   │   ├── agent.js                  Agent main loop (tool calls, reasoning)
+│   │   ├── ollama.js                 Ollama client (with timeout)
+│   │   ├── ollama-tools.js           Ollama native tools API
+│   │   └── compact.js                Context compaction (summarization)
+│   ├── tools/                        Action tools
+│   │   ├── index.js                  Tool registry & entry
+│   │   ├── test/                     run_tests / run_lint
+│   │   └── *.js                      Individual tool implementations
+│   ├── skills/                       Skills (analysis / inspection)
+│   │   ├── index.js                  Skill registry
+│   │   ├── git/                      Git-related skills
+│   │   └── analyze/                  Code analysis skills
+│   ├── storage/                      Persistence
+│   │   ├── db.js                     SQLite conversation store (sql.js/WASM)
+│   │   └── rootstore.js              Project root persistence
+│   ├── memory/
+│   │   └── recall.js                 Semantic memory recall
+│   └── device/
+│       └── device.js                 Device info
 │
-├── public/                       Frontend static files
-│   ├── index.html                Main page
-│   ├── frontend/                 Frontend assets
-│   │   ├── css/modules/          Modular styles
-│   │   └── js/modules/           Modular logic
-│   └── lib/                      Third-party libs (do not modify)
+├── public/                           Frontend static files
+│   ├── index.html                    Main page
+│   ├── frontend/js/modules/          Frontend JS modules
+│   │   ├── app.js                    Main entry
+│   │   ├── state.js                  State management
+│   │   ├── api.js                    API calls
+│   │   ├── render.js                 Message rendering (Markdown)
+│   │   ├── settings.js               Settings management
+│   │   ├── theme.js                  Theme switching
+│   │   ├── commands.js               Command palette
+│   │   ├── file-browser.js           File browser
+│   │   └── utils.js                  Utility functions
+│   ├── frontend/css/modules/         Modular stylesheets
+│   ├── components/                   Reusable UI components
+│   └── lib/                          Third-party libs (do not modify)
+│       ├── simpui/                   UI framework
+│       ├── lucide/                   Icon library
+│       ├── markdown-it/              Markdown renderer
+│       ├── marked/                   Markdown renderer (fallback)
+│       ├── highlight/                Code highlighting
+│       ├── purify/                   XSS sanitization
+│       └── mermaid/                  Diagram rendering
 │
-├── workspace/                    Sandbox working directory
-├── data/                         Database files
-├── start.sh                      Startup script
-├── package.json                  No dependencies
-└── README.md                     This document
+├── workspace/                        Sandbox working directory
+├── data/                             Database files
+├── docs/                             Documentation
+│   ├── agent-design.md               Agent engine architecture
+│   ├── discussions/                  Discussions & comparisons
+│   └── superpowers/plans/            Implementation plans
+├── start.sh / start.bat / start.ps1  Cross-platform startup scripts
+├── package.json                      No external dependencies
+└── README.md                         This document
 ```
 
 ## Security
 
-- Tool calls are confined to the `PROJECT_ROOT` single directory (path sandbox).
+- Tool calls are confined to the `PROJECT_ROOT` directory (path sandbox).
 - Write operations require explicit per-call human confirmation.
-- Ollama address and models are configurable, never hardcoded.
+- Ollama address and model are configurable, never hardcoded.
+- XSS protection: all Markdown output is sanitized via DOMPurify.
 
 ## Documentation
 
 | Doc | Description |
 |---|---|
 | [README.md](./README.md) | Project overview and quick start (Chinese) |
-| [README-en.md](./README-en.md) | Project overview and quick start (English) |
-| [docs/CLAUDE.md](./docs/CLAUDE.md) | Development conventions and coding standards |
-| [docs/产品设计书.md](./docs/产品设计书.md) | Detailed product design doc |
-| [docs/UI-SPEC.md](./docs/UI-SPEC.md) | UI design spec |
-| [docs/1-UI-REVIEW.md](./docs/1-UI-REVIEW.md) | UI audit report |
+| [CLAUDE.md](./CLAUDE.md) | Development conventions and coding standards |
+| [docs/agent-design.md](./docs/agent-design.md) | Agent engine architecture design |
+| [docs/discussions/](./docs/discussions/) | Discussions & comparative analysis |
+| [docs/superpowers/plans/](./docs/superpowers/plans/) | Implementation plans |

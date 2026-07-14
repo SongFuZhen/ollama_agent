@@ -7,7 +7,7 @@ const { buildOllamaTools } = require('../tools/schema');
 const { buildRecallPrompt } = require('../memory/recall');
 const { addMemory } = require('../storage/db');
 const { compactMessages } = require('./compact');
-const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY } = require('../config');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY, COMPACT_THRESHOLD, PROJECT_ROOT } = require('../config');
 
 // 规划/执行模式下的工具分类（Plan Mode 仅允许只读工具）
 const READONLY = new Set(['read_file', 'list_dir', 'grep', 'glob', 'tree', 'read_lines', 'search_files', 'count_loc']);
@@ -191,6 +191,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   const validHistory = Array.isArray(history)
     ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())
     : [];
+  let lastPromptTokens = 0; // 真实 prompt token（Ollama prompt_eval_count），用于压缩/预算判断
   let messages = [
     { role: 'system', content: useNativeTools ? nativeSystemPrompt() : systemPrompt(specs) },
     ...validHistory,
@@ -208,7 +209,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
 
   // 三级记忆注入（L2/L3）：首轮根据用户输入语义召回历史片段，拼进 system。
   // 异步进行，不阻塞首 token；若 Ollama 不可用则静默跳过。
-  if (opts.conversationId && /[\u4e00-\u9fa5a-zA-Z]{4,}/.test(userInput)) {
+  if (conversationId && /[\u4e00-\u9fa5a-zA-Z]{4,}/.test(userInput)) {
     buildRecallPrompt(userInput, { ollamaHost })
       .then((recallText) => {
         if (recallText) {
@@ -222,7 +223,6 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   let lastAnswer = '';
   let lastCallKey = '';
   let repeatCount = 0;
-  let lastPromptTokens = 0; // 真实 prompt token（Ollama prompt_eval_count），用于压缩/预算判断
   for (let step = 1; step <= MAX_STEPS; step++) {
     if (Date.now() > deadline) {
       emit({ type: 'error', step, msg: `已达整体超时（${WALL_MS / 1000}s），强制收尾` });
@@ -466,8 +466,8 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
 
   // 三级记忆写入（异步，不阻塞返回）：把本轮 user 提问 + 最终回答存为记忆片段，
   // 供后续会话语义召回。仅在有 conversationId 时生效；embedding 失败不影响落库（降级关键词）。
-  if (opts.conversationId) {
-    recordMemory(opts.conversationId, userInput, finalAnswer, ollamaHost);
+  if (conversationId) {
+    recordMemory(conversationId, userInput, finalAnswer, ollamaHost);
   }
 
   return finalAnswer;

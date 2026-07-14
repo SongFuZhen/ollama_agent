@@ -362,6 +362,10 @@ async function handleFsList(req, res) {
   const root = params.get('root') || (await getProjectRoot());
   try {
     const abs = await safeResolve(urlPath || '.', root);
+    const st = await fsp.stat(abs);
+    if (!st.isDirectory()) {
+      return sendJSON(res, 400, { error: '不是目录: ' + (urlPath || '.') });
+    }
     const entries = await fsp.readdir(abs, { withFileTypes: true });
     const list = entries
       .filter((e) => !e.name.startsWith('.'))
