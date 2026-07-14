@@ -16,6 +16,9 @@ const MAX_STEPS = 6;          // 7B 循环步数上限，防空转
 const JSON_RETRY = 2;         // 工具调用 JSON 解析失败重试次数
 const STEP_TIMEOUT_MS = 90000; // 本地模型响应较慢，适当放宽超时
 const NUM_CTX = Number(process.env.NUM_CTX) || 16384; // context window，agent 循环需较大上下文
+// 采样温度：小模型工具调用要确定性，默认压低到 0.1（可用 TEMP 环境变量覆盖，如 TEMP=0.3）
+const TEMPERATURE = Number(process.env.TEMP) || 0.1;
+const TOP_P = Number(process.env.TOP_P) || 0.9;
 const CTX_RESERVE = 2048;     // 为模型输出预留的 token 数
 const TOOL_RESULT_MAX = 6000; // 工具结果回传模型的最大字符数
 const TRUNCATE_MIN = 200;     // 单条消息可保留的最小字符数（小于则整条丢弃）
@@ -38,6 +41,8 @@ module.exports = {
   JSON_RETRY,
   STEP_TIMEOUT_MS,
   NUM_CTX,
+  TEMPERATURE,
+  TOP_P,
   CTX_RESERVE,
   TOOL_RESULT_MAX,
   TRUNCATE_MIN,

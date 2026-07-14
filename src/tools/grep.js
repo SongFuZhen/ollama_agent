@@ -114,7 +114,7 @@ module.exports = {
   grepDirAggregated,
 
   name: 'grep',
-  desc: '搜索文件内容（支持正则表达式）',
+  desc: '搜索文件内容（支持正则表达式），返回 文件:行号:内容；已知确切关键字或正则时用，只记得大致意思用 semantic_grep',
   params: {
     pattern: '搜索模式（支持正则表达式）',
     path: '搜索目录，默认项目根',

@@ -48,7 +48,7 @@ function matchPattern(filePath, pattern) {
 
 module.exports = {
   name: 'glob',
-  desc: '按模式查找文件（支持 glob 语法如 *.js, src/**/*.ts）',
+  desc: '按 glob 模式查找文件（如 *.js, src/**/*.ts）；已知文件命名/目录规律时比 search_files 更精确',
   params: { pattern: 'glob 模式', path: '搜索目录，默认项目根' },
   needConfirm: false,
   

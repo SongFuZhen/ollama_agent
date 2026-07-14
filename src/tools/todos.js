@@ -9,7 +9,7 @@ const VALID = new Set(['todo', 'doing', 'done']);
 
 module.exports = {
   name: 'todos',
-  desc: '管理本地任务清单：add 新增、list 查看、done/doing 改状态、delete 删除（离线可用）',
+  desc: '管理本地任务清单：add 新增、list 查看、done/doing 改状态、delete 删除（离线可用）；复杂多步任务拆解为可跟踪清单时用',
   params: {
     action: '操作：add | list | done | doing | delete',
     text: 'add 时的任务描述',

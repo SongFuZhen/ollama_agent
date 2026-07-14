@@ -91,7 +91,7 @@ function isCommandBlocked(cmd) {
 
 module.exports = {
   name: 'bash',
-  desc: '执行 shell 命令（受限，禁止危险操作）',
+  desc: '执行 shell 命令（受限，禁止危险操作，需确认）；需要跑 git/构建/测试等内置工具未覆盖的命令时用',
   params: { command: '要执行的 shell 命令' },
   needConfirm: true,
 

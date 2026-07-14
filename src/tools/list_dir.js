@@ -6,7 +6,7 @@ const { safeResolve, PROJECT_ROOT } = require('./utils');
 
 module.exports = {
   name: 'list_dir',
-  desc: '列出目录下的文件和子目录，返回树状结构',
+  desc: '列出目录下的文件和子目录，返回树状结构；想快速看某目录下有什么文件时用',
   params: { path: '相对项目根的路径，默认根目录' },
   needConfirm: false,
   

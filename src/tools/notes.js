@@ -8,7 +8,7 @@ const { truncate } = require('./utils');
 
 module.exports = {
   name: 'notes',
-  desc: '管理本地笔记：add 新增、list 查看、delete 删除（内容仅存于本地数据库，离线可用）',
+  desc: '管理本地笔记：add 新增、list 查看、delete 删除（内容仅存于本地数据库，离线可用）；跨步骤记住用户偏好或临时结论时用',
   params: {
     action: '操作：add | list | delete',
     content: 'add 时的笔记内容',

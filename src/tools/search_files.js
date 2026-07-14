@@ -6,7 +6,7 @@ const { PROJECT_ROOT } = require('./utils');
 
 module.exports = {
   name: 'search_files',
-  desc: '按文件名模式递归搜索',
+  desc: '按文件名关键字递归搜索文件；当你大概记得文件名（或部分）但不知路径时使用',
   params: { pattern: '文件名包含的关键字' },
   needConfirm: false,
   

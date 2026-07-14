@@ -7,7 +7,7 @@ const { safeResolve } = require('./utils');
 // 默认只替换第一处；all=true 时替换全部匹配。
 module.exports = {
   name: 'edit_file',
-  desc: '在文件中查找并替换一段内容（比整文件重写更安全）；old_string 必须唯一，否则设 all=true 替换全部',
+  desc: '在文件中查找并替换一段内容（比整文件重写更安全）；做局部小修改时用，整文件新建/替换用 write_file。old_string 必须唯一，否则设 all=true 替换全部',
   params: {
     path: '相对项目根的文件路径',
     old_string: '要被替换的原文（片段）',

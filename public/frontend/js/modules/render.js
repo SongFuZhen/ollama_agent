@@ -22,6 +22,12 @@ const TOOL_ICONS = {
   read_lines: 'Rows3',
   tree: 'FolderTree',
   count_loc: 'ListChecks',
+  apply_diff: 'FileDiff',
+  semantic_grep: 'Brain',
+  repo_map: 'Network',
+  ask_user: 'MessageCircleQuestion',
+  notes: 'StickyNote',
+  todos: 'ListTodo',
   run_tests: 'Play',
   run_lint: 'ShieldCheck',
   // skills

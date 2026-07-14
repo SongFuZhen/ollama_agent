@@ -26,7 +26,7 @@ async function walk(dir, root, depth, maxDepth, prefix, lines) {
 
 module.exports = {
   name: 'tree',
-  desc: '以树状结构列出目录（可限深度，默认完整展开），直观展示项目结构；排除 node_modules 与隐藏目录',
+  desc: '以树状结构列出目录（可限深度，默认完整展开），直观展示项目结构；需要整体把握目录层级时用',
   params: {
     path: '相对项目根的目标目录，默认根目录',
     depth: '展开深度，默认完整遍历（一次获取全部，无需逐级下钻）',

@@ -6,7 +6,7 @@ const { safeResolve, PROJECT_ROOT } = require('./utils');
 
 module.exports = {
   name: 'write_file',
-  desc: '写入/覆盖项目内文件（需确认）',
+  desc: '写入/覆盖项目内文件（需确认）；新建文件或整体替换内容时用，局部修改优先用 edit_file',
   params: { path: '相对项目根的文件路径', content: '要写入的内容' },
   needConfirm: true,
   
