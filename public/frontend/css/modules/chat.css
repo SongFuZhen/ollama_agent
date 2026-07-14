@@ -53,6 +53,8 @@
   background: var(--accent);
   color: var(--simpui-bg);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  max-width: 80%;
+  width: fit-content;
 }
 
 /* 底部信息（模型名 / 时间 / 统计 / 复制） */
@@ -93,13 +95,16 @@
   color: var(--simpui-text-light);
 }
 
-/* 用户发送的图片网格 */
+/* 用户发送的图片网格（在气泡内部） */
 .msg-images {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, 120px);
   gap: var(--space-2);
-  max-width: 80%;
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.bubble > .msg-images:first-child {
+  margin-top: 0;
 }
 
 .msg-image img {
@@ -107,6 +112,29 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-soft);
   display: block;
+  cursor: zoom-in;
+}
+
+/* ---------- 图片放大预览（lightbox） ---------- */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  animation: fadeIn 0.15s var(--ease);
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  cursor: default;
 }
 
 /* 步骤 / 工具块容器 */
@@ -291,34 +319,59 @@
 /* 思考中 */
 .thinking {
   display: inline-flex;
+  position: relative;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--simpui-text-light);
+  width: fit-content;
+  overflow: hidden;
 }
 
 .thinking.hidden { display: none; }
 
-.thinking-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: think-pulse 1s ease-in-out infinite;
+/* 彩光扫过（覆盖圆点+文字） */
+.thinking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(255,255,255,0.12) 45%,
+    rgba(255,255,255,0.3) 50%,
+    rgba(255,255,255,0.12) 55%,
+    transparent 65%,
+    transparent 100%
+  );
+  animation: dot-sweep 1.6s ease-in-out infinite;
+  pointer-events: none;
 }
 
-@keyframes think-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+/* 连接中：扫光稍慢 */
+.thinking.connecting::after {
+  animation-duration: 2s;
+}
+
+.thinking-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+@keyframes dot-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
 }
 
 .thinking-label {
-  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }

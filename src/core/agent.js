@@ -187,6 +187,23 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
     ? { role: 'user', content: userInput, images: images.slice() }
     : { role: 'user', content: userInput };
 
+  if (images && images.length) {
+    console.log('[image] 收到 ' + images.length + ' 张图片');
+    images.forEach((img, i) => {
+      const len = typeof img === 'string' ? img.length : 0;
+      let head = '';
+      try {
+        const buf = Buffer.from(img.slice(0, 100), 'base64');
+        const hex = buf.slice(0, 8).toString('hex');
+        // 常见图片魔术字节: PNG=89504e47, JPEG=ffd8ffe0, GIF=47494638, WebP=52494646
+        const types = { '89504e47': 'PNG', 'ffd8ffe0': 'JPEG', 'ffd8ff': 'JPEG', '47494638': 'GIF', '52494646': 'WEBP' };
+        const t = Object.entries(types).find(([k]) => hex.startsWith(k));
+        head = t ? t[1] : ('未知(' + hex + ')');
+      } catch (e) { head = '解析失败'; }
+      console.log('[image] 第' + (i + 1) + '张: base64长度=' + len + ' 格式=' + head);
+    });
+  }
+
   // 筛选有效历史：只保留 user/assistant 角色且有内容的消息，最多 20 条
   const validHistory = Array.isArray(history)
     ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())

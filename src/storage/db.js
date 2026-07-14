@@ -44,6 +44,7 @@ const SCHEMA = `
     conversation_id TEXT NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    model TEXT,
     tools TEXT,
     thinks TEXT,
     images TEXT,
@@ -201,6 +202,8 @@ async function initDB() {
   // 每次启动都执行 SCHEMA（IF NOT EXISTS，幂等且开销极小），
   // 保证旧库升级时也能补齐新增表（如 memory_chunks）。
   db.run(SCHEMA);
+  // 兼容旧库：为已有 messages 表补充 model 列
+  try { db.run('ALTER TABLE messages ADD COLUMN model TEXT'); } catch (_) {}
   await flush();
   return db;
 }
@@ -247,11 +250,12 @@ function deleteConversation(id) {
 
 // ---------- 消息 ----------
 
-function addMessage(conversationId, role, content, tools = null, thinks = null, images = null, stats = null) {
+function addMessage(conversationId, role, content, model = null, tools = null, thinks = null, images = null, stats = null) {
   run(
-    'INSERT INTO messages (conversation_id, role, content, tools, thinks, images, stats, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO messages (conversation_id, role, content, model, tools, thinks, images, stats, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       conversationId, role, content,
+      model || null,
       tools ? JSON.stringify(tools) : null,
       thinks ? JSON.stringify(thinks) : null,
       images ? JSON.stringify(images) : null,
@@ -270,11 +274,12 @@ function deleteMessages(conversationId) {
 
 function getMessages(conversationId) {
   const rows = getRows(
-    'SELECT role, content, tools, thinks, images, stats, timestamp FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+    'SELECT role, content, model, tools, thinks, images, stats, timestamp FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
     [conversationId]
   );
   return rows.map(r => ({
     ...r,
+    model: r.model || null,
     tools: r.tools ? JSON.parse(r.tools) : null,
     thinks: r.thinks ? JSON.parse(r.thinks) : null,
     images: r.images ? JSON.parse(r.images) : null,

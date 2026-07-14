@@ -246,21 +246,24 @@ function updatePanelHint() {
 // 点文件：把相对路径插入输入框（供用户发送时引用，或交给模型读取）
 // 本地模式下，路径前缀所选根目录名，便于模型理解
 function insertPath(rel) {
+  if (!inputEl) return;
   // 统一 ./ 前缀，明确相对路径语义
   const cur = inputEl.value;
   inputEl.value = (cur ? cur + ' ' : '') + '文件: ./' + rel;
   inputEl.focus();
 }
 
-fsRefresh.onclick = () => {
-  if (browseRoot !== null && localFiles) loadLocalTree(localFiles);
-  else loadFileTree('');
-};
+if (fsRefresh) {
+  fsRefresh.onclick = () => {
+    if (browseRoot !== null && localFiles) loadLocalTree(localFiles);
+    else loadFileTree('');
+  };
+}
 
 // 文件面板状态：无沙箱根时显示提示，有根时加载目录树
 function updateFilePanelState() {
   if (browseRoot !== null) { fileTreeEl.dataset.empty = ''; return; } // 本地浏览模式由 loadLocalTree 控制
-  const root = effectiveRoot();
+  const root = typeof effectiveRoot === 'function' ? effectiveRoot() : null;
   if (!root) {
     fileTreeEl.dataset.empty = '1';
     fileTreeEl.innerHTML = `<div class="file-hint">⚠ 请先选择并绑定沙箱目录<br><br>绑定后模型才能读取该目录下的文件，<br>并在此查看项目文件。</div>`;

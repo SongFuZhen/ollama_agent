@@ -41,6 +41,11 @@ if (ssSkillsEl) {
     if (typeof showSkills === 'function') showSkills();
   });
 }
+if (ssModelEl) {
+  ssModelEl.addEventListener('click', () => {
+    if (typeof showModels === 'function') showModels();
+  });
+}
 
 // 下拉菜单切换
 if (userDropdown) {
@@ -128,6 +133,8 @@ async function loadHistoryConversation(convId) {
     const data = await res.json();
 
     if (!data.messages || data.messages.length === 0) {
+      if (state.session) state.session.innerHTML = '';
+      showEmptyIfEmpty();
       showSimpuiToast('提示', '对话内容为空');
       return;
     }
@@ -197,6 +204,7 @@ async function loadHistoryConversation(convId) {
       if (msg.role === 'user') {
         appendUser(msg.content, msg.images || []);
       } else {
+        if (msg.model) state.currentStreamModel = msg.model;
         ensureMessageContainer();
         // 先按保存顺序恢复思考链与工具调用（thinks/tools 按索引交错还原）
         const thinks = msg.thinks || [];
@@ -246,6 +254,9 @@ async function loadHistoryConversation(convId) {
     scrollDown(true);
   } catch (e) {
     console.error('加载对话失败:', e);
+    if (state.session) state.session.innerHTML = '';
+    showEmptyIfEmpty();
+    showSimpuiToast('错误', '加载对话失败: ' + (e.message || e));
   }
 }
 
@@ -568,7 +579,19 @@ function renderSessionState() {
   const avgTtft = state.sessionStats.ttftCount > 0 ? Math.round(state.sessionStats.ttftSum / state.sessionStats.ttftCount) : 0;
   const totalTime = state.sessionStats.totalTimeSum;
 
-  if (ssModelEl) ssModelEl.textContent = model;
+  if (ssModelEl) {
+    ssModelEl.textContent = model;
+    // 有待发送图片且当前模型非视觉模型：高亮提示
+    const hasImages = typeof pendingImages !== 'undefined' && pendingImages.length > 0;
+    const isVision = hasImages && /vision|gemma|llava|bakllava|minicpm|moondream|cogvlm/i.test(model);
+    if (hasImages && !isVision) {
+      ssModelEl.classList.add('vision-warn');
+      ssModelEl.title = '当前模型可能不支持图片识别，点击切换';
+    } else {
+      ssModelEl.classList.remove('vision-warn');
+      ssModelEl.title = '点击打开设置';
+    }
+  }
   if (ssCharsEl) ssCharsEl.textContent = `${msgCount} 条 | TTFT: ${avgTtft}ms | 总耗时: ${formatElapsed(totalTime)}`;
   if (ssGitEl) ssGitEl.textContent = 'git:' + (state.gitBranch || '—');
   if (ssDirEl) ssDirEl.textContent = dirName;
@@ -603,10 +626,6 @@ function formatTokenCount(n) {
   if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
   return String(n);
 }
-
-// 状态栏点击事件
-if (ssToolsEl) ssToolsEl.addEventListener('click', showTools);
-if (ssSkillsEl) ssSkillsEl.addEventListener('click', showSkills);
 
 // 组装状态详情文本（用于弹框展示）
 function buildStateDetail() {
@@ -674,6 +693,7 @@ function handleEvent(ev) {
   switch (ev.type) {
     case 'meta':
       state.tools = Array.isArray(ev.tools) ? ev.tools : [];
+      if (ev.model) state.currentStreamModel = ev.model;
       break;
       
     case 'thinking_start':
@@ -792,6 +812,7 @@ function addImage(dataUrl, name) {
   if (!b64) return;
   pendingImages.push({ name: name || 'image.png', dataUrl, b64 });
   renderImageThumbs();
+  renderSessionState();
 }
 
 function renderImageThumbs() {
@@ -806,7 +827,7 @@ function renderImageThumbs() {
     const wrap = el('div', 'thumb');
     const im = el('img'); im.src = img.dataUrl;
     const x = el('span', 'x', '×');
-    x.onclick = () => { pendingImages.splice(i, 1); renderImageThumbs(); };
+    x.onclick = () => { pendingImages.splice(i, 1); renderImageThumbs(); renderSessionState(); };
     wrap.appendChild(im); wrap.appendChild(x);
     box.appendChild(wrap);
   });
@@ -859,6 +880,15 @@ async function send() {
   autoResizeInput();
   pendingImages.length = 0;
   renderImageThumbs();
+
+  // 发图片时检测当前模型是否支持视觉：不支持则在状态栏模型名上提示
+  if (imgs.length > 0) {
+    const model = (state.activeModel || state.defaultModel || '').toLowerCase();
+    const isVision = /vision|gemma|llava|bakllava|minicpm|moondream|cogvlm/i.test(model);
+    if (!isVision) {
+      showSimpuiToast('提示', '当前模型可能不支持图片识别，建议切换到 gemma3:4b 等视觉模型');
+    }
+  }
 
   // 上传图片到当前项目目录（按 日期/对话 组织），写入磁盘以便持久化与历史回放
   const uploadRoot = settingsRoot() || state.currentProjectRoot || (typeof serverRootCache !== 'undefined' ? serverRootCache : '') || '';
@@ -918,7 +948,7 @@ async function send() {
     const sAbs = (settingsRoot() && isAbs(settingsRoot())) ? settingsRoot() : null;
     if (sAbs) state.currentProjectRoot = sAbs;
   }
-  const effRoot = boundAbs || state.currentProjectRoot || settingsRoot() || browseRoot;
+  const effRoot = boundAbs || state.currentProjectRoot || settingsRoot() || (typeof browseRoot !== 'undefined' ? browseRoot : '');
   if (effRoot) body.projectRoot = effRoot;
   if (!state.sessionStats.startTs) state.sessionStats.startTs = Date.now();
   updateProjectRootUI();
@@ -1007,6 +1037,8 @@ function toggleThinking(on, msg) {
   if (on) {
     thinkStart = Date.now();
     thinkingEl.classList.remove('hidden');
+    // 区分连接/思考状态
+    thinkingEl.classList.toggle('connecting', msg === '正在连接');
     thinkSecsEl.textContent = '0';
     // 更新提示文字
     const label = thinkingEl.querySelector('.thinking-label');
@@ -1091,13 +1123,6 @@ renderSessionState();
 // 状态栏：点击弹出详情弹框
 if (ssMoreEl) {
   ssMoreEl.onclick = openStateModal;
-}
-// 状态栏：点击模型名称打开模型切换弹框（效果同 /models）
-if (ssModelEl) {
-  ssModelEl.style.cursor = 'pointer';
-  ssModelEl.onclick = () => {
-    if (typeof showModels === 'function') showModels();
-  };
 }
 // 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
 const stateModalClose = $('#state-modal-close');

@@ -46,7 +46,28 @@ module.exports = {
     const root = ctx.root || PROJECT_ROOT;
     const abs = await safeResolve(p || '.', root);
     const stats = { files: 0, lines: 0, blank: 0, comment: 0, byExt: {} };
-    await scan(abs, root, stats);
+    const st = await fsp.stat(abs);
+    if (st.isFile()) {
+      // 单文件统计：直接读文件，不走递归 readdir
+      stats.files = 1;
+      const ext = path.extname(abs).toLowerCase();
+      stats.byExt[ext] = (stats.byExt[ext] || 0) + 1;
+      try {
+        const content = await fsp.readFile(abs, 'utf8');
+        const lines = content.split('\n').length;
+        stats.lines += lines;
+        let blank = 0, comment = 0;
+        for (const ln of content.split('\n')) {
+          const t = ln.trim();
+          if (t === '') blank += 1;
+          else if (t.startsWith('//') || t.startsWith('#')) comment += 1;
+        }
+        stats.blank += blank;
+        stats.comment += comment;
+      } catch (e) { /* 非文本文件读取失败则跳过统计 */ }
+    } else {
+      await scan(abs, root, stats);
+    }
 
     const byExt = Object.entries(stats.byExt)
       .sort((a, b) => b[1] - a[1])

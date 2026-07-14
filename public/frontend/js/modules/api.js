@@ -16,9 +16,10 @@ async function saveConversation() {
     const role = msg.classList.contains('user') ? 'user' : 'assistant';
     const bubble = msg.querySelector('.bubble');
 
-    let content = '';
+  let content = '';
     if (bubble) {
-      content = bubble.innerHTML || '';
+      // 用户消息存纯文本（不含图片网格HTML），助手消息存 innerHTML（含 markdown 排版）
+      content = role === 'user' ? (bubble.textContent || '') : (bubble.innerHTML || '');
     }
 
     // 按 DOM 顺序收集思考链与工具调用（二者都在 .steps 容器内）
@@ -67,9 +68,13 @@ async function saveConversation() {
           completionTokens: statsEl.dataset.completionTokens ? Number(statsEl.dataset.completionTokens) : 0,
         };
       }
+      // 收集模型名，用于历史回放时正确显示实际使用的模型
+      const modelEl = msg.querySelector('.answer-footer .role');
+      const model = modelEl ? modelEl.textContent : null;
       messages.push({
         role,
         content,
+        model: model || undefined,
         tools: tools.length > 0 ? tools : undefined,
         thinks: thinks.length > 0 ? thinks : undefined,
         images: images.length > 0 ? images : undefined,

@@ -165,11 +165,10 @@ function handleChat(req, res) {
     try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); }
     catch (e) { aborted = true; }
   };
-  send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs() });
-
   readBody(req).then(async (body) => {
     const { message, images, model: bodyModel, ollamaHost, projectRoot, history, conversationId } = body;
     const model = bodyModel || DEFAULT_MODEL; // 前端可覆盖模型名
+    send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs(), model });
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
     // 规划模式入口：消息以 "/plan " 开头时，剥离前缀并以 mode:'plan' 调用，
@@ -664,7 +663,7 @@ async function handleSaveConversation(req, res) {
       // 整体覆盖：先删除旧消息，再写入完整列表，避免重复累积
       db.deleteMessages(id);
       for (const msg of messages) {
-        db.addMessage(id, msg.role, msg.content, msg.tools || null, msg.thinks || null, msg.images || null, msg.stats || null);
+        db.addMessage(id, msg.role, msg.content, msg.model || null, msg.tools || null, msg.thinks || null, msg.images || null, msg.stats || null);
       }
     }
     

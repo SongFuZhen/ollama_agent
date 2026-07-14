@@ -28,7 +28,8 @@ const state = {
     contextLimit: 0,        // 模型 context window 大小（0=未知）
   },
   bootDone: false,          // 启动序列完成
-  activeModel: null,        // 当前下拉选中的模型（来自 Ollama 已安装列表）
-  installedModels: [],      // Ollama 已安装模型列表（来自 preflight）
+  activeModel: null,         // 当前下拉选中的模型（来自 Ollama 已安装列表）
+  currentStreamModel: null,  // 当前流式会话实际使用的模型（来自 meta 事件）
+  installedModels: [],       // Ollama 已安装模型列表（来自 preflight）
   tools: [],                // 后端工具规格（来自 meta 事件，用于 /skills）
 };

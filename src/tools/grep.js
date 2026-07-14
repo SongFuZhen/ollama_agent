@@ -137,7 +137,7 @@ module.exports = {
 
     if (include) {
       const includeRegex = new RegExp(include.replace(/\*/g, '.*'));
-      results.filter(r => includeRegex.test(r.file));
+      results = results.filter(r => includeRegex.test(r.file));
     }
 
     if (results.length === 0) {
