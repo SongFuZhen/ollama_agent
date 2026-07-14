@@ -185,7 +185,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
   const ollamaTools = useNativeTools ? buildOllamaTools(specs) : null;
   const chatOpts = ollamaHost ? { ollamaHost } : {};
   // 沙箱根：用户「选择目录」下发的目录，否则默认 PROJECT_ROOT
-  const toolCtx = { root: projectRoot || PROJECT_ROOT, model, ollamaHost, projectRoot: projectRoot || PROJECT_ROOT };
+  const toolCtx = { root: projectRoot || PROJECT_ROOT, model, ollamaHost, projectRoot: projectRoot || PROJECT_ROOT, askUser, confirm };
 
   // 整体墙钟超时：即使模型在 Agent 循环里反复调工具不收敛，也强制收尾，
   // 避免前端一直 setBusy(true) 卡死、输入框停用。默认 90s，可用 AGENT_TIMEOUT_MS 覆盖。
