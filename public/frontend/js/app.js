@@ -75,6 +75,275 @@ function openDrawer() {
 function closeDrawer() {
   historyDrawer.classList.add('hidden');
 }
+// ---------- 笔记 / 待办（沙箱目录侧栏内，三 tab 切换：目录 / 待办 / 笔记 / 日志） ----------
+const sidebarTabs = $('#sidebar-tabs');
+const tabTodoBadge = $('#tab-todo-badge');
+const todoList = $('#todo-list');
+const noteList = $('#note-list');
+const todoTitleInput = $('#todo-title-input');
+const todoPriorityInput = $('#todo-priority-input');
+const todoDueInput = $('#todo-due-input');
+const todoAddOpen = $('#todo-add-open');
+const noteTitleInput = $('#note-title-input');
+const noteInput = $('#note-input');
+const noteAddOpen = $('#note-add-open');
+const todoCount = $('#todo-count');
+const noteCount = $('#note-count');
+
+// 切换侧栏底部 tab：整视图替换（目录 / 待办 / 笔记 各自独立）
+function switchSidebarTab(tabName) {
+  document.querySelectorAll('#sidebar-tabs .tab').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.sidebar-panes .pane').forEach((pane) => {
+    pane.classList.toggle('active', pane.dataset.pane === tabName);
+  });
+  if (tabName === 'todos' || tabName === 'notes') loadNotes();
+
+}
+if (sidebarTabs) {
+  sidebarTabs.onclick = (e) => {
+    const btn = e.target.closest('.tab');
+    if (btn) switchSidebarTab(btn.dataset.tab);
+  };
+}
+
+function fmtTs(ts) {
+  try { return new Date(ts).toLocaleString(); } catch (e) { return ''; }
+}
+
+async function loadNotes() {
+  if (!todoList || !noteList) return;
+  try {
+    const [todos, notes] = await Promise.all([
+      fetch('/api/todos').then((r) => r.json()),
+      fetch('/api/notes').then((r) => r.json()),
+    ]);
+    renderTodos(todos);
+    renderNotes(notes);
+  } catch (e) {
+    if (todoList) todoList.innerHTML = '<li class="notes-err">加载失败: ' + e.message + '</li>';
+  }
+}
+
+// ---------- 日志（状态栏「日志」按钮 → 右侧抽屉） ----------
+const logDrawer = $('#log-drawer');
+const logDrawerOverlay = $('#log-drawer-overlay');
+const logDrawerClose = $('#log-drawer-close');
+const logDownloadBtn = $('#log-download');
+const logContent = $('#log-content');
+const logMeta = $('#log-meta');
+const logAutoEl = $('#log-auto');
+const logRefreshBtn = $('#log-refresh');
+const logOpenBtn = $('#log-open');
+let logTimer = null;
+
+async function loadLog() {
+  if (!logContent) return;
+  try {
+    const res = await fetch('/api/log?lines=500');
+    const data = await res.json();
+    const raw = data.content || '（暂无日志）';
+    logContent.innerHTML = raw
+      .split('\n')
+      .map((line) => `<div class="log-line">${escapeHtml(line) || '&nbsp;'}</div>`)
+      .join('');
+    logContent.scrollTop = logContent.scrollHeight;
+    if (logMeta) logMeta.textContent = `${data.totalLines} 行`;
+  } catch (e) {
+    logContent.innerHTML = `<div class="log-line">日志读取失败: ${escapeHtml(e.message)}</div>`;
+  }
+}
+function startLogAuto() {
+  stopLogAuto();
+  logTimer = setInterval(loadLog, 2000);
+}
+function stopLogAuto() {
+  if (logTimer) { clearInterval(logTimer); logTimer = null; }
+}
+function openLogDrawer() {
+  if (!logDrawer) return;
+  logDrawer.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+  loadLog();
+  if (logAutoEl && logAutoEl.checked) startLogAuto();
+}
+function closeLogDrawer() {
+  if (logDrawer) logDrawer.classList.add('hidden');
+  stopLogAuto();
+}
+if (logOpenBtn) logOpenBtn.onclick = openLogDrawer;
+if (logDrawerClose) logDrawerClose.onclick = closeLogDrawer;
+if (logDrawerOverlay) logDrawerOverlay.onclick = closeLogDrawer;
+if (logRefreshBtn) logRefreshBtn.onclick = () => loadLog();
+if (logDownloadBtn) logDownloadBtn.onclick = () => { window.open('/api/log?download=1', '_blank'); };
+if (logAutoEl) logAutoEl.onchange = () => { logAutoEl.checked ? startLogAuto() : stopLogAuto(); };
+
+function renderTodos(todos) {
+  if (!todoList) return;
+  if (!todos.length) {
+    todoList.innerHTML = '<li class="notes-empty">暂无待办</li>';
+  } else {
+    todoList.innerHTML = todos
+      .map((t) => {
+        const pri = t.priority || 'medium';
+        const checked = t.status === 'done' ? 'checked' : '';
+        return `
+        <li class="todo-item ${t.status === 'done' ? 'done' : ''} ${t.status === 'doing' ? 'doing' : ''}" data-id="${t.id}">
+          <input type="checkbox" class="todo-toggle" data-act="toggle" data-id="${t.id}" ${checked} title="切换完成" />
+          <div class="todo-main">
+            <div class="todo-line">
+              <span class="todo-title">${escapeHtml(t.title || '(无标题)')}</span>
+              <span class="pri-badge pri-${pri}">${pri === 'high' ? '高' : pri === 'low' ? '低' : '中'}</span>
+              ${t.due ? `<span class="todo-due" title="截止">📅 ${escapeHtml(t.due)}</span>` : ''}
+              <button class="todo-edit" data-act="edit" data-id="${t.id}" title="编辑">✎</button>
+              <button class="todo-del" data-act="delete" data-id="${t.id}" title="删除">✕</button>
+            </div>
+            ${t.body ? `<div class="todo-body mdit">${renderMarkdown(t.body)}</div>` : ''}
+            <div class="todo-edit-form hidden">
+              <input class="ef-title simpui-input" type="text" value="${escapeHtml(t.title || '')}" placeholder="标题" />
+              <textarea class="ef-body simpui-input" rows="3" placeholder="备注（Markdown）">${escapeHtml(t.body || '')}</textarea>
+              <div class="ef-row">
+                <select class="ef-priority simpui-input">
+                  <option value="high" ${pri === 'high' ? 'selected' : ''}>高</option>
+                  <option value="medium" ${pri === 'medium' ? 'selected' : ''}>中</option>
+                  <option value="low" ${pri === 'low' ? 'selected' : ''}>低</option>
+                </select>
+                <input class="ef-due simpui-input" type="date" value="${t.due ? escapeHtml(t.due) : ''}" />
+                <select class="ef-status simpui-input">
+                  <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>待办</option>
+                  <option value="doing" ${t.status === 'doing' ? 'selected' : ''}>进行中</option>
+                  <option value="done" ${t.status === 'done' ? 'selected' : ''}>完成</option>
+                </select>
+              </div>
+              <div class="ef-actions">
+                <button class="simpui-btn primary sm ef-save" data-act="update" data-id="${t.id}">保存</button>
+                <button class="simpui-btn sm ef-cancel" data-act="cancel" data-id="${t.id}">取消</button>
+              </div>
+            </div>
+          </div>
+        </li>`;
+      })
+      .join('');
+  }
+  if (todoCount) {
+    const left = todos.filter((t) => t.status !== 'done').length;
+    todoCount.textContent = todos.length ? `${left}/${todos.length} 待办` : '';
+  }
+  // 底部 tab 上的待办角标：仅显示未完成的剩余数
+  if (tabTodoBadge) {
+    const left = todos.filter((t) => t.status !== 'done').length;
+    tabTodoBadge.textContent = left > 0 ? String(left) : '';
+    tabTodoBadge.classList.toggle('show', left > 0);
+  }
+}
+
+function renderNotes(notes) {
+  if (!noteList) return;
+  if (!notes.length) {
+    noteList.innerHTML = '<li class="notes-empty">暂无笔记</li>';
+  } else {
+    noteList.innerHTML = notes
+      .map(
+        (n) => `
+        <li class="note-item" data-id="${n.id}">
+          ${n.title ? `<div class="note-title">${escapeHtml(n.title)}</div>` : ''}
+          <div class="note-body mdit">${renderMarkdown(n.content)}</div>
+          <div class="note-edit-form hidden">
+            <input class="ne-title simpui-input" type="text" value="${escapeHtml(n.title || '')}" placeholder="标题（可选）" />
+            <textarea class="ne-content simpui-input" rows="5" placeholder="Markdown 正文">${escapeHtml(n.content || '')}</textarea>
+            <div class="ne-actions">
+              <button class="simpui-btn primary sm ne-save" data-act="update" data-id="${n.id}">保存</button>
+              <button class="simpui-btn sm ne-cancel" data-act="cancel" data-id="${n.id}">取消</button>
+              <button class="simpui-btn danger sm ne-del" data-act="delete" data-id="${n.id}">删除</button>
+            </div>
+          </div>
+          <div class="note-foot">
+            <span class="note-ts">${fmtTs(n.ts)}</span>
+            <button class="note-edit" data-act="edit" data-id="${n.id}" title="编辑">✎</button>
+          </div>
+        </li>`
+      )
+      .join('');
+  }
+  if (noteCount) noteCount.textContent = notes.length ? `${notes.length} 条` : '';
+}
+
+async function addTodo() {
+  const title = todoTitleInput && todoTitleInput.value;
+  if (!title || !title.trim()) { showSimpuiToast('提示', '请填写待办标题'); return; }
+  await fetch('/api/todos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'add',
+      title: title.trim(),
+      body: '',
+      priority: todoPriorityInput ? todoPriorityInput.value : 'medium',
+      due: todoDueInput ? (todoDueInput.value || null) : null,
+    }),
+  });
+  if (todoTitleInput) todoTitleInput.value = '';
+  if (todoDueInput) todoDueInput.value = '';
+  closeTodoAddModal();
+  loadNotes();
+}
+async function addNote() {
+  const content = noteInput && noteInput.value;
+  if (!content || !content.trim()) return;
+  await fetch('/api/notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'add',
+      title: noteTitleInput ? (noteTitleInput.value || '') : '',
+      content: content.trim(),
+    }),
+  });
+  if (noteInput) noteInput.value = '';
+  if (noteTitleInput) noteTitleInput.value = '';
+  closeNoteAddModal();
+  loadNotes();
+}
+async function todoAction(action, id, extra = {}) {
+  await fetch('/api/todos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, id: Number(id), ...extra }),
+  });
+  loadNotes();
+}
+async function noteAction(action, id, extra = {}) {
+  await fetch('/api/notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, id: Number(id), ...extra }),
+  });
+  loadNotes();
+}
+
+// ---------- 添加待办 / 笔记 弹框 ----------
+const todoAddModal = $('#todo-add-modal');
+const noteAddModal = $('#note-add-modal');
+
+function openTodoAddModal() {
+  if (!todoAddModal) return;
+  todoAddModal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+  if (todoTitleInput) todoTitleInput.focus();
+}
+function closeTodoAddModal() {
+  if (todoAddModal) todoAddModal.classList.add('hidden');
+}
+function openNoteAddModal() {
+  if (!noteAddModal) return;
+  noteAddModal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+  if (noteTitleInput) noteTitleInput.focus();
+}
+function closeNoteAddModal() {
+  if (noteAddModal) noteAddModal.classList.add('hidden');
+}
 
 async function loadHistoryList() {
   historyList.innerHTML = '<div class="history-loading"><span class="spin"></span>加载中…</div>';
@@ -145,6 +414,9 @@ async function loadHistoryConversation(convId) {
     // 设置对话 ID
     state.conversationId = convId;
     syncUrl();
+
+    // U3：用后端返回的结构化消息重建前端 history（权威来源），不再依赖 DOM 收集
+    loadHistoryFromMessages(data.messages);
 
     // 恢复对话名称（历史中保存的标题）
     const savedTitle = data.title || '';
@@ -248,6 +520,12 @@ async function loadHistoryConversation(convId) {
       }
     }
 
+    // Task 5: Show hint if context was previously cleared
+    if (data.context_cleared_at) {
+      const ago = Math.round((Date.now() - data.context_cleared_at) / 60000);
+      showSimpuiToast('提示', `该对话曾在 ${ago} 分钟前清除上下文，历史记录完整保留`);
+    }
+
     closeDrawer();
     showEmptyIfEmpty();
     renderSessionState();
@@ -271,6 +549,91 @@ if (historyBtnToolbar) {
 const historyBtn = $('#history-btn');
 if (historyBtn) {
   historyBtn.onclick = openDrawer;
+}
+
+// 笔记 / 待办 侧栏交互（底部 tab 切换，整视图替换）
+if (todoAddOpen) todoAddOpen.onclick = openTodoAddModal;
+if (noteAddOpen) noteAddOpen.onclick = openNoteAddModal;
+// 待办添加弹框
+const todoAddSave = $('#todo-add-save');
+if (todoAddSave) todoAddSave.onclick = () => addTodo();
+const todoAddCancel = $('#todo-add-cancel');
+if (todoAddCancel) todoAddCancel.onclick = closeTodoAddModal;
+const todoAddClose = $('#todo-add-close');
+if (todoAddClose) todoAddClose.onclick = closeTodoAddModal;
+if (todoAddModal) {
+  todoAddModal.onclick = (e) => { if (e.target === todoAddModal) closeTodoAddModal(); };
+  todoAddModal.onkeydown = (e) => {
+    if (e.key === 'Escape') closeTodoAddModal();
+    if (e.key === 'Enter' && e.target === todoTitleInput) addTodo();
+  };
+}
+// 笔记添加弹框
+if (noteAddOpen) noteAddOpen.onclick = openNoteAddModal;
+const noteAddSave = $('#note-add-save');
+if (noteAddSave) noteAddSave.onclick = () => addNote();
+const noteAddCancel = $('#note-add-cancel');
+if (noteAddCancel) noteAddCancel.onclick = closeNoteAddModal;
+const noteAddClose = $('#note-add-close');
+if (noteAddClose) noteAddClose.onclick = closeNoteAddModal;
+if (noteAddModal) {
+  noteAddModal.onclick = (e) => { if (e.target === noteAddModal) closeNoteAddModal(); };
+  noteAddModal.onkeydown = (e) => {
+    if (e.key === 'Escape') closeNoteAddModal();
+    if (e.key === 'Enter' && (e.target === noteTitleInput || e.target === noteInput)) addNote();
+  };
+}
+// 启动即加载一次待办/笔记（供底部角标显示剩余数）
+loadNotes();
+// 列表内的切换/删除/编辑/保存用事件委托（按钮动态生成）
+if (todoList) {
+  todoList.onclick = (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act;
+    const li = btn.closest('.todo-item');
+    if (act === 'toggle') {
+      todoAction('toggle', id);
+    } else if (act === 'delete') {
+      todoAction('delete', id);
+    } else if (act === 'edit') {
+      li.querySelector('.todo-edit-form').classList.toggle('hidden');
+    } else if (act === 'cancel') {
+      li.querySelector('.todo-edit-form').classList.add('hidden');
+    } else if (act === 'update') {
+      const f = li.querySelector('.todo-edit-form');
+      todoAction('update', id, {
+        title: f.querySelector('.ef-title').value,
+        body: f.querySelector('.ef-body').value,
+        priority: f.querySelector('.ef-priority').value,
+        due: f.querySelector('.ef-due').value || null,
+        status: f.querySelector('.ef-status').value,
+      });
+    }
+  };
+}
+if (noteList) {
+  noteList.onclick = (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act;
+    const li = btn.closest('.note-item');
+    if (act === 'edit') {
+      li.querySelector('.note-edit-form').classList.toggle('hidden');
+    } else if (act === 'cancel') {
+      li.querySelector('.note-edit-form').classList.add('hidden');
+    } else if (act === 'delete') {
+      noteAction('delete', id);
+    } else if (act === 'update') {
+      const f = li.querySelector('.note-edit-form');
+      noteAction('update', id, {
+        title: f.querySelector('.ne-title').value,
+        content: f.querySelector('.ne-content').value,
+      });
+    }
+  };
 }
 
 // ---------- 删除历史对话（需二次确认） ----------
@@ -414,6 +777,9 @@ $('#new-chat').onclick = () => {
   state.currentProjectRoot = effectiveRoot();
   state.conversationId = generateConvId();
   state.conversationTitle = '';
+  state.history = []; // U3：新对话清空结构化历史
+  state.conversationCleared = false; // 重置上下文清除标记
+  state.contextClearedAt = null; // 重置清除时间戳
   setConvName('');
   updateProjectRootUI();
   // 空状态页预填已有 project root
@@ -437,6 +803,27 @@ function mountSession() {
   }
   if (state.bootDone) syncUrl();
   messagesEl.appendChild(state.session);
+  // 事件委托：点击「清除上下文」按钮
+  state.session.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="clear-context"]');
+    if (!btn) return;
+    state.conversationCleared = true;
+    state.contextClearedAt = Date.now(); // 捕获时间戳，供持久化使用
+    btn.disabled = true;
+    btn.innerHTML = `
+      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+      </svg>
+      <span>上下文已清除</span>
+    `;
+    btn.classList.add('cleared');
+    btn.title = '已清除：下一条消息将不携带历史记录发送';
+    showSimpuiToast('提示', '已清除上下文，下一条消息将不携带历史记录发送');
+  });
   // 同步可编辑的对话名称
   if (convNameEl) {
     convNameEl.value = state.conversationTitle || '';
@@ -600,10 +987,20 @@ function renderSessionState() {
 
   // 渲染上下文用量条
   renderContextBar();
+
+  // 上下文已清除警告（Task 4: 视觉反馈）
+  if (ssContextText) {
+    ssContextText.textContent = state.conversationCleared
+      ? '⚠ 上下文已清除 · 下条消息不带历史'
+      : (state.sessionStats.contextLimit > 0
+          ? `${formatTokenCount(state.sessionStats.contextTokens || 0)}/${formatTokenCount(state.sessionStats.contextLimit)} ${state.sessionStats.contextLimit > 0 ? Math.round((state.sessionStats.contextTokens || 0) / state.sessionStats.contextLimit * 100) + '%' : ''}`
+          : (state.sessionStats.contextTokens || 0) > 0 ? formatTokenCount(state.sessionStats.contextTokens || 0) + '/?' : '—');
+    ssContextText.classList.toggle('context-cleared-warning', state.conversationCleared);
+  }
 }
 
 function renderContextBar() {
-  if (!ssContextFill || !ssContextText) return;
+  if (!ssContextFill) return;
   const used = state.sessionStats.contextTokens || 0;
   const limit = state.sessionStats.contextLimit || 0;
 
@@ -613,11 +1010,9 @@ function renderContextBar() {
     ssContextFill.classList.remove('warn', 'danger');
     if (pct >= 90) ssContextFill.classList.add('danger');
     else if (pct >= 70) ssContextFill.classList.add('warn');
-    ssContextText.textContent = `${formatTokenCount(used)}/${formatTokenCount(limit)} ${pct}%`;
   } else {
     ssContextFill.style.width = '0%';
     ssContextFill.classList.remove('warn', 'danger');
-    ssContextText.textContent = used > 0 ? formatTokenCount(used) + '/?' : '—';
   }
 }
 
@@ -661,6 +1056,7 @@ function openStateModal() {
   if (body) body.textContent = buildStateDetail();
   const modal = $('#state-modal');
   if (modal) modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
 }
 function closeStateModal() {
   const modal = $('#state-modal');
@@ -789,11 +1185,20 @@ function handleEvent(ev) {
     }
       
     case 'verify':
-      // 验证器闭环：自动跑测试/Lint（此前前端未处理该事件）
+      // 验证器闭环：自动跑测试/Lint，及自愈重试进度
       if (ev.status === 'running') {
         toggleThinking(true, '验证中 · 运行测试/Lint' + phaseStep(ev.step));
+      } else if (HEAL_STATUSES.has(ev.status)) {
+        // 自愈进度：实时反映「验证失败→重试修复→通过/耗尽」
+        toggleThinking(true, healLabel(ev) + phaseStep(ev.step));
+        showHealBanner(ev);
+        // 终态（成功/耗尽/异常）收起横幅，让出消息区空间
+        if (ev.status === 'heal_pass' || ev.status === 'heal_exhausted' || ev.status === 'heal_error') {
+          setTimeout(hideHealBanner, ev.status === 'heal_pass' ? 2500 : 6000);
+        }
       } else {
         toggleThinking(true, (ev.status === 'pass' ? '验证通过' : ev.status === 'fail' ? '验证失败' : '验证异常') + phaseStep(ev.step));
+        hideHealBanner(); // 普通验证结束也确保横幅收起
       }
       appendVerify(ev);
       break;
@@ -827,6 +1232,19 @@ function handleEvent(ev) {
 // 阶段标签里的「第 N 步」后缀（模型每轮工具循环 +1），让长任务进度可见
 function phaseStep(step) {
   return typeof step === 'number' && step > 0 ? `（第 ${step} 步）` : '';
+}
+
+// 自愈闭环相关状态集合与中文标签（验证失败后自动重试修复进度）
+const HEAL_STATUSES = new Set(['heal_start', 'heal_attempt', 'heal_pass', 'heal_exhausted', 'heal_error']);
+function healLabel(ev) {
+  switch (ev.status) {
+    case 'heal_start': return '自愈启动 · 验证失败，准备重试';
+    case 'heal_attempt': return '自愈中 · 模型修复代码（退避后重试）';
+    case 'heal_pass': return '自愈成功 · 验证通过';
+    case 'heal_exhausted': return '自愈耗尽 · 重试次数用尽仍未通过';
+    case 'heal_error': return '自愈异常';
+    default: return '自愈';
+  }
 }
 
 // ---------- 图片粘贴 / 拖拽（仅随消息发送，不落工作目录） ----------
@@ -911,6 +1329,26 @@ let lastUserMessage = '';
 let userAborted = false;
 
 // ---------- 发送请求（SSE 流式读取） ----------
+// ---------- 结构化历史（U3：解耦 DOM 收集） ----------
+// 历史以结构化数组为权威来源：每轮 user/assistant 提交时 push，发送时直接切片上报，
+// 不再从 #messages 的 .msg 节点文本 scrape，避免渲染结构变化影响上下文收集。
+const HISTORY_LIMIT = 20; // 与后端 validHistory 上限一致，仅保留最近 N 轮
+function pushHistory(role, content) {
+  if (!content || !content.trim()) return;
+  state.history.push({ role, content: content.trim() });
+  // 仅保留最近 HISTORY_LIMIT 条，避免无限增长
+  if (state.history.length > HISTORY_LIMIT) {
+    state.history = state.history.slice(state.history.length - HISTORY_LIMIT);
+  }
+}
+// 用后端返回的结构化消息（加载历史对话时）重建前端 history
+function loadHistoryFromMessages(messages) {
+  state.history = (messages || [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content && m.content.trim())
+    .slice(-HISTORY_LIMIT)
+    .map((m) => ({ role: m.role, content: m.content.trim() }));
+}
+
 async function send(opts = {}) {
   // 发起全新请求：清除上一次可能遗留的中止标志，避免新请求的初始事件被误丢弃
   requestAborted = false;
@@ -967,24 +1405,18 @@ async function send(opts = {}) {
     syncUrl();
   }
 
-  // 收集对话历史（最近 20 条，不含当前输入），供模型感知上下文
-  const history = [];
-  if (state.session) {
-    const msgs = state.session.querySelectorAll('.msg');
-    for (const m of msgs) {
-      if (m.classList.contains('user')) {
-        const bubble = m.querySelector('.bubble');
-        history.push({ role: 'user', content: bubble ? bubble.textContent.trim() : '' });
-      } else if (m.classList.contains('agent') && m.classList.contains('answer-card')) {
-        // 只取最终答案，跳过思考/工具步骤
-        const bubble = m.querySelector('.bubble');
-        if (bubble && bubble.textContent.trim()) {
-          history.push({ role: 'assistant', content: bubble.textContent.trim() });
-        }
-      }
-    }
+  // 收集对话历史（结构化，最近 HISTORY_LIMIT 条，不含当前输入）供模型感知上下文。
+  // U3：直接读 state.history（权威来源），不再从 DOM .msg 节点 scrape。
+  let history;
+  if (state.conversationCleared) {
+    // 用户点击了「清除上下文」：发送空历史，发送后重置标志（仅影响本次请求）
+    history = [];
+    state.conversationCleared = false;
+    state.contextClearedAt = null; // 重置时间戳（已落库，不再需要）
+  } else {
+    history = state.history.slice(-HISTORY_LIMIT);
   }
-
+  // 当前用户输入不计入历史（它是本次请求本身），发送后再作为一轮 user 提交入栈。
   const body = { message: text, images: imgs.map((i) => i.b64), history };
   // 二段式闭环：plan 模式下用户点「确认执行」时，显式声明 execute 跳过自动判定，
   // 避免 auto 模式因同一复杂消息再次进 plan 造成死循环。
@@ -1003,6 +1435,10 @@ async function send(opts = {}) {
   if (effRoot) body.projectRoot = effRoot;
   if (!state.sessionStats.startTs) state.sessionStats.startTs = Date.now();
   updateProjectRootUI();
+
+  // U3：当前用户输入作为一轮 user 提交入栈（不含在上方发送的 history 内）。
+  // 必须在构造 body 之后调用，确保本次请求不带自己。
+  pushHistory('user', text);
 
   // 创建 AbortController 以支持中止
   requestAborted = false;
@@ -1219,6 +1655,9 @@ if (ssMoreEl) {
 // 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
 const stateModalClose = $('#state-modal-close');
 if (stateModalClose) stateModalClose.onclick = closeStateModal;
+// 状态弹框：日志按钮
+const stateModalLogBtn = $('#state-modal-log-btn');
+if (stateModalLogBtn) stateModalLogBtn.onclick = () => { closeStateModal(); openLogDrawer(); };
 const stateModal = $('#state-modal');
 if (stateModal) {
   stateModal.onclick = (e) => { if (e.target === stateModal) closeStateModal(); };
@@ -1227,6 +1666,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeStateModal();
     closeDeleteConfirm();
+    closeTodoAddModal();
+    closeNoteAddModal();
+    closeLogDrawer();
   }
 });
 // 状态栏：定时刷新

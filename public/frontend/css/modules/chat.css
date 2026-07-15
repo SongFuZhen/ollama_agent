@@ -363,7 +363,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--success);
 }
 
 @keyframes dot-sweep {
@@ -374,4 +374,53 @@
 .thinking-label {
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* Context actions in answer footer */
+.answer-footer .context-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.context-clear {
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--simpui-text-light);
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.context-clear:hover {
+  color: var(--danger);
+  background: var(--danger-dim);
+}
+
+.context-clear:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.context-clear-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+/* Cleared state for context clear button */
+.context-clear.cleared {
+  color: var(--success);
+  background: var(--success-dim);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.context-clear.cleared:hover {
+  color: var(--success);
+  background: var(--success-dim);
+}
+
+/* Status bar context cleared warning */
+#ss-context-text.context-cleared-warning {
+  color: var(--warning) !important;
 }

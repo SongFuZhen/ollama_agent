@@ -7,7 +7,7 @@ const { buildOllamaTools } = require('../tools/schema');
 const { buildRecallPrompt } = require('../memory/recall');
 const { addMemory } = require('../storage/db');
 const { compactMessages } = require('./compact');
-const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY, COMPACT_THRESHOLD, PROJECT_ROOT } = require('../config');
+const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY, SELF_HEAL, MAX_HEAL_STEPS, COMPACT_THRESHOLD, PROJECT_ROOT } = require('../config');
 
 // 规划/执行模式下的工具分类（Plan Mode 仅允许只读工具）
 const READONLY = new Set(['read_file', 'list_dir', 'grep', 'glob', 'tree', 'read_lines', 'search_files', 'count_loc']);
@@ -165,6 +165,35 @@ function nativeSystemPrompt() {
   ].join('\n');
 }
 
+// 延迟工具：返回在 ms 毫秒后 resolve 的 promise；signal 已 abort 时立即 reject（ABORTED），
+// 使自愈重试间的等待可被用户取消立即打断，而非干等。
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(makeAbortError());
+    const t = setTimeout(() => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    if (!signal) return;
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(makeAbortError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+// 指数退避延迟：第 n 次重试（从 1 起）等待 base * 2^(n-1) ms，封顶 maxMs。
+// 用于自愈重试之间，避免弱模型连续硬撞同一报错时瞬间打满 Ollama；
+// 同时尊重 signal，取消即中止等待。
+async function backoffDelay(attempt, { base = 1000, maxMs = 8000, signal } = {}) {
+  const ms = Math.min(base * Math.pow(2, attempt - 1), maxMs);
+  await sleep(ms, signal);
+}
+
+// 验证器与自愈逻辑在 runAgent 内部以闭包形式定义（需访问 emit/messages/signal 等局部状态）。
+
+
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, confirm, images, mode: 'execute'|'plan', conversationId }
 async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools, signal } = {}, emitInput) {
@@ -193,6 +222,91 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
   // 避免前端一直 setBusy(true) 卡死、输入框停用。默认 90s，可用 AGENT_TIMEOUT_MS 覆盖。
   const WALL_MS = Number(process.env.AGENT_TIMEOUT_MS) || 90000;
   const deadline = Date.now() + WALL_MS;
+
+  // ---------- 验证器 + 自愈闭环（闭包，访问上述局部状态） ----------
+
+  // 跑验证器：真跑 run_tests / run_lint，返回 { failed, merged }。
+  // 失败判定以确定性退出码为准（工具约定失败报「退出码: N」），绝不采信模型自述。
+  async function runVerifier(step) {
+    let tOut = '';
+    let lOut = '';
+    try {
+      tOut = String(await runTool('run_tests', {}, toolCtx) || '');
+    } catch (e) {
+      tOut = 'run_tests 执行异常: ' + e.message;
+    }
+    try {
+      lOut = String(await runTool('run_lint', {}, toolCtx) || '');
+    } catch (e) {
+      lOut = 'run_lint 执行异常: ' + e.message;
+    }
+    const failed = /退出码/.test(tOut) || /退出码/.test(lOut);
+    const merged = `【验证结果 ${failed ? '失败' : '通过'}】\n--- run_tests ---\n${tOut.slice(0, TOOL_RESULT_MAX / 2)}\n--- run_lint ---\n${lOut.slice(0, TOOL_RESULT_MAX / 2)}`;
+    return { failed, merged };
+  }
+
+  // 单轮自愈：让模型基于现有 messages 走一次工具调用回合完成修复。
+  // 直接调用 chatStream + 执行工具，复刻主循环单步，而非递归 runAgent（会重置上下文、丢失报错）。
+  async function runHealRound() {
+    let raw = '';
+    try {
+      if (signal && signal.aborted) throw makeAbortError();
+      raw = await chatStream(model, messages, { signal });
+    } catch (e) {
+      if (isAbort(e)) throw e;
+      emit({ type: 'verify', step: 0, status: 'heal_error', output: '自愈模型调用失败: ' + e.message });
+      return;
+    }
+    const parsed = parseToolCall(raw);
+    if (parsed && parsed.action && isAllowed(parsed.action)) {
+      const tool = TOOLS[parsed.action];
+      try {
+        const r = await tool.run(parsed.params || {}, toolCtx);
+        addStepMessages(messages, useNativeTools, raw, null,
+          useNativeTools ? String(r).slice(0, TOOL_RESULT_MAX) : `工具 ${parsed.action} 返回:\n${String(r).slice(0, TOOL_RESULT_MAX)}`);
+      } catch (e) {
+        addStepMessages(messages, useNativeTools, raw, null, `工具 ${parsed.action} 执行错误: ${e.message}`);
+      }
+    }
+  }
+
+  // 自愈重试：验证失败后注入「请修复」指令，给模型 MAX_HEAL_STEPS 轮独立修复，
+  // 每轮后重新验证；通过即收尾，耗尽则上报最后失败输出交由用户人工处理。
+  // 轮次间用指数退避（backoffDelay）避免弱模型连续硬撞同一报错时瞬间打满 Ollama。
+  async function selfHeal(fromStep, verdict) {
+    emit({ type: 'verify', step: fromStep, status: 'heal_start', attempt: 0, max: MAX_HEAL_STEPS, output: `验证失败，启动自愈：最多重试 ${MAX_HEAL_STEPS} 次` });
+    let v = verdict;
+    for (let attempt = 1; attempt <= MAX_HEAL_STEPS; attempt++) {
+      if (Date.now() > deadline) {
+        emit({ type: 'verify', step: fromStep, status: 'heal_exhausted', attempt, max: MAX_HEAL_STEPS, output: '自愈超时，停止重试。最后失败：\n' + v.merged.slice(0, TOOL_RESULT_MAX) });
+        return;
+      }
+      // 指数退避：首轮前稍等，避免与上一轮验证紧挨着瞬间重发
+      try {
+        await backoffDelay(attempt, { base: 1000, maxMs: 8000, signal });
+      } catch (e) {
+        if (isAbort(e)) throw e;
+      }
+      const healPrompt = [
+        '你上一步的修改导致验证失败。请根据下方真实报错修复代码，不要改动无关逻辑，修复后我会重新运行验证。',
+        '',
+        v.merged.slice(0, TOOL_RESULT_MAX),
+        '',
+        `[自愈第 ${attempt}/${MAX_HEAL_STEPS} 次] 请直接修改代码文件修复上述失败，不要输出计划或空谈。`,
+      ].join('\n');
+      emit({ type: 'verify', step: fromStep, status: 'heal_attempt', attempt, max: MAX_HEAL_STEPS, output: `第 ${attempt} 次自愈尝试` });
+      addStepMessages(messages, useNativeTools, '', null,
+        useNativeTools ? healPrompt : `工具 验证 返回:\n${healPrompt}`);
+      await runHealRound();
+      v = await runVerifier(fromStep);
+      emit({ type: 'verify', step: fromStep, status: v.failed ? 'fail' : 'pass', attempt, max: MAX_HEAL_STEPS, output: v.merged.slice(0, TOOL_RESULT_MAX) });
+      if (!v.failed) {
+        emit({ type: 'verify', step: fromStep, status: 'heal_pass', attempt, max: MAX_HEAL_STEPS, output: `第 ${attempt} 次自愈成功，验证通过` });
+        return;
+      }
+    }
+    emit({ type: 'verify', step: fromStep, status: 'heal_exhausted', attempt: MAX_HEAL_STEPS, max: MAX_HEAL_STEPS, output: '自愈重试耗尽，仍未通过。最后失败：\n' + v.merged.slice(0, TOOL_RESULT_MAX) });
+  }
 
   // 构造首条 user 消息：有图片时改用 Ollama 多模态格式（content + images 数组）
   const userMessage = (images && images.length)
@@ -473,18 +587,13 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     // Verifier（验证器闭环）：执行模式下，每 VERIFY_EVERY 步且刚做了写操作，
     // 自动真跑 run_tests / run_lint，把结果作为反馈喂回主循环，模型据此再修。
     // 失败判定：输出含"退出码"（工具约定失败报"退出码: N"）。
+    // 若 SELF_HEAL 开启且验证失败，进入自愈重试：注入「请修复」指令，给模型
+    // 独立的 MAX_HEAL_STEPS 步修复，每步后再重新验证，直至通过或重试耗尽。
+    // 这是为 7B/8B 弱模型设计的核心闭环——确定性测试当裁判，模型只负责改。
     if (!isPlan && WRITE.has(action) && step % VERIFY_EVERY === 0) {
-      try {
-        emit({ type: 'verify', step, status: 'running' });
-        const tOut = String(await runTool('run_tests', {}, toolCtx) || '');
-        const lOut = String(await runTool('run_lint', {}, toolCtx) || '');
-        const failed = /退出码/.test(tOut) || /退出码/.test(lOut);
-        const merged = `【验证结果 ${failed ? '失败' : '通过'}】\n--- run_tests ---\n${tOut.slice(0, TOOL_RESULT_MAX / 2)}\n--- run_lint ---\n${lOut.slice(0, TOOL_RESULT_MAX / 2)}`;
-        emit({ type: 'verify', step, status: failed ? 'fail' : 'pass', output: merged.slice(0, TOOL_RESULT_MAX) });
-        addStepMessages(messages, stepUsedNative, text, nativeToolCalls,
-          useNativeTools ? merged.slice(0, TOOL_RESULT_MAX) : `工具 验证 返回:\n${merged.slice(0, TOOL_RESULT_MAX)}`);
-      } catch (e) {
-        emit({ type: 'verify', step, status: 'error', output: e.message });
+      const verdict = await runVerifier(step);
+      if (verdict.failed && SELF_HEAL && (MAX_STEPS - step) > 0) {
+        await selfHeal(step, verdict);
       }
     }
   }
@@ -522,4 +631,4 @@ function recordMemory(convId, userInput, answer, ollamaHost) {
   }
 }
 
-module.exports = { runAgent, systemPrompt, READONLY, WRITE, truncateMessages };
+module.exports = { runAgent, systemPrompt, READONLY, WRITE, truncateMessages, sleep, backoffDelay };

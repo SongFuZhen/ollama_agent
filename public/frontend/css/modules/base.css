@@ -25,7 +25,8 @@
   src: url("/fonts/JetBrainsMono-Bold.ttf") format("truetype");
 }
 
-/* 使用 simpui 的变量系统 */
+/* 使用 simpui 的变量系统，并在其之外补充少量语义色（simpui 未提供次级表面与状态色）。
+  沿用 simpui 的明暗机制：浅色写在 :root，暗色写在 .dark，与 theme.js 对齐。 */
 :root {
   /* 字体 */
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
@@ -60,45 +61,51 @@
   --duration-normal: 200ms;
   --duration-slow: 300ms;
 
-  /* 布局 */
+  /* 布局尺寸 */
   --topbar-h: 48px;
   --session-bar-h: 40px;
   --status-bar-h: 28px;
   --sidebar-w: 240px;
 
-  /* 语义色 - 与 simpui 保持一致 */
-  --green: #198754;
-  --red: #dc3545;
-
-  font-size: 14px;
-}
-
-/* 在 simpui 令牌之外补充的少量语义色（simpui 未提供次级表面与状态色）。
-   沿用 simpui 的明暗机制：浅色写在 :root，暗色写在 .dark，与 theme.js 对齐。 */
-:root {
+  /* 品牌色（主色调） */
   --accent: #3b6cf6;
   --accent-dim: rgba(59, 108, 246, .18);
-  --surface-2: #eef1f6;        /* 代码块 / 工具块底色 */
-  --border-soft: #e2e6ee;      /* 分割线 / 边框 */
-  --simpui-input-border: rgba(0, 0, 0, .08);
+  --primary: var(--accent);            /* 别名：统一指向品牌色，避免散落硬编码蓝 */
+
+  /* 语义状态色 */
   --danger: #dc2626;
+  --success: #198754;
   --warning: #b45309;
   --warning-dim: rgba(180, 83, 9, .12);
   --info: #0891b2;
   --info-dim: rgba(8, 145, 178, .12);
+
+  /* 表面 / 边框（simpui 之外补充） */
+  --surface-2: #eef1f6;                /* 代码块 / 工具块底色 */
+  --border-soft: #e2e6ee;              /* 分割线 / 边框 */
+  --simpui-input-border: rgba(0, 0, 0, .08);
+
+  font-size: 14px;
 }
 
 .dark {
+  /* 品牌色（暗色） */
   --accent: #3b82f6;
   --accent-dim: rgba(59, 130, 246, .25);
-  --surface-2: #151515;
-  --border-soft: #2a2f3a;
-  --simpui-input-border: rgba(255, 255, 255, .08);
+  --primary: var(--accent);
+
+  /* 语义状态色（暗色） */
   --danger: #f87171;
+  --success: #22c55e;
   --warning: #fbbf24;
   --warning-dim: rgba(251, 191, 36, .15);
   --info: #22d3ee;
   --info-dim: rgba(34, 211, 238, .15);
+
+  /* 表面 / 边框（暗色） */
+  --surface-2: #151515;
+  --border-soft: #2a2f3a;
+  --simpui-input-border: rgba(255, 255, 255, .08);
 }
 
 /* Reset */
@@ -139,9 +146,9 @@ html, body, h1, h2, h3, h4, h5, h6, p, div, span, strong, th, tr, input, select,
 }
 
 .dark .simpui-btn.danger {
-  background: var(--red);
+  background: var(--danger);
   color: #fff;
-  border-color: var(--red);
+  border-color: var(--danger);
 }
 
 html, body {

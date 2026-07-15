@@ -110,20 +110,75 @@
 
         <!-- ===== 主体布局 ===== -->
         <div class="layout">
-            <!-- 侧边栏 -->
+            <!-- 侧边栏：目录 / 待办 / 笔记 三 tab 切换（各自独立完整视图） -->
             <aside class="sidebar" id="sidebar">
-                <div class="sidebar-header">
-                    <span class="sidebar-title">沙箱目录</span>
-                    <button
-                        id="fs-refresh"
-                        class="simpui-btn sm"
-                        aria-label="刷新"
-                    >
-                        <i data-lucide="refresh-cw"></i>
-                        <span>刷新</span>
+                <div class="sidebar-panes">
+                    <!-- 目录 -->
+                    <div id="file-pane" class="pane active" data-pane="files">
+                        <div class="pane-header">
+                            <span class="pane-title">沙箱目录</span>
+                            <button id="fs-refresh" class="simpui-btn sm" aria-label="刷新">
+                                <i data-lucide="refresh-cw"></i><span>刷新</span>
+                            </button>
+                        </div>
+                        <div id="file-tree" class="file-tree"></div>
+                    </div>
+                    <!-- 待办 -->
+                    <div id="todo-pane" class="notes-pane pane" data-pane="todos">
+                        <div class="pane-header">
+                            <span class="pane-title">待办</span>
+                            <div class="pane-header-actions">
+                                <button
+                                    id="todo-add-open"
+                                    class="simpui-btn sm"
+                                    type="button"
+                                    title="添加待办"
+                                    aria-label="添加待办"
+                                >
+                                    <i data-lucide="plus"></i>
+                                    <span>添加</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="notes-pane-body">
+                            <ul id="todo-list" class="todo-list"></ul>
+                        </div>
+                    </div>
+                    <!-- 笔记 -->
+                    <div id="note-pane" class="notes-pane pane" data-pane="notes">
+                        <div class="pane-header">
+                            <span class="pane-title">笔记</span>
+                            <div class="pane-header-actions">
+                                <button
+                                    id="note-add-open"
+                                    class="simpui-btn sm"
+                                    type="button"
+                                    title="添加笔记"
+                                    aria-label="添加笔记"
+                                >
+                                    <i data-lucide="plus"></i>
+                                    <span>添加</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="notes-pane-body">
+                            <ul id="note-list" class="note-list"></ul>
+                        </div>
+                    </div>
+                </div>
+                <!-- 底部切换条（高度与右侧 status bar 一致，图标+文字） -->
+                <div class="sidebar-tabs" id="sidebar-tabs">
+                    <button class="tab active" data-tab="files" title="目录">
+                        <i data-lucide="folder-tree"></i><span>目录</span>
+                    </button>
+                    <button class="tab" data-tab="todos" title="待办">
+                        <i data-lucide="list-todo"></i><span>待办</span>
+                        <span class="tab-badge" id="tab-todo-badge"></span>
+                    </button>
+                    <button class="tab" data-tab="notes" title="笔记">
+                        <i data-lucide="sticky-note"></i><span>笔记</span>
                     </button>
                 </div>
-                <div id="file-tree" class="file-tree"></div>
             </aside>
 
             <!-- 主内容区 -->
@@ -244,6 +299,17 @@
                             </div>
                         </div>
                     </div>
+                    <div
+                        id="heal-banner"
+                        class="heal-banner hidden"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <span class="heal-spinner"></span>
+                        <span class="heal-icon"></span>
+                        <span class="heal-text">自愈中</span>
+                        <span class="heal-badge simpui-badge sm"></span>
+                    </div>
                     <div id="messages" class="messages"></div>
                     <div
                         id="thinking"
@@ -363,6 +429,12 @@
                         >
                         <span class="status-sep">|</span>
                         <span class="status-more" id="ss-more">详情</span>
+                        <span class="status-sep">|</span>
+                        <span
+                            class="status-item clickable"
+                            id="log-open"
+                            title="运行日志"
+                        >日志</span>
                     </div>
                 </div>
             </main>
@@ -391,6 +463,37 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ===== 运行日志 Drawer ===== -->
+        <div id="log-drawer" class="drawer hidden">
+            <div class="drawer-overlay" id="log-drawer-overlay"></div>
+            <div class="drawer-content">
+                <div class="drawer-header">
+                    <h3>运行日志</h3>
+                    <div class="drawer-header-actions">
+                        <label class="log-toggle">
+                            <input type="checkbox" id="log-auto" checked />
+                            <span>自动刷新</span>
+                        </label>
+                        <button id="log-refresh" class="simpui-btn sm" title="刷新" aria-label="刷新日志">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                        <button id="log-download" class="simpui-btn sm" title="下载日志文件">
+                            <i data-lucide="download"></i>
+                        </button>
+                        <button
+                            id="log-drawer-close"
+                            class="simpui-btn sm"
+                            aria-label="关闭"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div class="log-meta" id="log-meta"></div>
+                <pre id="log-content" class="log-content"></pre>
             </div>
         </div>
 
@@ -504,15 +607,145 @@
             <div class="simpui-dialog-panel sm">
                 <div class="simpui-dialog-header">
                     <h3 class="simpui-dialog-title">会话状态</h3>
+                    <div class="simpui-dialog-header-actions">
+                        <button
+                            id="state-modal-log-btn"
+                            class="simpui-btn sm"
+                            title="打开日志面板"
+                            aria-label="打开日志面板"
+                        >
+                            <i data-lucide="scroll-text"></i>
+                            <span>日志</span>
+                        </button>
+                        <button
+                            id="state-modal-close"
+                            class="simpui-dialog-close"
+                            aria-label="关闭"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div id="state-modal-body" class="simpui-dialog-body"></div>
+            </div>
+        </div>
+
+        <!-- ===== 添加待办弹窗 ===== -->
+        <div
+            id="todo-add-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="添加待办"
+        >
+            <div class="simpui-dialog-panel md">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">添加待办</h3>
                     <button
-                        id="state-modal-close"
+                        id="todo-add-close"
                         class="simpui-dialog-close"
                         aria-label="关闭"
                     >
                         ✕
                     </button>
                 </div>
-                <div id="state-modal-body" class="simpui-dialog-body"></div>
+                <div class="simpui-dialog-body">
+                    <div class="field">
+                        <label for="todo-title-input">待办标题</label>
+                        <input
+                            id="todo-title-input"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="待办标题"
+                            maxlength="200"
+                            spellcheck="false"
+                        />
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="todo-priority-input">优先级</label>
+                            <select id="todo-priority-input" class="simpui-input">
+                                <option value="high">高</option>
+                                <option value="medium" selected>中</option>
+                                <option value="low">低</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="todo-due-input">截止日期</label>
+                            <input id="todo-due-input" class="simpui-input" type="date" />
+                        </div>
+                    </div>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="todo-add-cancel" class="simpui-btn" type="button">
+                        取消
+                    </button>
+                    <button
+                        id="todo-add-save"
+                        class="simpui-btn primary"
+                        type="button"
+                    >
+                        添加
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 添加笔记弹窗 ===== -->
+        <div
+            id="note-add-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="添加笔记"
+        >
+            <div class="simpui-dialog-panel md">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">添加笔记</h3>
+                    <button
+                        id="note-add-close"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="field">
+                        <label for="note-title-input">标题（可选）</label>
+                        <input
+                            id="note-title-input"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="标题（可选）"
+                            maxlength="200"
+                            spellcheck="false"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="note-input">内容</label>
+                        <textarea
+                            id="note-input"
+                            class="simpui-input note-add-textarea"
+                            placeholder="写点什么…（支持 Markdown）"
+                            rows="5"
+                            maxlength="20000"
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="note-add-cancel" class="simpui-btn" type="button">
+                        取消
+                    </button>
+                    <button
+                        id="note-add-save"
+                        class="simpui-btn primary"
+                        type="button"
+                    >
+                        保存
+                    </button>
+                </div>
             </div>
         </div>
 

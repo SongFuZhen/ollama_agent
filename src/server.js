@@ -14,6 +14,7 @@ const { resolveMode } = require('./core/workflow');
 const db = require('./storage/db');
 const { getDeviceId, getDevice } = require('./device/device');
 const { handleHotreload, startHotwatch } = require('./server/hotreload');
+const { log, LOG_PATH } = require('./server/logger');
 
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public', 'frontend');
 const ROOT_DIR = path.resolve(__dirname, '..', 'public');
@@ -167,6 +168,11 @@ function handleChat(req, res) {
 
   // 向已关闭连接写入会抛错，统一拦截
   const send = (obj) => {
+    // 自愈事件结构化日志：带上第 N/M 次计数，落盘 data/agent.log 便于离线排查弱模型修复收敛
+    if (obj && obj.type === 'verify' && /^heal_/.test(obj.status || '')) {
+      const cnt = obj.max ? ` ${obj.attempt || 0}/${obj.max}` : '';
+      log(`[自愈] ${obj.status}${cnt} (step ${obj.step || '-'}): ${(obj.output || '').replace(/\n/g, ' ').slice(0, 200)}`);
+    }
     if (aborted) return;
     try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); }
     catch (e) { aborted = true; }
@@ -265,7 +271,12 @@ function handlePreflight(res, userHost) {
 }
 
 function handleConfig(res) {
-  sendJSON(res, 200, { ollamaHost: OLLAMA_HOST, projectRoot: PROJECT_ROOT, tools: allSpecs() });
+  sendJSON(res, 200, {
+    ollamaHost: OLLAMA_HOST,
+    projectRoot: PROJECT_ROOT,
+    tools: allSpecs(),
+    defaultModel: DEFAULT_MODEL,   // 状态栏模型名不再依赖 preflight 往返（离线也可显示）
+  });
 }
 
 // 显式语义召回：/api/recall?query=...&k=5
@@ -516,6 +527,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
   if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
   if (req.method === 'GET' && url === '/api/recall') return handleRecall(req, res);
+  if (req.method === 'GET' && url.startsWith('/api/log')) return handleLog(req, res);
+  if (req.method === 'GET' && url === '/api/notes') return sendJSON(res, 200, db.getNotes());
+  if (req.method === 'POST' && url === '/api/notes') return handleNotesPost(req, res);
+  if (req.method === 'GET' && url === '/api/todos') return sendJSON(res, 200, db.getTodos());
+  if (req.method === 'POST' && url === '/api/todos') return handleTodosPost(req, res);
   if (req.method === 'GET' && url === '/api/model/context') return handleModelContext(req, res);
   if (req.method === 'GET' && url === '/api/root') return handleRootGet(res);
   if (req.method === 'POST' && url === '/api/root') return handleRootSave(req, res);
@@ -539,6 +555,113 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET') return serveStatic(req, res);
   res.writeHead(405); res.end('method not allowed');
 });
+
+// ---------- 日志查看 API ----------
+// GET /api/log?lines=N  返回末尾 N 行（默认 200）；?download=1 直接下载完整文件
+async function handleLog(req, res) {
+  const urlObj = new URL(req.url, 'http://localhost');
+  const download = urlObj.searchParams.get('download') === '1';
+  const lines = Math.min(Math.max(parseInt(urlObj.searchParams.get('lines') || '200', 10) || 200, 1), 5000);
+  let content = '';
+  try {
+    content = await fsp.readFile(LOG_PATH, 'utf8');
+  } catch (e) {
+    content = ''; // 日志尚未生成
+  }
+  if (download) {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="agent.log"',
+    });
+    res.end(content);
+    return;
+  }
+  // 取末尾 N 行（保留换行），避免大文件一次性全量下发
+  const all = content.split('\n');
+  const tail = all.slice(Math.max(0, all.length - lines - 1)).join('\n');
+  sendJSON(res, 200, { content: tail, totalLines: all.length - 1, path: LOG_PATH });
+}
+
+// ---------- 笔记 / 待办 API（本地、离线） ----------
+// POST /api/notes { action: add|update|delete, id?, title?, content? }
+async function handleNotesPost(req, res) {
+  try {
+    const { action, id, title, content } = await parseBody(req);
+    const act = action || 'add';
+    if (act === 'add') {
+      if (content == null || !String(content).trim()) return sendJSON(res, 400, { error: 'content required' });
+      db.addNote({ title: title == null ? '' : String(title), content: String(content) });
+      return sendJSON(res, 200, { ok: true, notes: db.getNotes() });
+    }
+    if (act === 'update') {
+      if (id == null) return sendJSON(res, 400, { error: 'id required' });
+      const fields = {};
+      if (title !== undefined) fields.title = String(title);
+      if (content !== undefined) fields.content = String(content);
+      db.updateNote(Number(id), fields);
+      return sendJSON(res, 200, { ok: true, notes: db.getNotes() });
+    }
+    if (act === 'delete') {
+      if (id == null) return sendJSON(res, 400, { error: 'id required' });
+      db.deleteNote(Number(id));
+      return sendJSON(res, 200, { ok: true, notes: db.getNotes() });
+    }
+    return sendJSON(res, 400, { error: 'action 仅支持 add / update / delete' });
+  } catch (e) {
+    return sendJSON(res, 500, { error: e.message });
+  }
+}
+
+// POST /api/todos { action: add|update|toggle|status|delete, id?, title?, body?, priority?, due?, status? }
+async function handleTodosPost(req, res) {
+  try {
+    const { action, id, title, body, priority, due, status } = await parseBody(req);
+    const act = action || 'add';
+    if (act === 'add') {
+      if (title == null || !String(title).trim()) return sendJSON(res, 400, { error: 'title required' });
+      db.addTodo({
+        title: String(title),
+        body: body == null ? '' : String(body),
+        priority: priority || 'medium',
+        due: due || null,
+      });
+      return sendJSON(res, 200, { ok: true, todos: db.getTodos() });
+    }
+    if (act === 'update') {
+      if (id == null) return sendJSON(res, 400, { error: 'id required' });
+      const fields = {};
+      if (title !== undefined) fields.title = String(title);
+      if (body !== undefined) fields.body = String(body);
+      if (priority !== undefined) fields.priority = String(priority);
+      if (due !== undefined) fields.due = due || null;
+      if (status !== undefined) fields.status = String(status);
+      db.updateTodo(Number(id), fields);
+      return sendJSON(res, 200, { ok: true, todos: db.getTodos() });
+    }
+    if (act === 'toggle' || act === 'status') {
+      if (id == null) return sendJSON(res, 400, { error: 'id required' });
+      let next;
+      if (act === 'status') {
+        next = status || 'done';
+      } else {
+        // toggle: todo/doing -> done, done -> todo（done 取消回 todo）
+        const todo = db.getTodos().find((t) => t.id === Number(id));
+        if (!todo) return sendJSON(res, 404, { error: 'not found' });
+        next = todo.status === 'done' ? 'todo' : 'done';
+      }
+      db.setTodoStatus(Number(id), next);
+      return sendJSON(res, 200, { ok: true, todos: db.getTodos() });
+    }
+    if (act === 'delete') {
+      if (id == null) return sendJSON(res, 400, { error: 'id required' });
+      db.deleteTodo(Number(id));
+      return sendJSON(res, 200, { ok: true, todos: db.getTodos() });
+    }
+    return sendJSON(res, 400, { error: 'action 仅支持 add / update / toggle / status / delete' });
+  } catch (e) {
+    return sendJSON(res, 500, { error: e.message });
+  }
+}
 
 // ---------- 设备 API ----------
 async function handleGetDevice(req, res) {
@@ -590,17 +713,21 @@ async function handleGetConversationStats(req, res) {
 
 async function handleSaveConversation(req, res) {
   try {
-    const { id, title, projectRoot, messages } = await parseBody(req);
+    const { id, title, projectRoot, messages, contextClearedAt } = await parseBody(req);
     if (!id) return sendJSON(res, 400, { error: 'id required' });
     
     const existing = db.getConversation(id);
     if (!existing) {
-      db.createConversation(id, title || '', projectRoot || '');
+      db.createConversation(id, title || '', projectRoot || '', contextClearedAt || null);
     } else {
       if (title) db.updateConversationTitle(id, title);
       // 更新 project_root（如果提供了新值）
       if (projectRoot !== undefined) {
         db.updateConversationRoot(id, projectRoot);
+      }
+      // 清除上下文时间戳：仅当本次携带有效值时更新（null 表示本次未清除，保留历史值）
+      if (contextClearedAt !== undefined) {
+        db.updateConversationContextCleared(id, contextClearedAt || null);
       }
     }
     
@@ -651,12 +778,13 @@ db.initDB().then(() => {
   process.on('beforeExit', () => { try { db.closeDB(); } catch (e) {} });
 
   server.listen(PORT, () => {
-    console.log('Ason Agent 已启动: http://localhost:' + PORT);
-    console.log('设备 ID: ' + deviceId);
-    console.log('设备信息: ' + deviceInfo.username + '@' + deviceInfo.hostname);
-    console.log('项目根目录(沙箱): ' + PROJECT_ROOT);
-    console.log('默认模型: ' + DEFAULT_MODEL);
-    console.log('数据库: 已连接');
+    log('Ason Agent 已启动: http://localhost:' + PORT);
+    log('设备 ID: ' + deviceId);
+    log('设备信息: ' + deviceInfo.username + '@' + deviceInfo.hostname);
+    log('项目根目录(沙箱): ' + PROJECT_ROOT);
+    log('默认模型: ' + DEFAULT_MODEL);
+    log('数据库: 已连接');
+    log('日志文件: ' + require('./server/logger').LOG_PATH);
     startHotwatch();
   });
 }).catch(err => {

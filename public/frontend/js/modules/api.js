@@ -95,6 +95,9 @@ async function saveConversation() {
   const rawRoot = state.currentProjectRoot || '';
   const projectRoot = (rawRoot && (rawRoot.startsWith('/') || /^[A-Z]:\\/i.test(rawRoot))) ? rawRoot : '';
   
+  // Task 5: Persist context cleared timestamp
+  const contextClearedAt = state.contextClearedAt;
+  
   try {
     await fetch('/api/conversation', {
       method: 'POST',
@@ -104,6 +107,7 @@ async function saveConversation() {
         title,
         projectRoot,
         messages,
+        contextClearedAt,
       }),
     });
   } catch (e) {
@@ -177,7 +181,7 @@ async function preflight() {
     if (typeof updateFilePanelState === 'function') updateFilePanelState(); // 按是否有根决定加载树或显示提示
 
     if (d.ollama !== 'ok') {
-      setStatus('warn', '⚠ Ollama 不可达 (' + (d.ollamaHost || '') + '): ' + (d.error || ''));
+      setStatus('error', '离线' + (d.error ? '（' + d.error + '）' : ''));
       return;
     }
     // 优先用左侧文件面板实际绑定的项目目录（currentProjectRoot），与文件树保持一致

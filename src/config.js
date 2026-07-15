@@ -23,6 +23,11 @@ const CTX_RESERVE = 2048;     // 为模型输出预留的 token 数
 const TOOL_RESULT_MAX = 6000; // 工具结果回传模型的最大字符数
 const TRUNCATE_MIN = 200;     // 单条消息可保留的最小字符数（小于则整条丢弃）
 const VERIFY_EVERY = 2;       // 执行模式下每 N 步自动跑一次验证器（run_tests/run_lint）
+// 自愈重试：验证失败时，注入「请修复」指令，给模型若干独立步修复，再重新验证。
+// 这是为 7B/8B 弱模型设计的核心闭环——把「判断对不对」交给确定性测试，
+// 模型只负责改，失败就把报错原样喂回重来，最多重试 MAX_HEAL_STEPS 次。
+const SELF_HEAL = (process.env.SELF_HEAL || 'on') !== 'off'; // 默认开启，SELF_HEAL=off 关闭
+const MAX_HEAL_STEPS = Number(process.env.MAX_HEAL_STEPS) || 3; // 单次验证失败后的最大修复重试步数
 const COMPACT_RECENT_K = 6;    // 压缩时保留最近 K 条消息不摘要
 const COMPACT_THRESHOLD = 0.7; // prompt token 越过 NUM_CTX*该比例时触发压缩
 
@@ -65,6 +70,8 @@ module.exports = {
   TOOL_RESULT_MAX,
   TRUNCATE_MIN,
   VERIFY_EVERY,
+  SELF_HEAL,
+  MAX_HEAL_STEPS,
   COMPACT_RECENT_K,
   COMPACT_THRESHOLD,
   PORT: process.env.PORT || 3000,

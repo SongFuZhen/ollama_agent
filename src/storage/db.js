@@ -17,6 +17,7 @@ let SQL = null;   // sql.js 模块
 let db = null;    // sql.js Database 实例
 let saveTimer = null;
 let saving = false;
+let initPromise = null;  // initDB 防重入锁：并发调用共享同一次初始化
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS devices (
@@ -35,6 +36,7 @@ const SCHEMA = `
     device_id TEXT,
     title TEXT DEFAULT '',
     project_root TEXT DEFAULT '',
+    context_cleared_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -67,17 +69,25 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_memory_conv ON memory_chunks(conv_id);
 
-  CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content TEXT NOT NULL,
-    ts INTEGER NOT NULL
-  );
+  DROP TABLE IF EXISTS notes;
+  DROP TABLE IF EXISTS todos;
 
   CREATE TABLE IF NOT EXISTS todos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    text TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'todo',  -- todo | doing | done
-    ts INTEGER NOT NULL
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    title   TEXT NOT NULL DEFAULT '',                 -- 标题
+    body    TEXT NOT NULL DEFAULT '',                 -- markdown 备注/说明
+    status  TEXT NOT NULL DEFAULT 'todo',             -- todo | doing | done
+    priority TEXT NOT NULL DEFAULT 'medium',          -- high | medium | low
+    due     TEXT,                                      -- ISO date 'YYYY-MM-DD' 或 NULL
+    done    INTEGER NOT NULL DEFAULT 0,               -- 冗余完成标记（1=done），便于排序/筛选
+    ts      INTEGER NOT NULL                          -- 创建时间
+  );
+
+  CREATE TABLE IF NOT EXISTS notes (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    title   TEXT NOT NULL DEFAULT '',                 -- 标题（可选）
+    content TEXT NOT NULL DEFAULT '',                 -- markdown 正文
+    ts      INTEGER NOT NULL                          -- 创建/更新时间
   );
 `;
 
@@ -190,22 +200,29 @@ function closeDB() {
 }
 
 async function initDB() {
-  await fsp.mkdir(DATA_DIR, { recursive: true });
-  SQL = await initSqlJs();
-  try {
-    const buf = await fsp.readFile(DB_PATH);
-    db = new SQL.Database(new Uint8Array(buf));
-  } catch (e) {
-    // 文件缺失或损坏：从空库开始
-    db = new SQL.Database();
-  }
-  // 每次启动都执行 SCHEMA（IF NOT EXISTS，幂等且开销极小），
-  // 保证旧库升级时也能补齐新增表（如 memory_chunks）。
-  db.run(SCHEMA);
-  // 兼容旧库：为已有 messages 表补充 model 列
-  try { db.run('ALTER TABLE messages ADD COLUMN model TEXT'); } catch (_) {}
-  await flush();
-  return db;
+  // 防重入：首个调用开始初始化后，后续并发调用复用同一个 promise，
+  // 避免 notes/todos 与 server 启动同时触发 initDB 时重复初始化、相互覆盖。
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    await fsp.mkdir(DATA_DIR, { recursive: true });
+    SQL = await initSqlJs();
+    try {
+      const buf = await fsp.readFile(DB_PATH);
+      db = new SQL.Database(new Uint8Array(buf));
+    } catch (e) {
+      // 文件缺失或损坏：从空库开始
+      db = new SQL.Database();
+    }
+    // 每次启动都执行 SCHEMA（IF NOT EXISTS，幂等且开销极小），
+    // 保证旧库升级时也能补齐新增表（如 memory_chunks）。
+    db.run(SCHEMA);
+    // 兼容旧库：为已有表补充新增列
+    try { db.run('ALTER TABLE messages ADD COLUMN model TEXT'); } catch (_) {}
+    try { db.run('ALTER TABLE conversations ADD COLUMN context_cleared_at INTEGER'); } catch (_) {}
+    await flush();
+    return db;
+  })();
+  return initPromise;
 }
 
 function getDB() {
@@ -221,11 +238,11 @@ function isReady() {
 
 // ---------- 对话 ----------
 
-function createConversation(id, title = '', projectRoot = '') {
+function createConversation(id, title = '', projectRoot = '', contextClearedAt = null) {
   const now = Date.now();
   run(
-    'INSERT INTO conversations (id, title, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    [id, title || '', projectRoot || '', now, now]
+    'INSERT INTO conversations (id, title, project_root, context_cleared_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, title || '', projectRoot || '', contextClearedAt || null, now, now]
   );
   scheduleSave();
 }
@@ -240,8 +257,14 @@ function updateConversationRoot(id, projectRoot) {
   scheduleSave();
 }
 
+// 持久化「清除上下文」时间戳：下次加载对话时用于提示「曾清除上下文」
+function updateConversationContextCleared(id, ts) {
+  run('UPDATE conversations SET context_cleared_at = ?, updated_at = updated_at WHERE id = ?', [ts || null, id]);
+  scheduleSave();
+}
+
 function getConversation(id) {
-  return getRow('SELECT id, title, project_root, created_at, updated_at FROM conversations WHERE id = ?', [id]) || null;
+  return getRow('SELECT id, title, project_root, context_cleared_at, created_at, updated_at FROM conversations WHERE id = ?', [id]) || null;
 }
 
 function getConversations() {
@@ -404,32 +427,86 @@ function clearMemory() {
   scheduleSave();
 }
 
-// ---------- 笔记 / 待办（本地、离线） ----------
-function addNote(content) {
-  run('INSERT INTO notes (content, ts) VALUES (?, ?)', [content || '', Date.now()]);
-  scheduleSave();
-}
-function getNotes() {
-  return getRows('SELECT id, content, ts FROM notes ORDER BY ts DESC');
-}
-function deleteNote(id) {
-  run('DELETE FROM notes WHERE id = ?', [id]);
+// ---------- 笔记 / 待办（本地、离线，重建表） ----------
+
+function addTodo({ title = '', body = '', priority = 'medium', due = null } = {}) {
+  const status = 'todo';
+  const done = 0;
+  run(
+    'INSERT INTO todos (title, body, status, priority, due, done, ts) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [title || '', body || '', status, priority || 'medium', due || null, done, Date.now()]
+  );
   scheduleSave();
 }
 
-function addTodo(text) {
-  run('INSERT INTO todos (text, status, ts) VALUES (?, ?, ?)', [text || '', 'todo', Date.now()]);
+// 局部更新：fields 为 { title?, body?, status?, priority?, due? } 的子集
+function updateTodo(id, fields = {}) {
+  const allowed = ['title', 'body', 'status', 'priority', 'due'];
+  const cols = [];
+  const vals = [];
+  for (const k of allowed) {
+    if (fields[k] !== undefined) {
+      cols.push(`${k} = ?`);
+      vals.push(fields[k]);
+    }
+  }
+  // 若改了 status，同步 done 冗余列
+  if (fields.status !== undefined) {
+    cols.push('done = ?');
+    vals.push(fields.status === 'done' ? 1 : 0);
+  }
+  if (!cols.length) return;
+  vals.push(Number(id));
+  run('UPDATE todos SET ' + cols.join(', ') + ' WHERE id = ?', vals);
   scheduleSave();
 }
+
 function getTodos() {
-  return getRows('SELECT id, text, status, ts FROM todos ORDER BY ts DESC');
+  // 未完成在前（doing > todo），已完成在底；同组按 ts 倒序
+  return getRows(
+    `SELECT id, title, body, status, priority, due, done, ts FROM todos
+     ORDER BY done ASC,
+       CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END,
+       ts DESC`
+  );
 }
+
 function setTodoStatus(id, status) {
-  run('UPDATE todos SET status = ? WHERE id = ?', [status, id]);
+  const done = status === 'done' ? 1 : 0;
+  run('UPDATE todos SET status = ?, done = ? WHERE id = ?', [status, done, Number(id)]);
   scheduleSave();
 }
+
 function deleteTodo(id) {
-  run('DELETE FROM todos WHERE id = ?', [id]);
+  run('DELETE FROM todos WHERE id = ?', [Number(id)]);
+  scheduleSave();
+}
+
+function addNote({ title = '', content = '' } = {}) {
+  run('INSERT INTO notes (title, content, ts) VALUES (?, ?, ?)', [title || '', content || '', Date.now()]);
+  scheduleSave();
+}
+
+// 局部更新：fields 为 { title?, content? } 的子集
+function updateNote(id, fields = {}) {
+  const allowed = ['title', 'content'];
+  const cols = [];
+  const vals = [];
+  for (const k of allowed) {
+    if (fields[k] !== undefined) { cols.push(`${k} = ?`); vals.push(fields[k]); }
+  }
+  if (!cols.length) return;
+  vals.push(Number(id));
+  run('UPDATE notes SET ' + cols.join(', ') + ' WHERE id = ?', vals);
+  scheduleSave();
+}
+
+function getNotes() {
+  return getRows('SELECT id, title, content, ts FROM notes ORDER BY ts DESC');
+}
+
+function deleteNote(id) {
+  run('DELETE FROM notes WHERE id = ?', [Number(id)]);
   scheduleSave();
 }
 
@@ -441,6 +518,7 @@ module.exports = {
   createConversation,
   updateConversationTitle,
   updateConversationRoot,
+  updateConversationContextCleared,
   addMessage,
   deleteMessages,
   getMessages,
@@ -457,9 +535,11 @@ module.exports = {
   deleteMemory,
   clearMemory,
   addNote,
+  updateNote,
   getNotes,
   deleteNote,
   addTodo,
+  updateTodo,
   getTodos,
   setTodoStatus,
   deleteTodo,

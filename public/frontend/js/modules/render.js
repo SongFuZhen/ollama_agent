@@ -343,7 +343,23 @@ function appendAnswer(text) {
     });
   };
   footer.appendChild(copy);
-  
+
+  // Context actions (clear context button)
+  const ctxActions = el('div', 'context-actions');
+  ctxActions.innerHTML = `
+    <button class="simpui-btn ghost sm context-clear" type="button" data-action="clear-context" title="清除上下文：后续对话不再携带历史记录（本地保留完整记录）" aria-label="清除上下文">
+      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+      </svg>
+      <span>清除上下文</span>
+    </button>
+  `;
+  footer.appendChild(ctxActions);
+
   m.appendChild(bubble);
   m.appendChild(footer);
   appendToActive(m);
@@ -543,6 +559,9 @@ function finalizeAnswer(content) {
   // 执行结束：清理可能残留的「执行中…」占位
   clearToolLoading();
 
+  // U3：最终答案作为一轮 assistant 提交入栈，成为后续请求的结构化历史来源。
+  if (typeof pushHistory === 'function' && content && content.trim()) pushHistory('assistant', content);
+
   // 更新状态栏
   if (typeof renderSessionState === 'function') renderSessionState();
   
@@ -587,17 +606,78 @@ function showConfirm(card) {
   appendToActive(c);
 }
 
+// ---------- 自愈状态横幅（验证失败后自动重试修复的全局进度提示） ----------
+// 横幅浮于消息列表上方，随 heal_* 事件显示/更新/收起，让用户一眼看到「模型正在自我修复」。
+const HEAL_BANNER_META = {
+  heal_start: { cls: 'running', icon: '🔧', badge: '自愈中', badgeCls: 'warning' },
+  heal_attempt: { cls: 'running', icon: '🔧', badge: '重试中', badgeCls: 'warning' },
+  heal_pass: { cls: 'ok', icon: '✅', badge: '已修复', badgeCls: 'success' },
+  heal_exhausted: { cls: 'fail', icon: '⛔', badge: '需人工', badgeCls: 'danger' },
+  heal_error: { cls: 'fail', icon: '⚠', badge: '异常', badgeCls: 'danger' },
+};
+function showHealBanner(ev) {
+  const banner = $('#heal-banner');
+  if (!banner) return;
+  const meta = HEAL_BANNER_META[ev.status] || { cls: 'running', icon: '🔧', badge: '自愈中', badgeCls: 'warning' };
+  banner.className = 'heal-banner heal-' + meta.cls;
+  banner.querySelector('.heal-icon').textContent = meta.icon;
+  banner.querySelector('.heal-text').textContent = healBannerText(ev);
+  const badge = banner.querySelector('.heal-badge');
+  badge.className = 'heal-badge simpui-badge sm ' + meta.badgeCls;
+  // 重试计数 N/M：自愈进行中显示当前第几次 / 上限，让用户看到收敛进度
+  badge.textContent = meta.badge + (ev.max ? ` ${ev.attempt || 0}/${ev.max}` : '');
+  banner.classList.remove('hidden');
+}
+function healBannerText(ev) {
+  switch (ev.status) {
+    case 'heal_start': return '验证失败，正在启动自动修复…';
+    case 'heal_attempt': return '模型根据报错修复代码（退避后重试）…';
+    case 'heal_pass': return '自愈成功：修复后验证通过';
+    case 'heal_exhausted': return '自愈重试耗尽，仍未通过，需人工处理';
+    case 'heal_error': return '自愈异常：' + (ev.output || '');
+    default: return '自愈中';
+  }
+}
+function hideHealBanner() {
+  const banner = $('#heal-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
 // ---------- 验证器结果（run_tests / run_lint 闭环） ----------
+// 自愈合事件的「第 N/M 次」后缀，便于在步骤行里也看到重试收敛进度
+function healCountSuffix(ev) {
+  return ev.max ? `（第 ${ev.attempt || 0}/${ev.max} 次）` : '';
+}
 function appendVerify(ev) {
   let text;
-  if (ev.status === 'running') text = '⏳ 验证中：运行测试 / Lint…';
-  else if (ev.status === 'pass') text = '✓ 验证通过';
-  else if (ev.status === 'fail') text = '✗ 验证失败';
-  else text = '⚠ 验证异常：' + (ev.output || '');
-  if (ev.output && ev.status !== 'running') {
+  let type = 'verify';
+  if (ev.status === 'running') {
+    text = '⏳ 验证中：运行测试 / Lint…';
+  } else if (ev.status === 'pass') {
+    text = '✓ 验证通过';
+  } else if (ev.status === 'fail') {
+    text = '✗ 验证失败';
+    type = 'error';
+  } else if (ev.status === 'heal_start') {
+    text = '🔧 自愈启动：验证失败，进入自动修复重试' + healCountSuffix(ev);
+  } else if (ev.status === 'heal_attempt') {
+    text = '🔧 自愈重试：模型根据报错修复代码…' + healCountSuffix(ev);
+  } else if (ev.status === 'heal_pass') {
+    text = '✅ 自愈成功：修复后验证通过' + healCountSuffix(ev);
+  } else if (ev.status === 'heal_exhausted') {
+    text = '⛔ 自愈耗尽：重试次数用尽仍未通过，需人工处理' + healCountSuffix(ev);
+    type = 'error';
+  } else if (ev.status === 'heal_error') {
+    text = '⚠ 自愈异常：' + (ev.output || '');
+    type = 'error';
+  } else {
+    text = '⚠ 验证异常：' + (ev.output || '');
+    type = 'error';
+  }
+  if (ev.output && ev.status !== 'running' && ev.status !== 'heal_start' && ev.status !== 'heal_attempt') {
     text += '\n' + String(ev.output).slice(0, 1200);
   }
-  appendStep(ev.status === 'fail' ? 'error' : 'verify', text);
+  appendStep(type, text);
 }
 
 // ---------- ask_user 提问卡片（模型向用户澄清） ----------

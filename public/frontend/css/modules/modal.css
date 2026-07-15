@@ -71,6 +71,16 @@ select, textarea {
   box-shadow: 0 0 0 3px var(--simpui-focus);
 }
 
+/* 并排字段（如优先级 + 截止日期） */
+.field-row {
+  display: flex;
+  gap: var(--space-3);
+}
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
 .hint {
   font-family: var(--font-mono);
   font-size: 12px;

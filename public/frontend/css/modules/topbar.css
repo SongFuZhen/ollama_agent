@@ -81,7 +81,7 @@
 }
 
 .debug-icon.ready {
-  color: var(--green);
+  color: var(--success);
 }
 
 .debug-icon.error {
