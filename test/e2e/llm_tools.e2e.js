@@ -1,7 +1,9 @@
 'use strict';
 
-// LLM 驱动工具测试 — 用 deepseek-r1:8b 实际调用每个工具，验证模型能否正确选择工具并生成合法参数
-// 用法: OLLAMA_HOST=http://192.168.0.101:11434 MODEL=deepseek-r1:8b node test/llm_tools.test.js
+// LLM 驱动工具测试（端到端，需连真实 Ollama）— 用 deepseek-r1:8b 实际调用每个工具，验证模型能否正确选择工具并生成合法参数
+// 用法: OLLAMA_HOST=http://localhost:11434 MODEL=deepseek-r1:8b npm run test:e2e
+//   或: OLLAMA_HOST=http://localhost:11434 MODEL=deepseek-r1:8b node test/e2e/llm_tools.e2e.js
+// 注意: 本文件为 *.e2e.js，不在 `node --test test/` 的默认收集范围内，离线运行 `npm test` 不会挂起。
 
 const path = require('path');
 const fsp = require('fs/promises');
