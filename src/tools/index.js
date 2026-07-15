@@ -20,9 +20,9 @@ const notes = require('./notes');
 const todos = require('./todos');
 const delegate = require('./delegate');
 
-// 测试 / Lint 工具
-const run_tests = require('./test/run_tests');
-const run_lint = require('./test/run_lint');
+// 验证工具：自动跑目标项目的测试 / Lint
+const run_tests = require('./verify/run_tests');
+const run_lint = require('./verify/run_lint');
 
 // 技能（分析 / 查看类，来自 src/skills）
 const { SKILLS } = require('../skills');

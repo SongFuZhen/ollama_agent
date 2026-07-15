@@ -4,6 +4,11 @@ workspace/
 # 运行时数据库（SQLite，本地生成，不入库）
 data/
 
+# 运行时产物 / 上传 / 会话续跑状态
+photos/
+.omo/
+.test_tmp/
+
 # 系统/编辑器元数据
 .DS_Store
 *.log
