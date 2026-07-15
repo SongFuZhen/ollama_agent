@@ -130,13 +130,20 @@
 | `read_lines` | 读取指定行范围（1 起，省 `end` 读到末尾） | `path`, `start`, `end?` | - |
 | `glob` | 按 glob 模式查找文件（`*.js`、`src/**/*.ts`） | `pattern`, `path?` | - |
 | `grep` | 搜索文件内容（支持正则） | `pattern`, `path?`, `include?` | - |
-| `tree` | 树状列出目录（默认 2 层，排除 node_modules/隐藏目录） | `path?`, `depth?` | - |
+| `tree` | 树状列出目录（默认完整展开；`depth` 可限深度，排除 node_modules/隐藏目录） | `path?`, `depth?` | - |
 | `count_loc` | 递归统计代码行数/文件数（按扩展名，区分空行与注释） | `path?` | - |
 | `write_file` | 写入/覆盖文件 | `path`, `content` | ✓ |
 | `edit_file` | 查找替换片段（`old_string` 须唯一，否则 `all=true` 全替换） | `path`, `old_string`, `new_string`, `all?` | ✓ |
 | `bash` | 执行受限 shell 命令（禁止危险操作） | `command` | ✓ |
 | `run_tests` | 按项目类型自动跑测试（npm/cargo/go/pytest/make），或 `command` 手动指定 | `command?` | ✓ |
 | `run_lint` | 按项目类型自动跑 lint（eslint/clippy/go vet/flake8），或 `command` 手动指定 | `command?` | ✓ |
+| `apply_diff` | 原子化应用 unified diff 补丁（支持多文件；任一文件失败则整体回滚） | `diff` | ✓ |
+| `semantic_grep` | 模糊语义检索：按 token 重叠度对工作区文本排序，适合"记得大概意思"的场景 | `query`, `path?`, `limit?` | - |
+| `repo_map` | 仓库结构速览：列出含导出符号的重要源文件（大型仓库导航用） | `path?`, `max?` | - |
+| `ask_user` | 执行中向用户提澄清问题并等待回答（回答作为结果返回模型继续推理） | `question`, `options?` | - |
+| `notes` | 管理本地笔记（add/list/delete），内容仅存本地数据库，离线可用 | `action`, `content?`, `id?` | - |
+| `todos` | 管理本地任务清单（add/list/done/doing/delete），离线可用 | `action`, `text?`, `id?` | - |
+| `delegate` | 委派聚焦子任务给子代理（独立上下文、工具受限），子代理返回精简结论，主代理负责汇总 | `task`, `tools?`, `mode?` | - |
 
 **技能（skills）**
 
@@ -146,5 +153,5 @@
 | `git_diff` | 查看差异（默认未暂存；`staged=true` 看已暂存；`path` 限定文件） | `path?`, `staged?` |
 | `git_log` | 查看提交历史（`max` 条数默认 20；`path` 只看某文件） | `max?`, `path?` |
 | `git_show` | 查看某次提交或某版本文件（`ref` 可为哈希/分支/标签，或 `哈希:文件路径`） | `ref` |
-| `explain_symbol` | 解释符号（函数/类/变量）的定义位置与上下文 | `symbol`, `path?` |
-| `find_references` | 查找符号的所有引用位置，评估改动影响 | `symbol`, `path?` |
+| `explain_symbol` | 解释符号（函数/类/变量）的定义位置与上下文；`path` 可限目录或具体文件 | `symbol`, `path?` |
+| `find_references` | 查找符号的所有引用位置，评估改动影响；`path` 可限目录或具体文件 | `symbol`, `path?` |

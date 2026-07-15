@@ -2,7 +2,7 @@
 
 const http = require('http');
 const { OLLAMA_HOST, NUM_CTX } = require('../config');
-const { hostParts, TIMEOUT_MS } = require('./ollama');
+const { hostParts, TIMEOUT_MS, makeAbortError } = require('./ollama');
 
 function processLine(json, state) {
   if (json.error) return json.error;
@@ -65,8 +65,16 @@ async function chatStreamWithTools(model, messages, tools, opts = {}) {
 
     req.on('error', (e) => {
       clearTimeout(timer);
+      // 取消错误：直接 reject（带 ABORTED 标记），不套连接前缀
+      if (e && e.code === 'ABORTED') return reject(e);
       reject(new Error(/超时/.test(e.message) ? e.message : '无法连接 Ollama (' + (opts.ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
     });
+
+    // 取消支持：signal abort 时立即断开与 Ollama 的连接，真正中断生成
+    if (opts.signal) {
+      if (opts.signal.aborted) { req.destroy(makeAbortError()); return; }
+      opts.signal.addEventListener('abort', () => req.destroy(makeAbortError()), { once: true });
+    }
 
     req.write(body);
     req.end();

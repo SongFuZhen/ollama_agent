@@ -213,6 +213,12 @@ function getDB() {
   return db;
 }
 
+// 数据库是否已初始化（initDB 完成）。工具（notes/todos）在调用前据此判断，
+// 避免在未 initDB 的环境（如独立脚本、initDB 尚未 resolve 的早期请求）直接崩 null。
+function isReady() {
+  return db !== null;
+}
+
 // ---------- 对话 ----------
 
 function createConversation(id, title = '', projectRoot = '') {
@@ -430,6 +436,7 @@ function deleteTodo(id) {
 module.exports = {
   initDB,
   getDB,
+  isReady,
   closeDB,
   createConversation,
   updateConversationTitle,

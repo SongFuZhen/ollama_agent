@@ -7,6 +7,18 @@ const db = require('../storage/db');
 
 const VALID = new Set(['todo', 'doing', 'done']);
 
+// 确保数据库已初始化：server 启动时已调 initDB，但独立脚本/早期请求可能尚未就绪。
+// 未就绪时 lazy 初始化一次；若仍失败（如 WASM 加载异常）则给出友好提示而非崩 null。
+async function ensureDB() {
+  if (db.isReady()) return true;
+  try {
+    await db.initDB();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 module.exports = {
   name: 'todos',
   desc: '管理本地任务清单：add 新增、list 查看、done/doing 改状态、delete 删除（离线可用）；复杂多步任务拆解为可跟踪清单时用',
@@ -18,6 +30,7 @@ module.exports = {
   needConfirm: false,
 
   async run({ action, text, id }, ctx = {}) {
+    if (!(await ensureDB())) return '错误：本地数据库不可用，任务清单功能暂不可用。';
     switch ((action || 'list').toLowerCase()) {
       case 'add': {
         if (!text || !text.trim()) return '错误：text 不能为空';

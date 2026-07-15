@@ -805,9 +805,11 @@ function handleEvent(ev) {
       break;
 
     case 'plan':
-      // 规划模式最终返回的纯计划（此前前端未处理，走 answer 兜底）
+      // 规划模式最终返回的执行计划：渲染为答案卡片，并追加「确认执行」按钮
+      // 形成二段式闭环——用户确认后以 mode:'execute' 重发原始消息（history 自动含本计划）。
       toggleThinking(false);
       finalizeAnswer(ev.content, true);
+      appendPlanActions();
       break;
 
     case 'ask_user_request':
@@ -903,11 +905,21 @@ inputEl.addEventListener('drop', (e) => {
 let currentAbortController = null;
 let requestAborted = false;
 
+// 最近一次用户消息文本，供 plan 模式「确认执行」二段式复用（此时输入框可能已清空）
+let lastUserMessage = '';
+// 标记当前中止是否由用户主动触发（用于区分「用户中止」与「连接真正失败」）
+let userAborted = false;
+
 // ---------- 发送请求（SSE 流式读取） ----------
-async function send() {
-  const text = inputEl.value.trim();
+async function send(opts = {}) {
+  // 发起全新请求：清除上一次可能遗留的中止标志，避免新请求的初始事件被误丢弃
+  requestAborted = false;
+  userAborted = false;
+  // 二段式闭环：plan 确认执行时传入原始消息文本（此时输入框可能已清空）
+  const text = (opts.message != null ? opts.message : inputEl.value).trim();
   if (state.busy) return;
   if (!text && pendingImages.length === 0) return; // 文+图至少一项
+  if (text) lastUserMessage = text; // 记录最近一次用户消息，供 plan 确认执行复用
 
   const convId = state.conversationId;
 
@@ -974,6 +986,9 @@ async function send() {
   }
 
   const body = { message: text, images: imgs.map((i) => i.b64), history };
+  // 二段式闭环：plan 模式下用户点「确认执行」时，显式声明 execute 跳过自动判定，
+  // 避免 auto 模式因同一复杂消息再次进 plan 造成死循环。
+  if (opts.overrideMode) body.mode = opts.overrideMode;
   if (state.conversationId) body.conversationId = state.conversationId;
   if (state.activeModel) body.model = state.activeModel;    // 下拉选中的模型
   const oh = ollamaHost(); if (oh) body.ollamaHost = oh;     // 前端覆盖 Ollama 地址
@@ -1021,7 +1036,8 @@ async function send() {
     }
   } catch (e) {
     if (e.name === 'AbortError') {
-      appendStep('error', '⚠ 已中止');
+      // 用户主动中止不视为错误，不追加错误节点（半截卡片已在 abortCurrentRequest 清理）
+      if (!userAborted) appendStep('error', '⚠ 已中止');
     } else {
       appendStep('error', '读取响应失败: ' + e.message);
     }
@@ -1032,12 +1048,52 @@ async function send() {
   }
 }
 
+// plan 模式二段式闭环：在计划答案卡片末尾追加操作按钮。
+// - 「确认执行」：以 mode:'execute' 重发原始用户消息，history 自动含本计划，模型按计划实施。
+// - 「修改后执行」：把原始消息填回输入框，用户改完自行发送（同样会被 auto 判定，可再确认）。
+function appendPlanActions() {
+  // 取最后一个 agent 答案卡片：用 querySelectorAll 末尾项，比 :last-of-type 配合类选择器稳健
+  // （:last-of-type 只看元素类型位置、不看类，若末尾 .msg 非 answer-card 会匹配失败）
+  const cards = document.querySelectorAll('.msg.agent.answer-card');
+  const card = cards[cards.length - 1];
+  if (!card || card.querySelector('.plan-actions')) return; // 防重复追加
+  const wrap = el('div', 'plan-actions');
+  const confirm = el('button', 'simpui-btn primary sm', '✅ 确认执行');
+  confirm.onclick = () => {
+    wrap.remove();
+    send({ overrideMode: 'execute', message: lastUserMessage });
+  };
+  const edit = el('button', 'simpui-btn secondary sm', '✏️ 修改后执行');
+  edit.onclick = () => {
+    wrap.remove();
+    inputEl.value = lastUserMessage;
+    autoResizeInput();
+    inputEl.focus();
+  };
+  wrap.appendChild(confirm);
+  wrap.appendChild(edit);
+  card.appendChild(wrap);
+}
+
 // ---------- 中止当前请求 ----------
 function abortCurrentRequest() {
   requestAborted = true;
+  userAborted = true;
   if (currentAbortController) {
     currentAbortController.abort();
     currentAbortController = null;
+  }
+  // 清理未完成的流式答案卡片：中止发生在 finalize 之前时，state.streamingAnswer
+  // 仍指向半截卡片。若不清理，它会被下次发消息的 history 收集当成一条残缺的
+  // assistant 回答，并因 ensureMessageContainer 复用旧卡片而把新输出追加进去，
+  // 造成上下文错位/顺序混乱。已 finalize 的卡片 streamingAnswer 已置 null，不误删。
+  if (state.streamingAnswer) {
+    const card = state.streamingAnswer.closest('.msg.agent.answer-card');
+    if (card && card.parentNode) card.parentNode.removeChild(card);
+    state.streamingAnswer = null;
+    state.streamingSteps = null;
+    state.streamingText = '';
+    state.streamingHead = null;
   }
   setBusy(false);
 }

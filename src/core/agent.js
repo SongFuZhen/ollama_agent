@@ -1,6 +1,6 @@
 'use strict';
 
-const { chat, chatStream } = require('./ollama');
+const { chat, chatStream, makeAbortError } = require('./ollama');
 const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
 const { buildOllamaTools } = require('../tools/schema');
@@ -167,8 +167,10 @@ function nativeSystemPrompt() {
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, confirm, images, mode: 'execute'|'plan', conversationId }
-async function runAgent(userInput, { model, confirm, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools } = {}, emitInput) {
+async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools, signal } = {}, emitInput) {
   const emit = emitInput || (() => {});
+  // 取消错误：signal 中断时由 Ollama 层抛出的 ABORTED 错误，用于区分「用户中止」与真实错误
+  const isAbort = (e) => e && e.code === 'ABORTED';
   const isPlan = mode === 'plan';
   // 工具集过滤优先级：allowedTools（委派时主代理显式限定）> plan 只读约束 > 全部
   let specs = specsFor();
@@ -306,12 +308,15 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
           }
         };
 
+        // 取消优先：signal 已 abort 时不再调用模型，直接抛出取消错误退出主循环
+        if (signal && signal.aborted) throw makeAbortError();
+
         if (useNativeTools) {
-          const response = await chatStreamWithTools(model, messages, ollamaTools, streamOpts);
+          const response = await chatStreamWithTools(model, messages, ollamaTools, Object.assign({}, streamOpts, { signal }));
           raw = response.content;
           nativeToolCalls = response.tool_calls;
         } else {
-          raw = await chatStream(model, messages, streamOpts);
+          raw = await chatStream(model, messages, Object.assign({}, streamOpts, { signal }));
         }
 
         // 流结束时 think 块仍未闭合（部分模型省略 </think>）：
@@ -327,6 +332,7 @@ async function runAgent(userInput, { model, confirm, images, ollamaHost, project
         }
         break;
       } catch (e) {
+        if (isAbort(e)) throw e; // 用户中止：不重试，直接上抛退出
         if (r === JSON_RETRY) throw e;
         emit({ type: 'error', step, msg: '模型调用失败，重试: ' + e.message });
       }

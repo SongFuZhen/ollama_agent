@@ -32,8 +32,26 @@ const NATIVE_TOOLS_MODELS = [
   // 'deepseek-r1-tool-calling',  // MFDoom 模型文本输出 JSON，走 prompt-based 路线更稳定
 ];
 
+// Workflow 固化强度：决定「先规划再执行」是否默认开启
+//   auto   : 复杂任务自动先规划、用户确认后执行；简单任务直跑（默认）
+//   manual : 仅 /plan 前缀触发规划（历史行为）
+//   always : 所有任务强制先规划
+const WORKFLOW_MODE = process.env.WORKFLOW_MODE || 'auto';
+
+// 复杂任务判定词表（isComplexTask 用）：命中任一「写/构建意图」即视为复杂。
+// COMPLEX_CN/EN 为写意图关键词；MULTI_FILE 为多文件/全量信号；
+// SIMPLE 为只读/问答意图，命中且无写意图时短路为不规划。
+const COMPLEX_TASK_PATTERNS = {
+  CN: /重构|实现|修复|增加|新增|创建|新建|修改|改写|重写|搭建|开发|完成|接入|集成|迁移|优化|补充|实现.*功能|写.*(脚本|程序|函数|模块)/,
+  EN: /\b(refactor|implement|fix|add|create|modify|build|develop|migrate|setup|write)\b/i,
+  MULTI_FILE: /多个文件|所有文件|整个项目|全局|批量|一次性.*(改|建)/,
+  SIMPLE: /读取|查看|解释|说明|搜索|查找|列出|是什么|怎么|为什么|对比|总结|有什么区别|如何|能否.*(解释|说明)/,
+};
+
 module.exports = {
   NATIVE_TOOLS_MODELS,
+  WORKFLOW_MODE,
+  COMPLEX_TASK_PATTERNS,
   PROJECT_ROOT,
   OLLAMA_HOST,
   DEFAULT_MODEL,

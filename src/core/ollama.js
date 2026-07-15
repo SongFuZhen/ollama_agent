@@ -21,6 +21,14 @@ function hostParts(hostStr) {
   return { host: m[1], port: parseInt(m[2], 10) };
 }
 
+// 取消错误标记：signal 触发 req.destroy() 时由 req.on('error') 接收，
+// 上层据此区分「用户中止」与真实网络/超时错误（取消不重试、不报错提示）。
+function makeAbortError() {
+  const e = new Error('请求已取消（用户中止）');
+  e.code = 'ABORTED';
+  return e;
+}
+
 // 非流式调用，返回完整文本
 // opts.ollamaHost 可选，覆盖默认 OLLAMA_HOST（前端设置面板可下发）
 function chat(model, messages, opts = {}) {
@@ -188,12 +196,20 @@ async function chatStream(model, messages, opts = {}) {
 
     req.on('error', (e) => {
       clearTimeout(timer);
+      // 取消错误：直接 reject（带 ABORTED 标记），不套连接前缀
+      if (e && e.code === 'ABORTED') return reject(e);
       if (/超时/.test(e.message)) {
         reject(new Error(e.message));
       } else {
         reject(new Error('无法连接 Ollama (' + (opts.ollamaHost || OLLAMA_HOST) + ')：' + (e.code || e.message)));
       }
     });
+
+    // 取消支持：signal abort 时立即断开与 Ollama 的连接，真正中断生成
+    if (opts.signal) {
+      if (opts.signal.aborted) { req.destroy(makeAbortError()); return; }
+      opts.signal.addEventListener('abort', () => req.destroy(makeAbortError()), { once: true });
+    }
 
     req.write(body);
     req.end();
@@ -238,4 +254,4 @@ function embed(text, opts = {}) {
   });
 }
 
-module.exports = { chat, chatStream, listModels, embed, hostParts, TIMEOUT_MS };
+module.exports = { chat, chatStream, listModels, embed, hostParts, TIMEOUT_MS, makeAbortError };

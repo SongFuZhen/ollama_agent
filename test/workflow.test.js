@@ -6,6 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { READONLY, WRITE } = require('../src/core/agent');
 const { specsFor } = require('../src/tools/index');
+const { isComplexTask, resolveMode } = require('../src/core/workflow');
 
 test('READONLY 覆盖只读调研工具', () => {
   for (const t of ['read_file', 'list_dir', 'grep', 'glob', 'tree', 'read_lines', 'search_files', 'count_loc']) {
@@ -39,3 +40,65 @@ test('Plan Mode 过滤会移除写操作工具', () => {
   const planSpecs = all.filter((s) => READONLY.has(s.name));
   assert.ok(planSpecs.every((s) => !WRITE.has(s.name)));
 });
+
+// ---------- 复杂任务判定（智能触发 Workflow） ----------
+
+test('isComplexTask: 中文写意图判复杂', () => {
+  assert.ok(isComplexTask('重构 tools/index.js 的注册逻辑'));
+  assert.ok(isComplexTask('实现登录功能'));
+  assert.ok(isComplexTask('修复这个 bug'));
+  assert.ok(isComplexTask('新增一个用户管理模块'));
+});
+
+test('isComplexTask: 英文写意图判复杂', () => {
+  assert.ok(isComplexTask('refactor the parser module'));
+  assert.ok(isComplexTask('implement a new feature'));
+  assert.ok(isComplexTask('fix the crash on startup'));
+});
+
+test('isComplexTask: 多文件信号判复杂', () => {
+  assert.ok(isComplexTask('批量修改所有文件的缩进'));
+  assert.ok(isComplexTask('重构整个项目的配置加载'));
+});
+
+test('isComplexTask: 只读/问答意图判简单', () => {
+  assert.ok(!isComplexTask('读取 src/config.js 并解释'));
+  assert.ok(!isComplexTask('查看 git 状态'));
+  assert.ok(!isComplexTask('搜索包含 runAgent 的文件'));
+  assert.ok(!isComplexTask('这个函数是做什么的？'));
+});
+
+test('isComplexTask: 纯问候/空文本不规划', () => {
+  assert.ok(!isComplexTask('你好'));
+  assert.ok(!isComplexTask(''));
+  assert.ok(!isComplexTask('   '));
+});
+
+test('isComplexTask: 含请求动词的开放任务倾向规划', () => {
+  assert.ok(isComplexTask('请帮我优化这个函数的性能'));
+  assert.ok(isComplexTask('如何实现一个缓存层'));
+});
+
+// ---------- 模式推导（resolveMode） ----------
+
+test('resolveMode: /plan 前缀强制 plan 并剥离前缀', () => {
+  const r = resolveMode('/plan 实现登录功能', undefined);
+  assert.equal(r.mode, 'plan');
+  assert.equal(r.planMessage, '实现登录功能');
+});
+
+test('resolveMode: body.mode=execute 跳过自动判定（二段式防死循环）', () => {
+  assert.equal(resolveMode('重构整个模块', 'execute').mode, 'execute');
+});
+
+test('resolveMode: body.mode=plan 强制 plan', () => {
+  assert.equal(resolveMode('随便聊聊', 'plan').mode, 'plan');
+});
+
+test('resolveMode: auto 模式下复杂进 plan、简单进 execute', () => {
+  // 依赖 config 默认 WORKFLOW_MODE='auto'
+  if (process.env.WORKFLOW_MODE && process.env.WORKFLOW_MODE !== 'auto') return;
+  assert.equal(resolveMode('重构 X 模块', undefined).mode, 'plan');
+  assert.equal(resolveMode('读取 config 并解释', undefined).mode, 'execute');
+});
+

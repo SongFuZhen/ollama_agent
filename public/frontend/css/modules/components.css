@@ -295,6 +295,16 @@
   justify-content: flex-end;
 }
 
+/* ---------- Plan 模式二段式操作按钮（确认执行 / 修改后执行） ---------- */
+.plan-actions {
+  margin-top: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  border-top: 1px dashed var(--border-soft);
+  padding-top: var(--space-3);
+}
+
 /* ---------- Dark mode 覆盖 simpui ---------- */
 body.dark .simpui-btn {
   background: var(--surface-2);

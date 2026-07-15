@@ -10,6 +10,7 @@ const { listModels, hostParts } = require('./core/ollama');
 const { safeResolve, allSpecs } = require('./tools/index');
 const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./storage/rootstore');
 const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST } = require('./config');
+const { resolveMode } = require('./core/workflow');
 const db = require('./storage/db');
 const { getDeviceId, getDevice } = require('./device/device');
 
@@ -144,8 +145,12 @@ function handleChat(req, res) {
   // 客户端断开标志：用于中断 Agent 循环、避免向已关闭连接写入
   let aborted = false;
   let currentConfirmId = null;
+  // 后端取消控制器：客户端断开（前端中止/关闭页面）时 abort，signal 透传 runAgent，
+  // 真正中断 Ollama 生成（此前 runAgent 在 aborted 后仍在跑直到自然结束/90s 超时）。
+  const agentAbort = new AbortController();
   const onClose = () => {
     aborted = true;
+    agentAbort.abort(); // 通知 runAgent 主循环与 Ollama 连接一并取消
     // 清理本连接等待中的确认项，避免 pendingConfirm 泄漏
     for (const [id, resolve] of pendingConfirm) {
       if (id === currentConfirmId) {
@@ -171,14 +176,10 @@ function handleChat(req, res) {
     send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs(), model });
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
 
-    // 规划模式入口：消息以 "/plan " 开头时，剥离前缀并以 mode:'plan' 调用，
-    // 只调研不改动，最终返回可确认的执行计划（前端据此二次确认再 execute）。
-    let mode = 'execute';
-    let planMessage = message;
-    if (typeof message === 'string' && message.trim().startsWith('/plan')) {
-      mode = 'plan';
-      planMessage = message.trim().slice(5).replace(/^\s+/, '') || message;
-    }
+    // 规划模式入口：WORKFLOW_MODE='auto' 时复杂任务自动进 plan；'/plan ' 前缀或
+    // body.mode 显式值可强制覆盖。plan 只调研不改动，最终返回可确认的执行计划
+    // （前端据此二次确认再 execute）。body.mode='execute' 用于二段式跳过自动判定。
+    const { mode, planMessage } = resolveMode(message, body.mode);
 
     // 解析生效的项目根：前端下发的绝对路径优先（校验有效才用），否则用持久化/默认沙箱
     let effectiveRoot = PROJECT_ROOT;
@@ -211,7 +212,7 @@ function handleChat(req, res) {
         send({ type: 'ask_user_request', id, question });
       });
 
-    runAgent(planMessage, { model, confirm, askUser, images: images || [], ollamaHost, projectRoot: effectiveRoot, history, conversationId, mode }, send)
+    runAgent(planMessage, { model, confirm, askUser, images: images || [], ollamaHost, projectRoot: effectiveRoot, history, conversationId, mode, signal: agentAbort.signal }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
