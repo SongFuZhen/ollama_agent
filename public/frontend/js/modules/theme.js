@@ -36,17 +36,23 @@ function applyTheme(theme) {
   if (hlLight) hlLight.disabled = theme !== 'light';
   if (hlDark) hlDark.disabled = theme === 'light';
 
-  // 更新按钮图标
-  updateThemeIcon(theme);
+  // 更新按钮图标与文字
+  updateThemeButton(theme);
 }
 
-function updateThemeIcon(theme) {
+// 更新主题按钮：图标 + 当前主题文字（明亮 / 暗黑）
+function updateThemeButton(theme) {
   if (!themeToggle) return;
-  const icon = themeToggle.querySelector('i');
-  if (icon) {
-    icon.setAttribute('data-lucide', theme === 'light' ? 'sun' : 'moon');
+  // 图标：lucide 会把 <i> 替换为 <svg>，故每次重建图标节点
+  const iconHolder = themeToggle.querySelector('.theme-icon');
+  const iconName = theme === 'light' ? 'sun' : 'moon';
+  if (iconHolder) {
+    iconHolder.innerHTML = '<i data-lucide="' + iconName + '"></i>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
+  const label = document.getElementById('theme-label');
+  if (label) label.textContent = theme === 'light' ? '明亮' : '暗黑';
+  themeToggle.title = theme === 'light' ? '当前：明亮，点击切换为暗黑' : '当前：暗黑，点击切换为明亮';
 }
 
 // 初始化主题

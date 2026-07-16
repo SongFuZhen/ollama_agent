@@ -34,13 +34,13 @@
   max-width: 80%;
   max-height: 70vh;
   overflow-y: auto;
-  padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
   font-size: 14px;
   line-height: 1.7;
   word-break: break-word;
   overflow-wrap: break-word;
   border: 1px solid transparent;
+  padding: var(--space-3) var(--space-4);
 }
 
 /* Agent 气泡：更明显的卡面 + 描边 + 常规字重 */
