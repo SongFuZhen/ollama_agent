@@ -3,6 +3,8 @@
 const { chat, chatStream, makeAbortError } = require('./ollama');
 const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
+const { resolveDirectCall, buildSkillParams } = require('./workflow');
+const SKILL_TOOLS = specsFor().filter((s) => s.kind === 'skill').map((s) => s.name);
 const { buildOllamaTools } = require('../tools/schema');
 const { buildRecallPrompt } = require('../memory/recall');
 const { addMemory } = require('../storage/db');
@@ -308,10 +310,51 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     emit({ type: 'verify', step: fromStep, status: 'heal_exhausted', attempt: MAX_HEAL_STEPS, max: MAX_HEAL_STEPS, output: '自愈重试耗尽，仍未通过。最后失败：\n' + v.merged.slice(0, TOOL_RESULT_MAX) });
   }
 
+  // 直接调用通道：解析 !（bash）/ @（skill）前缀，绕过模型推理直接执行，
+  // 把真实结果作为首轮上下文注入，模型据此作答。优先级 ! > @（在 workflow.resolveDirectCall 内定）。
+  const directCall = resolveDirectCall(userInput);
+  let directResult = null; // 注入用的「工具结果」文本
+  let userInstruction = userInput; // 剥离前缀后留给模型的真实用户指令
+
+  if (directCall.type === 'bash') {
+    const tool = TOOLS.bash;
+    // 沿用 bash 的写操作确认：needConfirm 时先向用户确认
+    if (tool.needConfirm) {
+      const cr = await confirm({ action: 'bash', params: { command: directCall.command } });
+      if (!cr || !cr.ok) {
+        emit({ type: 'answer', content: '（已取消执行命令）' });
+        return '（已取消执行命令）';
+      }
+    }
+    try {
+      directResult = String(await tool.run({ command: directCall.command }, toolCtx));
+    } catch (e) {
+      directResult = '命令执行错误: ' + e.message;
+    }
+    emit({ type: 'tool', step: 0, action: 'bash', params: { command: directCall.command }, root: toolCtx.root });
+    emit({ type: 'tool_result', step: 0, action: 'bash', result: directResult.slice(0, TOOL_RESULT_MAX) });
+    userInstruction = directCall.restMessage || '请基于上面的命令输出回答。';
+  } else if (directCall.type === 'skill') {
+    if (directCall.unknown) {
+      // 未知 skill：回退普通对话并提示可用 skill，不阻断
+      emit({ type: 'error', step: 0, msg: `未知技能 @${directCall.skill}，可用技能：${SKILL_TOOLS.join(', ')}` });
+    } else {
+      const params = buildSkillParams(directCall.skill, directCall.rawArgs);
+      try {
+        directResult = String(await runTool(directCall.skill, params, toolCtx));
+      } catch (e) {
+        directResult = '技能执行错误: ' + e.message;
+      }
+      emit({ type: 'tool', step: 0, action: directCall.skill, params, root: toolCtx.root });
+      emit({ type: 'tool_result', step: 0, action: directCall.skill, result: directResult.slice(0, TOOL_RESULT_MAX) });
+      userInstruction = directCall.restMessage || '请基于上面的技能输出回答。';
+    }
+  }
+
   // 构造首条 user 消息：有图片时改用 Ollama 多模态格式（content + images 数组）
   const userMessage = (images && images.length)
-    ? { role: 'user', content: userInput, images: images.slice() }
-    : { role: 'user', content: userInput };
+    ? { role: 'user', content: userInstruction, images: images.slice() }
+    : { role: 'user', content: userInstruction };
 
   if (images && images.length) {
     console.log('[image] 收到 ' + images.length + ' 张图片');
@@ -335,9 +378,13 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     ? history.filter(h => h && (h.role === 'user' || h.role === 'assistant') && h.content && h.content.trim())
     : [];
   let lastPromptTokens = 0; // 真实 prompt token（Ollama prompt_eval_count），用于压缩/预算判断
+  const directResultMsg = directResult != null
+    ? { role: 'user', content: `工具执行结果：\n${directResult.slice(0, TOOL_RESULT_MAX)}` }
+    : null;
   let messages = [
     { role: 'system', content: useNativeTools ? nativeSystemPrompt() : systemPrompt(specs) },
     ...validHistory,
+    ...(directResultMsg ? [directResultMsg] : []),
     userMessage,
   ];
   messages = truncateMessages(messages, CTX_RESERVE, lastPromptTokens || null);

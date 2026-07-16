@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { READONLY, WRITE } = require('../src/core/agent');
 const { specsFor } = require('../src/tools/index');
-const { isComplexTask, resolveMode } = require('../src/core/workflow');
+const { isComplexTask, resolveMode, resolveDirectCall, buildSkillParams } = require('../src/core/workflow');
 
 test('READONLY 覆盖只读调研工具', () => {
   for (const t of ['read_file', 'list_dir', 'grep', 'glob', 'tree', 'read_lines', 'search_files', 'count_loc']) {
@@ -102,3 +102,46 @@ test('resolveMode: auto 模式下复杂进 plan、简单进 execute', () => {
   assert.equal(resolveMode('读取 config 并解释', undefined).mode, 'execute');
 });
 
+
+// ---------- 直接调用解析（resolveDirectCall / buildSkillParams） ----------
+
+test('resolveDirectCall: ! 前缀解析为 bash 调用', () => {
+  const r = resolveDirectCall('!ls -la src/core');
+  assert.equal(r.type, 'bash');
+  assert.equal(r.command, 'ls -la src/core');
+});
+
+test('resolveDirectCall: ! 空命令回退 null', () => {
+  assert.equal(resolveDirectCall('!   ').type, null);
+});
+
+test('resolveDirectCall: @ 已知 skill 解析并带参数', () => {
+  const r = resolveDirectCall('@git_log max=5');
+  assert.equal(r.type, 'skill');
+  assert.equal(r.skill, 'git_log');
+  assert.equal(r.unknown, undefined);
+  assert.deepEqual(buildSkillParams('git_log', r.rawArgs), { max: 5 });
+});
+
+test('resolveDirectCall: @ 位置参数填入主字段', () => {
+  const r = resolveDirectCall('@explain_symbol runAgent');
+  assert.deepEqual(buildSkillParams('explain_symbol', r.rawArgs), { symbol: 'runAgent' });
+  const g = resolveDirectCall('@git_show HEAD~1');
+  assert.deepEqual(buildSkillParams('git_show', g.rawArgs), { ref: 'HEAD~1' });
+});
+
+test('resolveDirectCall: @ 未知 skill 标 unknown 并回退', () => {
+  const r = resolveDirectCall('@no_such_skill foo');
+  assert.equal(r.type, 'skill');
+  assert.equal(r.unknown, true);
+});
+
+test('resolveDirectCall: 普通文本 / /plan 返回 null', () => {
+  assert.equal(resolveDirectCall('普通对话').type, null);
+  assert.equal(resolveDirectCall('/plan 重构').type, null);
+});
+
+test('resolveMode: ! 与 @ 前缀不进入 plan 模式', () => {
+  assert.equal(resolveMode('!ls', undefined).mode, 'execute');
+  assert.equal(resolveMode('@git_status', undefined).mode, 'execute');
+});

@@ -103,6 +103,8 @@ http://localhost:3000
 | `explain_symbol` | 解释符号定义 |
 | `find_references` | 查找符号引用 |
 
+> 这些可执行 skill 可通过 `@skill名` 语法强制直接调用，绕过模型推理。完整用法（含 `@` 语法、slash 命令、三套机制对比）见 [docs/skills-and-tools.md](docs/skills-and-tools.md)。
+
 ## 目录结构
 
 ```
