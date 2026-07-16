@@ -133,8 +133,14 @@ ollama_agent/
 │
 ├── public/                           Frontend static files
 │   ├── index.html                    Main page
-│   ├── frontend/js/modules/          Frontend JS modules
-│   │   ├── app.js                    Main entry
+│   ├── frontend/js/modules/          Frontend JS modules (global-script, split by feature)
+│   │   ├── refs.js                    Shared DOM refs + status bar / user menu wiring (loaded first)
+│   │   ├── app.js                    Main entry: boot & event wiring only
+│   │   ├── chat.js                   Message rendering / SSE dispatch / thinking / images / send·abort
+│   │   ├── sidebar.js                Sidebar tabs / todos·notes / log drawer / add modals
+│   │   ├── history.js                History drawer / list / conversation replay / delete confirm
+│   │   ├── statusbar.js              Status bar / context usage / model dropdown / git branch / detail modal
+│   │   ├── composer.js               Input autosize / send hotkeys / conv name / URL persistence / new chat
 │   │   ├── state.js                  State management
 │   │   ├── api.js                    API calls
 │   │   ├── render.js                 Message rendering (Markdown)

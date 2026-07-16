@@ -133,8 +133,14 @@ ollama_agent/
 │
 ├── public/                           前端静态文件
 │   ├── index.html                    主页面
-│   ├── frontend/js/modules/          前端 JS 模块
-│   │   ├── app.js                    主入口
+│   ├── frontend/js/modules/          前端 JS 模块（global-script，按功能拆分）
+│   │   ├── refs.js                    共享 DOM 引用与状态栏/用户菜单点击接线（最先加载）
+│   │   ├── app.js                    主入口：仅负责启动与事件接线
+│   │   ├── chat.js                   消息流渲染 / SSE 分发 / 思考态 / 图片 / 发送·中止
+│   │   ├── sidebar.js                侧栏 tab / 待办·笔记 / 日志抽屉 / 添加弹框
+│   │   ├── history.js                历史对话抽屉 / 列表 / 加载回放 / 删除确认
+│   │   ├── statusbar.js              状态栏 / 上下文用量 / 模型下拉 / git 分支 / 详情弹框
+│   │   ├── composer.js               输入框自适应 / 发送快捷键 / 对话名 / URL 持久化 / 新对话
 │   │   ├── state.js                  状态管理
 │   │   ├── api.js                    API 调用
 │   │   ├── render.js                 消息渲染（Markdown）
