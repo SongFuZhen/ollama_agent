@@ -103,7 +103,46 @@ http://localhost:3000
 | `explain_symbol` | 解释符号定义 |
 | `find_references` | 查找符号引用 |
 
-> 这些可执行 skill 及全部工具均可通过 `@命令名` 语法强制直接调用，绕过模型推理。完整用法（含 `@`/`!` 语法、slash 命令、三套机制对比）见 [docs/skills-and-tools.md](docs/skills-and-tools.md)。
+> 这些可执行 skill 及全部工具均可通过 `@命令名` 语法强制直接调用，绕过模型推理。
+
+### 命令语法
+
+除了自然语言对话，还支持三种前缀/斜杠语法，直接驱动工具与技能：
+
+**`@命令` — 强制直接调用**（绕过模型推理，结果直接喂给模型作答）
+
+```
+@<工具或技能名> [参数...]
+```
+
+- 参数可用 `key=value`（如 `path=src/x.js`、`max=5`），位置参数会自动填入主参数（如 `@read_file src/x.js`）。
+- 可调用全部已注册工具与技能；写操作（`write_file`/`edit_file`/`bash` 等）执行前弹二次确认。
+- 示例：`@git_status`、`@git_log max=5`、`@read_file src/core/agent.js`、`@grep pattern=foo path=src`、`@write_file path=/tmp/n.txt content=hi`
+
+**`!命令` — 直接执行 shell**
+
+```
+!<shell 命令>
+```
+
+- 直接调用 `bash` 工具执行 shell 命令，沿用其确认流程（含只读命令），危险命令被安全策略拦截。
+- 示例：`!ls -la src/core`、`!git log --oneline -3`、`!npm test`
+- 优先级：`!` > `@` > `/plan`。
+
+**`/命令` — 前端 slash 命令**
+
+| 命令 | 作用 |
+|------|------|
+| `/skills` | 弹出可用技能列表 |
+| `/tools` | 弹出可用工具列表 |
+| `/models` | 切换模型 |
+| `/help` | 显示所有命令 |
+| `/clear` | 清空当前对话上下文 |
+| `/compress` | 压缩中间历史以省 token |
+| `/recall` | 语义召回跨会话记忆 |
+| `/plan` | 进入只读规划模式，返回可确认的执行计划 |
+
+> 三套机制对比、`@`/`!` 完整参数与示例见 [docs/skills-and-tools.md](docs/skills-and-tools.md)。
 
 ## 目录结构
 
