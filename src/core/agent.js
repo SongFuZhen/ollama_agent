@@ -5,6 +5,7 @@ const { chatStreamWithTools } = require('./ollama-tools');
 const { TOOLS, specsFor, isAllowed, runTool } = require('../tools/index');
 const { resolveDirectCall, buildSkillParams } = require('./workflow');
 const SKILL_TOOLS = specsFor().filter((s) => s.kind === 'skill').map((s) => s.name);
+const DIRECT_CALL_NAMES = specsFor().map((s) => s.name);
 const { buildOllamaTools } = require('../tools/schema');
 const { buildRecallPrompt } = require('../memory/recall');
 const { addMemory } = require('../storage/db');
@@ -336,18 +337,27 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     userInstruction = directCall.restMessage || '请基于上面的命令输出回答。';
   } else if (directCall.type === 'skill') {
     if (directCall.unknown) {
-      // 未知 skill：回退普通对话并提示可用 skill，不阻断
-      emit({ type: 'error', step: 0, msg: `未知技能 @${directCall.skill}，可用技能：${SKILL_TOOLS.join(', ')}` });
+      // 未知工具/技能：回退普通对话并提示可用名称，不阻断
+      emit({ type: 'error', step: 0, msg: `未知命令 @${directCall.skill}，可用命令：${DIRECT_CALL_NAMES.join(', ')}` });
     } else {
+      const tool = TOOLS[directCall.skill];
+      // 写操作等 needConfirm 工具：执行前先向用户确认（与模型自主调用路径一致）
+      if (tool && tool.needConfirm) {
+        const cr = await confirm({ action: directCall.skill, params: buildSkillParams(directCall.skill, directCall.rawArgs) });
+        if (!cr || !cr.ok) {
+          emit({ type: 'answer', content: `（已取消执行 @${directCall.skill}）` });
+          return `（已取消执行 @${directCall.skill}）`;
+        }
+      }
       const params = buildSkillParams(directCall.skill, directCall.rawArgs);
       try {
         directResult = String(await runTool(directCall.skill, params, toolCtx));
       } catch (e) {
-        directResult = '技能执行错误: ' + e.message;
+        directResult = '执行错误: ' + e.message;
       }
       emit({ type: 'tool', step: 0, action: directCall.skill, params, root: toolCtx.root });
       emit({ type: 'tool_result', step: 0, action: directCall.skill, result: directResult.slice(0, TOOL_RESULT_MAX) });
-      userInstruction = directCall.restMessage || '请基于上面的技能输出回答。';
+      userInstruction = directCall.restMessage || '请基于上面的输出回答。';
     }
   }
 

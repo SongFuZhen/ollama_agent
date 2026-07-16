@@ -6,14 +6,25 @@ const { WORKFLOW_MODE, COMPLEX_TASK_PATTERNS } = require('../config');
 const { specsFor } = require('../tools');
 
 // 可执行 skill 名称集合（来自 specsFor 中 kind==='skill' 的项）。
-// 用于 @ 前缀解析时判断是否为已知 skill。
+// 用于 @ 前缀解析时区分 skill 与 tool，以及未知提示。
 const SKILL_TOOLS = specsFor().filter((s) => s.kind === 'skill').map((s) => s.name);
+
+// 全部可直接调用的工具/技能名称（@ 前缀匹配范围，含 skills 与 tools）。
+const DIRECT_CALL_NAMES = specsFor().map((s) => s.name);
+
+// 每个工具 params schema 的第一个键（主参数名），用于把位置参数填入。
+// 例：read_file 主参数为 path → `@read_file src/x.js` 映射为 { path:'src/x.js' }。
+const TOOL_FIRST_PARAM = {};
+for (const s of specsFor()) {
+  const keys = s.params ? Object.keys(s.params) : [];
+  if (keys.length) TOOL_FIRST_PARAM[s.name] = keys[0];
+}
 
 // 直接调用解析：把「指定后必须直接调用」固化为输入前缀语法。
 //   - `!<命令>`    → 直接调用 bash 工具执行 shell 命令（沿用其写操作确认逻辑）
-//   - `@<skill> `  → 直接调用 src/skills 下注册的可执行 skill（绕过模型推理）
+//   - `@<name>`    → 直接调用任意已注册工具/技能（src/skills 的 skill 或 src/tools 的 tool），绕过模型推理
 // 优先级：! > @ > /plan；输入以哪个前缀开头就用哪个，互不共存。
-// 返回 { type: 'bash'|'skill'|null, command?, skill?, rawArgs?, restMessage? }
+// 返回 { type: 'bash'|'skill'|null, command?, skill?, rawArgs?, restMessage?, unknown? }
 function resolveDirectCall(message) {
   if (typeof message !== 'string') return { type: null };
   const trimmed = message.trim();
@@ -25,23 +36,24 @@ function resolveDirectCall(message) {
     return { type: 'bash', command, restMessage: '' };
   }
 
-  // @ 前缀：直接调可执行 skill
+  // @ 前缀：直接调任意已注册工具/技能
   const m = trimmed.match(/^@(\w+)\s*([\s\S]*)$/);
   if (m) {
-    const skill = m[1];
+    const name = m[1];
     const rawArgs = m[2].trim();
-    if (SKILL_TOOLS.includes(skill)) {
-      return { type: 'skill', skill, rawArgs, restMessage: rawArgs };
+    const isSkill = SKILL_TOOLS.includes(name);
+    if (DIRECT_CALL_NAMES.includes(name)) {
+      return { type: 'skill', skill: name, isSkill, rawArgs, restMessage: rawArgs };
     }
-    // 未知 skill：标 type='skill' 但 skill 不在集合，由调用方回退并提示
-    return { type: 'skill', skill, rawArgs, restMessage: rawArgs, unknown: true };
+    // 未知工具/技能：标 unknown，由调用方回退并提示
+    return { type: 'skill', skill: name, isSkill, rawArgs, restMessage: rawArgs, unknown: true };
   }
 
   return { type: null };
 }
 
 // 把 @/! 原始参数的 key=value 片段解析为对象，剩余位置参数收集为数组。
-// 例："max=5 path=src/a.js 其它" → { max:'5', path:'src/a.js', _positional:['其它'] }
+// 例："max=5 path=src/a.js 其它" → { max:5, path:'src/a.js' }，positional:['其它']
 function parseArgs(rawArgs) {
   const params = {};
   const positional = [];
@@ -60,19 +72,18 @@ function parseArgs(rawArgs) {
   return { params, positional };
 }
 
-// 依据 skill 的 params schema，把用户输入的原始参数映射为调用参数对象。
-// 位置参数按 skill 的第一个必填/主参数填入（symbol/ref），其余走 key=value。
-function buildSkillParams(skill, rawArgs) {
+// 依据工具/技能名，把用户输入的原始参数映射为调用参数对象。
+// 6 个 skill 走专属映射（处理 staged 布尔、主参数歧义等）；其余工具走通用映射：
+// key=value 直接收，位置参数填入该工具 params schema 的第一个键（主参数）。
+function buildSkillParams(name, rawArgs) {
   const { params, positional } = parseArgs(rawArgs);
-  switch (skill) {
+  switch (name) {
     case 'git_status':
       return {};
     case 'git_show':
-      // ref 必填，位置参数或 key=value 均可
       return { ref: params.ref || positional.join(' ') };
     case 'explain_symbol':
     case 'find_references':
-      // symbol 必填；path 可选
       return Object.assign({}, params.path ? { path: params.path } : {},
         { symbol: params.symbol || positional.join(' ') });
     case 'git_diff':
@@ -81,12 +92,18 @@ function buildSkillParams(skill, rawArgs) {
       if (params.path) p.path = params.path;
       if (params.max != null) p.max = params.max;
       if (params.staged != null) p.staged = params.staged === true || params.staged === 'true';
-      // 位置参数若未用 key=value，视为 path
       if (positional.length && !params.path) p.path = positional.join(' ');
       return p;
     }
-    default:
-      return params;
+    default: {
+      // 通用：位置参数填入主参数（若有），其余走 key=value
+      const first = TOOL_FIRST_PARAM[name];
+      const p = Object.assign({}, params);
+      if (first && positional.length && !(first in p)) {
+        p[first] = positional.join(' ');
+      }
+      return p;
+    }
   }
 }
 

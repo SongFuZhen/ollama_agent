@@ -15,32 +15,61 @@
 | **前端 slash 命令** | `public/frontend/js/modules/commands.js` | 输入框 UI 快捷键 | 输入 `/命令名` 唤起弹窗 / 动作 | 否（纯前端交互） |
 
 ### 关键澄清
-- **`@` 不是引用符号，而是调用触发器**。输入 `@git_status` 会**绕过模型、直接执行**该 skill 并把真实结果喂给模型作答（`/plan` 的优先级低于 `@`：带 `@` 时走强制调用）。
+- **`@` 不是引用符号，而是调用触发器**。输入 `@git_status`、`@read_file ...` 等会**绕过模型、直接执行**对应工具/技能并把真实结果喂给模型作答（`/plan` 的优先级低于 `@`：带 `@` 时走强制调用）。`@` 可调用全部已注册工具与技能。
 - **指令型 skill 没有 `@` 通道**。它们靠模型识别任务类型自动启用（例如"做个有设计感的页面"会触发 frontend-design）。想强制走设计 skill，用自然语言描述设计意图即可。
 - **slash 命令不执行任何 skill**。`/skills` 只是弹出"可用技能列表"，`/tools` 同理，它们用于查看而非调用。
 
 ---
 
-## 二、`@skill` 强制调用语法
+## 二、`@<命令>` 强制调用语法
 
 格式：
 
 ```
-@<skill名> [参数...]
+@<工具或技能名> [参数...]
 ```
 
-命中 `src/skills/` 下注册的可执行 skill 时，**直接运行、不经过模型推理**，结果作为首轮上下文注入，模型据此作答。若 `@` 后不是已知 skill，会回退为普通对话并提示可用 skill。
+`@` 可调用**任意已注册的工具或技能**（`src/skills/` 的 6 个 skill + `src/tools/` 的全部工具），**直接运行、不经过模型推理**，结果作为首轮上下文注入，模型据此作答。
 
-### 可用 skill 与参数
+- **参数写法**：`key=value` 形式（如 `path=src/x.js`、`max=5`）；位置参数会自动填入该命令的主参数（如 `@read_file src/x.js` 等价于 `@read_file path=src/x.js`）。
+- **写操作确认**：写类命令（`write_file` / `edit_file` / `apply_diff` / `bash` 等）执行前会弹一次二次确认，被拒绝则不执行——与模型自主调用路径一致。
+- **未知命令**：`@` 后不是已知工具/技能时，回退为普通对话并提示可用命令列表。
 
-| Skill | 参数写法 | 说明 |
-|-------|----------|------|
-| `git_status` | 无参 | 查看工作区状态（修改/新增/删除、当前分支） |
-| `git_diff` | `[path=文件路径] [staged]` | 查看差异；`path=` 限定文件，`staged` 看已暂存 |
-| `git_log` | `[max=N] [path=文件路径]` | 查看提交历史，默认 20 条 |
-| `git_show` | `<ref>`（必填） | 查看某次提交/版本文件，`ref` 可为哈希/分支/标签或 `哈希:路径` |
-| `explain_symbol` | `<symbol> [path=目录或文件]` | 解释函数/类/变量的定义与上下文 |
-| `find_references` | `<symbol> [path=目录或文件]` | 查找符号的所有引用位置 |
+### 可用命令（节选常用）
+
+**技能（src/skills）**
+
+| 命令 | 参数写法 | 说明 |
+|------|----------|------|
+| `git_status` | 无参 | 查看工作区状态 |
+| `git_diff` | `[path=文件] [staged]` | 查看差异 |
+| `git_log` | `[max=N] [path=文件]` | 查看提交历史 |
+| `git_show` | `<ref>`（必填） | 查看某次提交/版本文件 |
+| `explain_symbol` | `<symbol> [path=目录/文件]` | 解释符号定义 |
+| `find_references` | `<symbol> [path=目录/文件]` | 查找符号引用 |
+
+**工具（src/tools，可用 `@` 直接调）**
+
+| 命令 | 参数写法 | 说明 |
+|------|----------|------|
+| `read_file` | `<path>` | 读取文件内容 |
+| `read_lines` | `<path> [start=] [end=]` | 读取文件指定行范围 |
+| `list_dir` | `[path=目录]` | 列出目录内容（树状） |
+| `tree` | `[path=] [depth=]` | 树状展示目录层级 |
+| `glob` | `<pattern>` | 按 glob 模式找文件 |
+| `search_files` | `<pattern>` | 按文件名关键字递归搜索 |
+| `grep` | `<pattern> [path=]` | 搜索文件内容（支持正则） |
+| `semantic_grep` | `<query> [path=]` | 模糊语义检索 |
+| `count_loc` | `[path=]` | 统计代码行数/文件数 |
+| `repo_map` | `[path=] [max=]` | 仓库重要源文件速览 |
+| `run_tests` | `[command=]` | 运行测试（需确认） |
+| `run_lint` | `[command=]` | 运行 lint（需确认） |
+| `write_file` | `<path> <content>` | 写入文件（需确认） |
+| `edit_file` | `<path> <old_string> <new_string>` | 局部替换（需确认） |
+| `apply_diff` | `<diff>` | 应用 diff 补丁（需确认） |
+| `notes` / `todos` | `action=...` | 笔记 / 任务清单管理 |
+
+> 完整列表可在前端输入 `/skills`、`/tools` 查看，或见 `src/tools/index.js` 与 `src/skills/index.js`。
 
 ### 示例
 
@@ -63,6 +92,21 @@
 @explain_symbol runAgent
 ```
 → 直接在项目里定位 `runAgent` 的定义并解释。
+
+```
+@read_file src/core/workflow.js
+```
+→ 直接读取该文件内容（位置参数 `src/core/workflow.js` 自动填入 `path`）。
+
+```
+@grep pattern=resolveDirectCall path=src/core
+```
+→ 直接在 `src/core` 下搜索 `resolveDirectCall`。
+
+```
+@write_file path=/tmp/note.txt content=hello
+```
+→ 弹出二次确认后写入（被拒绝则不写）。
 
 ```
 @git_show HEAD~1

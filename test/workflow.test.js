@@ -115,23 +115,27 @@ test('resolveDirectCall: ! 空命令回退 null', () => {
   assert.equal(resolveDirectCall('!   ').type, null);
 });
 
-test('resolveDirectCall: @ 已知 skill 解析并带参数', () => {
-  const r = resolveDirectCall('@git_log max=5');
+test('resolveDirectCall: @ 匹配任意工具/技能并解析参数', () => {
+  // 工具 read_file：位置参数自动填入主参数 path
+  const r = resolveDirectCall('@read_file src/core/agent.js');
   assert.equal(r.type, 'skill');
-  assert.equal(r.skill, 'git_log');
+  assert.equal(r.skill, 'read_file');
   assert.equal(r.unknown, undefined);
-  assert.deepEqual(buildSkillParams('git_log', r.rawArgs), { max: 5 });
+  assert.deepEqual(buildSkillParams('read_file', r.rawArgs), { path: 'src/core/agent.js' });
+  // skill git_log：key=value 解析
+  const g = resolveDirectCall('@git_log max=5');
+  assert.deepEqual(buildSkillParams('git_log', g.rawArgs), { max: 5 });
 });
 
 test('resolveDirectCall: @ 位置参数填入主字段', () => {
   const r = resolveDirectCall('@explain_symbol runAgent');
   assert.deepEqual(buildSkillParams('explain_symbol', r.rawArgs), { symbol: 'runAgent' });
-  const g = resolveDirectCall('@git_show HEAD~1');
-  assert.deepEqual(buildSkillParams('git_show', g.rawArgs), { ref: 'HEAD~1' });
+  const gh = resolveDirectCall('@git_show HEAD~1');
+  assert.deepEqual(buildSkillParams('git_show', gh.rawArgs), { ref: 'HEAD~1' });
 });
 
-test('resolveDirectCall: @ 未知 skill 标 unknown 并回退', () => {
-  const r = resolveDirectCall('@no_such_skill foo');
+test('resolveDirectCall: @ 未知命令标 unknown 并回退', () => {
+  const r = resolveDirectCall('@no_such_cmd foo');
   assert.equal(r.type, 'skill');
   assert.equal(r.unknown, true);
 });
@@ -144,4 +148,18 @@ test('resolveDirectCall: 普通文本 / /plan 返回 null', () => {
 test('resolveMode: ! 与 @ 前缀不进入 plan 模式', () => {
   assert.equal(resolveMode('!ls', undefined).mode, 'execute');
   assert.equal(resolveMode('@git_status', undefined).mode, 'execute');
+});
+
+// ---------- @ 直接调用：写操作 confirm 拦截（agent 集成） ----------
+
+test('runAgent: @write_file 被 confirm 拒绝时返回取消', async () => {
+  const { runAgent } = require('../src/core/agent');
+  const events = [];
+  const out = await runAgent('@write_file path=/tmp/x.txt content=hi', {
+    model: 'dummy',
+    confirm: async () => ({ ok: false }),
+  }, (e) => events.push(e));
+  assert.match(String(out), /已取消执行 @write_file/);
+  // 不应出现实际的 write_file 工具执行结果
+  assert.ok(!events.some((e) => e.type === 'tool_result' && e.action === 'write_file'));
 });
