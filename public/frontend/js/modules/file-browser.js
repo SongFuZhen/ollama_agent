@@ -308,6 +308,9 @@ async function bindAbsoluteRoot(raw) {
     }
     fileTreeEl.dataset.empty = '';
     updateProjectRootUI();
+    // 绑定成功后立即强制查询 git 分支（updateProjectRootUI 因 #project-root 缺失会早 return，
+    // 不能依赖它顺带触发，这里直接调用确保状态栏 git 分支刷新）。
+    if (typeof fetchGitBranch === 'function') fetchGitBranch(path, true);
     if (typeof refreshStatusRoot === 'function') refreshStatusRoot(); // 绑定后刷新状态栏「根」
     loadFileTreeForRoot(path);
   } catch (e) {

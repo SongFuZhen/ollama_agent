@@ -219,6 +219,11 @@ async function initDB() {
     // 兼容旧库：为已有表补充新增列
     try { db.run('ALTER TABLE messages ADD COLUMN model TEXT'); } catch (_) {}
     try { db.run('ALTER TABLE conversations ADD COLUMN context_cleared_at INTEGER'); } catch (_) {}
+    try { db.run('ALTER TABLE messages ADD COLUMN mid TEXT'); } catch (_) {}
+    try { db.run('ALTER TABLE conversations ADD COLUMN excluded_mids TEXT'); } catch (_) {}
+    try { db.run('ALTER TABLE conversations ADD COLUMN history TEXT'); } catch (_) {}
+    try { db.run('ALTER TABLE conversations ADD COLUMN compact_divider INTEGER'); } catch (_) {}
+    try { db.run('ALTER TABLE conversations ADD COLUMN cleared_divider INTEGER'); } catch (_) {}
     await flush();
     return db;
   })();
@@ -238,11 +243,18 @@ function isReady() {
 
 // ---------- 对话 ----------
 
-function createConversation(id, title = '', projectRoot = '', contextClearedAt = null) {
+function createConversation(id, title = '', projectRoot = '', contextClearedAt = null, excludedMids = null, history = null, compactDivider = null, clearedDivider = null) {
   const now = Date.now();
   run(
-    'INSERT INTO conversations (id, title, project_root, context_cleared_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, title || '', projectRoot || '', contextClearedAt || null, now, now]
+    'INSERT INTO conversations (id, title, project_root, context_cleared_at, excluded_mids, history, compact_divider, cleared_divider, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      id, title || '', projectRoot || '', contextClearedAt || null,
+      excludedMids ? JSON.stringify(excludedMids) : null,
+      history ? JSON.stringify(history) : null,
+      compactDivider == null ? null : Number(compactDivider),
+      clearedDivider == null ? null : Number(clearedDivider),
+      now, now,
+    ]
   );
   scheduleSave();
 }
@@ -263,8 +275,22 @@ function updateConversationContextCleared(id, ts) {
   scheduleSave();
 }
 
+// 持久化「单条移出上下文」与「压缩/清除」状态：排除集合、当前结构化历史、分隔线位置
+function updateConversationState(id, { excludedMids, history, compactDivider, clearedDivider } = {}) {
+  const sets = [];
+  const params = [];
+  if (excludedMids !== undefined) { sets.push('excluded_mids = ?'); params.push(JSON.stringify(excludedMids)); }
+  if (history !== undefined) { sets.push('history = ?'); params.push(JSON.stringify(history)); }
+  if (compactDivider !== undefined) { sets.push('compact_divider = ?'); params.push(compactDivider == null ? null : Number(compactDivider)); }
+  if (clearedDivider !== undefined) { sets.push('cleared_divider = ?'); params.push(clearedDivider == null ? null : Number(clearedDivider)); }
+  if (sets.length === 0) return;
+  params.push(id);
+  run(`UPDATE conversations SET ${sets.join(', ')}, updated_at = updated_at WHERE id = ?`, params);
+  scheduleSave();
+}
+
 function getConversation(id) {
-  return getRow('SELECT id, title, project_root, context_cleared_at, created_at, updated_at FROM conversations WHERE id = ?', [id]) || null;
+  return getRow('SELECT id, title, project_root, context_cleared_at, excluded_mids, history, compact_divider, cleared_divider, created_at, updated_at FROM conversations WHERE id = ?', [id]) || null;
 }
 
 function getConversations() {
@@ -279,9 +305,9 @@ function deleteConversation(id) {
 
 // ---------- 消息 ----------
 
-function addMessage(conversationId, role, content, model = null, tools = null, thinks = null, images = null, stats = null) {
+function addMessage(conversationId, role, content, model = null, tools = null, thinks = null, images = null, stats = null, mid = null) {
   run(
-    'INSERT INTO messages (conversation_id, role, content, model, tools, thinks, images, stats, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO messages (conversation_id, role, content, model, tools, thinks, images, stats, mid, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       conversationId, role, content,
       model || null,
@@ -289,6 +315,7 @@ function addMessage(conversationId, role, content, model = null, tools = null, t
       thinks ? JSON.stringify(thinks) : null,
       images ? JSON.stringify(images) : null,
       stats ? JSON.stringify(stats) : null,
+      mid || null,
       Date.now(),
     ]
   );
@@ -303,11 +330,12 @@ function deleteMessages(conversationId) {
 
 function getMessages(conversationId) {
   const rows = getRows(
-    'SELECT role, content, model, tools, thinks, images, stats, timestamp FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+    'SELECT role, content, model, tools, thinks, images, stats, mid, timestamp FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
     [conversationId]
   );
   return rows.map(r => ({
     ...r,
+    mid: r.mid || null,
     model: r.model || null,
     tools: r.tools ? JSON.parse(r.tools) : null,
     thinks: r.thinks ? JSON.parse(r.thinks) : null,
@@ -519,6 +547,7 @@ module.exports = {
   updateConversationTitle,
   updateConversationRoot,
   updateConversationContextCleared,
+  updateConversationState,
   addMessage,
   deleteMessages,
   getMessages,

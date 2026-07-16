@@ -9,7 +9,8 @@ const { runAgent } = require('./core/agent');
 const { listModels, hostParts } = require('./core/ollama');
 const { safeResolve, allSpecs } = require('./tools/index');
 const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./storage/rootstore');
-const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST } = require('./config');
+const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST, COMPACT_RECENT_K } = require('./config');
+const { compactMessages } = require('./core/compact');
 const { resolveMode } = require('./core/workflow');
 const db = require('./storage/db');
 const { getDeviceId, getDevice } = require('./device/device');
@@ -533,6 +534,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url === '/api/root') return handleRootGet(res);
   if (req.method === 'POST' && url === '/api/root') return handleRootSave(req, res);
   if (req.method === 'POST' && url === '/api/chat') return handleChat(req, res);
+  if (req.method === 'POST' && url === '/api/compact') return handleCompact(req, res);
   if (req.method === 'POST' && url === '/api/confirm') return handleConfirm(req, res);
   if (req.method === 'POST' && url === '/api/ask-user') return handleAskUser(req, res);
   if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
@@ -710,12 +712,18 @@ async function handleGetConversationStats(req, res) {
 
 async function handleSaveConversation(req, res) {
   try {
-    const { id, title, projectRoot, messages, contextClearedAt } = await parseBody(req);
+    const { id, title, projectRoot, messages, contextClearedAt, excludedMids, history, compactDivider, clearedDivider } = await parseBody(req);
     if (!id) return sendJSON(res, 400, { error: 'id required' });
-    
+
     const existing = db.getConversation(id);
     if (!existing) {
-      db.createConversation(id, title || '', projectRoot || '', contextClearedAt || null);
+      db.createConversation(
+        id, title || '', projectRoot || '', contextClearedAt || null,
+        Array.isArray(excludedMids) ? excludedMids : null,
+        Array.isArray(history) ? history : null,
+        compactDivider == null ? null : compactDivider,
+        clearedDivider == null ? null : clearedDivider
+      );
     } else {
       if (title) db.updateConversationTitle(id, title);
       // 更新 project_root（如果提供了新值）
@@ -726,16 +734,23 @@ async function handleSaveConversation(req, res) {
       if (contextClearedAt !== undefined) {
         db.updateConversationContextCleared(id, contextClearedAt || null);
       }
+      // 持久化「单条移出上下文」与「压缩/清除」状态
+      db.updateConversationState(id, {
+        excludedMids: Array.isArray(excludedMids) ? excludedMids : undefined,
+        history: Array.isArray(history) ? history : undefined,
+        compactDivider: compactDivider === undefined ? undefined : (compactDivider == null ? null : compactDivider),
+        clearedDivider: clearedDivider === undefined ? undefined : (clearedDivider == null ? null : clearedDivider),
+      });
     }
-    
+
     if (messages && Array.isArray(messages)) {
       // 整体覆盖：先删除旧消息，再写入完整列表，避免重复累积
       db.deleteMessages(id);
       for (const msg of messages) {
-        db.addMessage(id, msg.role, msg.content, msg.model || null, msg.tools || null, msg.thinks || null, msg.images || null, msg.stats || null);
+        db.addMessage(id, msg.role, msg.content, msg.model || null, msg.tools || null, msg.thinks || null, msg.images || null, msg.stats || null, msg.mid || null);
       }
     }
-    
+
     sendJSON(res, 200, { ok: true });
   } catch (e) {
     sendJSON(res, 500, { error: e.message });
@@ -758,6 +773,28 @@ async function handleDeleteConversation(req, res) {
   if (!id) return sendJSON(res, 400, { error: 'id required' });
   db.deleteConversation(id);
   sendJSON(res, 200, { ok: true });
+}
+
+// 手动压缩上下文：把中间旧历史摘要化，返回压缩后的历史（离线，Ollama 不可用则原样返回）
+async function handleCompact(req, res) {
+  try {
+    const { history, model, ollamaHost } = await parseBody(req);
+    const list = Array.isArray(history) ? history : [];
+    const msgs = list
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content && String(m.content).trim())
+      .map((m) => ({ role: m.role, content: String(m.content) }));
+    if (msgs.length <= COMPACT_RECENT_K) {
+      return sendJSON(res, 200, { ok: true, compacted: false, history: list });
+    }
+    const compacted = await compactMessages(msgs, {
+      model: model || DEFAULT_MODEL,
+      ollamaHost: ollamaHost || OLLAMA_HOST,
+    });
+    return sendJSON(res, 200, { ok: true, compacted: true, history: compacted });
+  } catch (e) {
+    console.error('handleCompact failed', e);
+    return sendJSON(res, 500, { ok: false, error: String((e && e.message) || e) });
+  }
 }
 
 // 初始化数据库并启动服务器

@@ -158,14 +158,11 @@ function renderSessionState() {
   // 渲染上下文用量条
   renderContextBar();
 
-  // 上下文已清除警告（Task 4: 视觉反馈）
+  // 上下文用量文本：始终显示 token 用量（如 0/131k 0%），清除状态不在此处覆盖
   if (ssContextText) {
-    ssContextText.textContent = state.conversationCleared
-      ? '⚠ 上下文已清除 · 下条消息不带历史'
-      : (state.sessionStats.contextLimit > 0
-          ? `${formatTokenCount(state.sessionStats.contextTokens || 0)}/${formatTokenCount(state.sessionStats.contextLimit)} ${state.sessionStats.contextLimit > 0 ? Math.round((state.sessionStats.contextTokens || 0) / state.sessionStats.contextLimit * 100) + '%' : ''}`
-          : (state.sessionStats.contextTokens || 0) > 0 ? formatTokenCount(state.sessionStats.contextTokens || 0) + '/?' : '—');
-    ssContextText.classList.toggle('context-cleared-warning', state.conversationCleared);
+    ssContextText.textContent = state.sessionStats.contextLimit > 0
+      ? `${formatTokenCount(state.sessionStats.contextTokens || 0)}/${formatTokenCount(state.sessionStats.contextLimit)} ${Math.round((state.sessionStats.contextTokens || 0) / state.sessionStats.contextLimit * 100)}%`
+      : (state.sessionStats.contextTokens || 0) > 0 ? formatTokenCount(state.sessionStats.contextTokens || 0) + '/?' : '—';
   }
 }
 
@@ -233,10 +230,11 @@ function closeStateModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-// 查询沙箱目录的 git 分支（用于状态栏），同一根只查一次
-async function fetchGitBranch(root) {
+// 查询沙箱目录的 git 分支（用于状态栏），同一根只查一次。
+// force=true 时忽略缓存，绑定/切换目录后强制重新查询。
+async function fetchGitBranch(root, force) {
   if (!root) { state.gitBranch = ''; lastGitRoot = null; return; }
-  if (lastGitRoot === root) return;
+  if (!force && lastGitRoot === root) return;
   lastGitRoot = root;
   state.gitBranch = '';
   try {

@@ -15,6 +15,7 @@ async function saveConversation() {
   session.querySelectorAll('.msg').forEach(msg => {
     const role = msg.classList.contains('user') ? 'user' : 'assistant';
     const bubble = msg.querySelector('.bubble');
+    const mid = msg.dataset.mid || null;
 
   let content = '';
     if (bubble) {
@@ -74,6 +75,7 @@ async function saveConversation() {
       messages.push({
         role,
         content,
+        mid,
         model: model || undefined,
         tools: tools.length > 0 ? tools : undefined,
         thinks: thinks.length > 0 ? thinks : undefined,
@@ -95,9 +97,9 @@ async function saveConversation() {
   const rawRoot = state.currentProjectRoot || '';
   const projectRoot = (rawRoot && (rawRoot.startsWith('/') || /^[A-Z]:\\/i.test(rawRoot))) ? rawRoot : '';
   
-  // Task 5: Persist context cleared timestamp
+  // Task 5: 持久化上下文相关状态（清除上下文时间戳、单条移出集合、压缩历史与分隔线）
   const contextClearedAt = state.contextClearedAt;
-  
+
   try {
     await fetch('/api/conversation', {
       method: 'POST',
@@ -108,6 +110,10 @@ async function saveConversation() {
         projectRoot,
         messages,
         contextClearedAt,
+        excludedMids: Array.from(state.excludedMids || []),
+        history: state.history,
+        compactDivider: state.compactDivider == null ? null : state.compactDivider,
+        clearedDivider: state.clearedDivider == null ? null : state.clearedDivider,
       }),
     });
   } catch (e) {

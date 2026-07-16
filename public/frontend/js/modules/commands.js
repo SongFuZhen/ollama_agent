@@ -9,6 +9,7 @@ const COMMAND_ICONS = {
   models: 'cpu',
   help: 'help-circle',
   clear: 'trash-2',
+  recall: 'search',
 };
 
 // 指令定义
@@ -42,6 +43,18 @@ const SLASH_COMMANDS = [
     desc: '清空当前对话',
     icon: 'trash-2',
     run: clearChat,
+  },
+  {
+    name: 'compress',
+    desc: '压缩上下文（摘要旧历史以省 token）',
+    icon: 'minimize-2',
+    run: compressContext,
+  },
+  {
+    name: 'recall',
+    desc: '语义召回历史记忆',
+    icon: 'search',
+    run: () => showRecall(),
   },
 ];
 
@@ -295,15 +308,152 @@ function showHelp() {
     name: '/' + cmd.name,
     desc: cmd.desc,
   }));
-  openListModal('可用命令', rows);
+  openListModal('可用命令', rows, { compact: true });
 }
 
 function clearChat() {
-  const newChatBtn = $('#new-chat');
-  if (newChatBtn) newChatBtn.click();
-  showSimpuiToast('已清空', '当前对话已清空');
+  // /clear：清空结构化历史（之前的对话不再作为上下文），不删除已显示的消息
+  state.history = [];
+  const session = state.session;
+  if (session) {
+    const div = el('div', 'context-clear-divider');
+    div.textContent = '上下文已清除';
+    session.appendChild(div);
+    // 记录清除分隔线位置（最后一条消息之后），重开对话时恢复
+    state.clearedDivider = session.querySelectorAll('.msg').length - 1;
+  }
+  if (typeof scrollDown === 'function') scrollDown(true);
+  // 立即落库，确保重开对话仍可见清除状态与空历史
+  if (state.conversationId) saveConversation();
+  showSimpuiToast('已清空上下文', '之前的对话不再作为上下文，后续消息从空白开始');
+}
+
+// /compress：把中间旧历史摘要化，降低后续上下文 token 占用
+async function compressContext() {
+  const history = state.history || [];
+  if (history.length <= 6) {
+    showSimpuiToast('提示', '上下文较短，暂无需压缩');
+    return;
+  }
+  try {
+    const r = await fetch('/api/compact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history: history.map((h) => ({ role: h.role, content: h.content })),
+        model: state.activeModel || state.defaultModel,
+        ollamaHost: typeof ollamaHost === 'function' ? ollamaHost() : undefined,
+      }),
+    });
+    const d = await r.json();
+    if (d && d.ok && d.compacted && Array.isArray(d.history)) {
+      // compactMessages 把中间段合成一条 system 摘要；前端转为 user 消息，
+      // 使后续发送仍能被后端 validHistory 保留进上下文
+      state.history = d.history.map((h) =>
+        h.role === 'system'
+          ? { role: 'user', content: h.content, mid: nextMid() }
+          : { role: h.role, content: h.content, mid: h.mid || null }
+      );
+      // 记录压缩分隔线位置（按 DOM 消息序号，避免 state.history 被 HISTORY_LIMIT 截断导致错位）。
+      // state.history 是 DOM 消息的尾部，保留最近 6 条，分隔线落在它们之前。
+      const totalMsgs = state.session ? state.session.querySelectorAll('.msg').length : 0;
+      state.compactDivider = totalMsgs > 6 ? (totalMsgs - 7) : null;
+      const session = state.session;
+      if (session) {
+        const div = el('div', 'context-clear-divider');
+        div.textContent = '上下文已压缩';
+        session.appendChild(div);
+      }
+      if (typeof scrollDown === 'function') scrollDown(true);
+      // 立即落库，确保重开对话仍可见压缩状态与压缩后的历史
+      if (state.conversationId) saveConversation();
+      showSimpuiToast('已压缩', '中间历史已摘要化，后续消息携带压缩后的上下文');
+    } else {
+      showSimpuiToast('提示', '上下文较短或压缩失败，未做处理');
+    }
+  } catch (e) {
+    showSimpuiToast('错误', '压缩失败: ' + (e.message || e));
+  }
 }
 
 // 导出供状态栏点击使用
 window.showTools = showTools;
 window.showSkills = showSkills;
+
+/* ----------------------------- */
+/* 语义召回（/recall）            */
+/* ----------------------------- */
+// 打开召回弹框：可传入初始 query（支持 /recall <文本> 内联用法）。
+function showRecall(initialQuery) {
+  let modal = $('#recall-modal');
+  if (!modal) {
+    modal = el('div', 'simpui-dialog-backdrop hidden');
+    modal.id = 'recall-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML = `
+      <div class="simpui-dialog-panel md">
+        <div class="simpui-dialog-header">
+          <h3 class="simpui-dialog-title">语义召回</h3>
+          <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+        </div>
+        <div class="simpui-dialog-body">
+          <p class="recall-hint">从跨会话历史记忆中召回最相关片段。embedding 模型就绪时走语义排序，缺失则自动降级关键词。</p>
+          <div class="recall-form">
+            <input id="recall-query" class="simpui-input" type="text" placeholder="输入查询，如：如何配置 embedding 模型" />
+            <button id="recall-search" class="simpui-btn primary sm">召回</button>
+          </div>
+          <div id="recall-results" class="recall-results"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
+    const q = modal.querySelector('#recall-query');
+    const btn = modal.querySelector('#recall-search');
+    const doSearch = () => runRecall(q.value.trim(), modal);
+    btn.addEventListener('click', doSearch);
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  }
+  modal.classList.remove('hidden');
+  const q = modal.querySelector('#recall-query');
+  if (q) {
+    q.value = initialQuery || '';
+    q.focus();
+    if (initialQuery) runRecall(initialQuery, modal);
+  }
+}
+
+// 调用 /api/recall 并渲染命中片段。
+async function runRecall(query, modal) {
+  const results = modal.querySelector('#recall-results');
+  if (!query) { showSimpuiToast('提示', '请输入查询内容'); return; }
+  results.innerHTML = '<div class="recall-loading">检索中…</div>';
+  try {
+    const params = new URLSearchParams({ query, k: '5' });
+    const oh = typeof ollamaHost === 'function' ? ollamaHost() : '';
+    if (oh) params.set('ollamaHost', oh);
+    const r = await fetch('/api/recall?' + params.toString());
+    const d = await r.json();
+    if (!d || !d.ok) { results.innerHTML = '<div class="recall-empty">召回失败</div>'; return; }
+    const chunks = Array.isArray(d.chunks) ? d.chunks : [];
+    if (!chunks.length) { results.innerHTML = '<div class="recall-empty">无匹配记忆</div>'; return; }
+    const isSemantic = typeof d.prompt === 'string' && d.prompt.includes('相关历史记忆');
+    results.innerHTML = '';
+    results.appendChild(el('div', 'recall-meta', `命中 ${d.count} 条 · ${isSemantic ? '语义召回' : '关键词召回'}`));
+    chunks.forEach((c) => {
+      const card = el('div', 'recall-card');
+      const role = (c.role === 'user' || c.role === 'assistant') ? c.role : 'unknown';
+      const badge = el('span', 'simpui-badge ' + (role === 'user' ? 'info' : 'secondary') + ' sm', role);
+      const head = el('div', 'recall-card-head');
+      head.appendChild(badge);
+      card.appendChild(head);
+      card.appendChild(el('div', 'recall-card-body', c.content));
+      results.appendChild(card);
+    });
+  } catch (e) {
+    results.innerHTML = '<div class="recall-empty">检索出错: ' + escapeHtml(e.message || String(e)) + '</div>';
+  }
+}
+
+window.showRecall = showRecall;

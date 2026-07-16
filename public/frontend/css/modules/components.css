@@ -1,6 +1,15 @@
 /* components.css - 组件样式 */
 /* 设计方向：Technical Laboratory - 等宽标签、左边框强调 */
 
+/* ---------- 垂直分割线组件 ----------
+   需分隔处直接插入 <span class="divider"></span>，居中 16px、随主题变色 */
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--simpui-input-border);
+  flex-shrink: 0;
+}
+
 /* ---------- 过程步骤 ---------- */
 .step {
   font-size: 12px;
@@ -319,6 +328,63 @@ body.dark .simpui-btn:hover:not(:disabled) {
 }
 
 /* ---------- 命令弹框（/skills、/tools、/models） ---------- */
+.recall-hint {
+  color: var(--simpui-text-light);
+  font-size: 13px;
+  margin: 0 0 var(--space-3);
+  line-height: 1.5;
+}
+
+.recall-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.recall-form .simpui-input {
+  flex: 1;
+}
+
+.recall-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.recall-loading,
+.recall-empty {
+  color: var(--simpui-text-light);
+  font-size: 13px;
+  padding: var(--space-2) 0;
+}
+
+.recall-meta {
+  font-size: 12px;
+  color: var(--simpui-text-dim);
+  padding-bottom: var(--space-1);
+}
+
+.recall-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-soft);
+}
+
+.recall-card-head {
+  margin-bottom: var(--space-1);
+}
+
+.recall-card-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--simpui-text-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .cmd-empty {
   color: var(--simpui-text-light);
   padding: var(--space-3) 0;
@@ -329,8 +395,8 @@ body.dark .simpui-btn:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-2);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -389,10 +455,10 @@ body.dark .simpui-btn:hover:not(:disabled) {
 }
 
 .cmd-row-desc {
-  margin-top: var(--space-1);
+  margin-top: 0;
   font-size: 12px;
   color: var(--simpui-text-dim);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .cmd-row-params {

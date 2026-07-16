@@ -73,6 +73,45 @@ async function loadHistoryList() {
   }
 }
 
+// 把 DB 返回的 JSON 字符串安全解析为对象（失败返回 null）
+function parseJsonOrNull(v) {
+  if (v == null) return null;
+  if (typeof v !== 'string') return v;
+  try { return JSON.parse(v); } catch (_) { return null; }
+}
+
+// 在指定 DOM 消息序号（.msg 计数）之后插入红色分隔线（如「上下文已清除/已压缩」）
+function insertDividerAfterMsgIndex(idx, text) {
+  const session = state.session;
+  if (!session || idx == null || idx < 0) return;
+  const msgs = session.querySelectorAll('.msg');
+  if (idx >= msgs.length) return; // 越界则不插，避免错位
+  const div = el('div', 'context-clear-divider');
+  div.textContent = text;
+  const ref = msgs[idx];
+  if (ref.nextSibling) ref.parentNode.insertBefore(div, ref.nextSibling);
+  else ref.parentNode.appendChild(div);
+}
+
+// 从后端对话数据恢复上下文相关状态：单条移出集合、分隔线位置、结构化历史
+function restoreContextState(data) {
+  // 单条移出上下文集合（DB 存为 JSON 字符串）
+  const savedMids = parseJsonOrNull(data.excluded_mids);
+  state.excludedMids = new Set(Array.isArray(savedMids) ? savedMids : []);
+  // 压缩/清除分隔线位置（INTEGER 列，已为数字或 null）
+  state.compactDivider = (data.compact_divider != null) ? Number(data.compact_divider) : null;
+  state.clearedDivider = (data.cleared_divider != null) ? Number(data.cleared_divider) : null;
+  // 结构化历史：优先用后端持久化的 history（与 DOM mid 对齐），否则从消息重建
+  const savedHistory = parseJsonOrNull(data.history);
+  if (Array.isArray(savedHistory)) {
+    state.history = savedHistory
+      .filter((h) => h && (h.role === 'user' || h.role === 'assistant') && h.content)
+      .map((h) => ({ role: h.role, content: h.content, mid: h.mid || null }));
+  } else {
+    loadHistoryFromMessages(data.messages);
+  }
+}
+
 async function loadHistoryConversation(convId) {
   // 加载中：在会话区显示占位，避免空白或旧内容闪烁
   emptyEl.style.display = 'none';
@@ -96,8 +135,11 @@ async function loadHistoryConversation(convId) {
     state.conversationId = convId;
     syncUrl();
 
-    // U3：用后端返回的结构化消息重建前端 history（权威来源），不再依赖 DOM 收集
-    loadHistoryFromMessages(data.messages);
+    // 恢复上下文相关状态：单条移出集合、压缩/清除分隔线位置、结构化历史
+    restoreContextState(data);
+    // 为 DOM 渲染准备与消息顺序一致的 mid 列表（缺失则补发，确保 history 与 DOM 对齐）
+    const mids = data.messages.map((m) => m.mid || null);
+    for (let i = 0; i < mids.length; i++) if (!mids[i]) mids[i] = nextMid();
 
     // 恢复对话名称（历史中保存的标题）
     const savedTitle = data.title || '';
@@ -153,12 +195,12 @@ async function loadHistoryConversation(convId) {
     }
 
      // 渲染消息
-    for (const msg of data.messages) {
-      if (msg.role === 'user') {
-        appendUser(msg.content, msg.images || []);
-      } else {
-        if (msg.model) state.currentStreamModel = msg.model;
-        ensureMessageContainer();
+     data.messages.forEach((msg, i) => {
+       if (msg.role === 'user') {
+         appendUser(msg.content, msg.images || [], mids[i]);
+       } else {
+         if (msg.model) state.currentStreamModel = msg.model;
+         ensureMessageContainer(mids[i]);
         // 先按保存顺序恢复思考链与工具调用（thinks/tools 按索引交错还原）
         const thinks = msg.thinks || [];
         const tools = msg.tools || [];
@@ -191,7 +233,7 @@ async function loadHistoryConversation(convId) {
         state.streamingAnswer = null;
         state.streamingSteps = null;
       }
-    }
+    });
 
     // 恢复上下文用量：promptTokens 是 Ollama 每次返回的累计值（含 system + 所有历史 + 当前用户），
     // 遍历所有消息，最后一条有值的 promptTokens 即为当前上下文总量
@@ -201,11 +243,11 @@ async function loadHistoryConversation(convId) {
       }
     }
 
-    // Task 5: Show hint if context was previously cleared
-    if (data.context_cleared_at) {
-      const ago = Math.round((Date.now() - data.context_cleared_at) / 60000);
-      showSimpuiToast('提示', `该对话曾在 ${ago} 分钟前清除上下文，历史记录完整保留`);
-    }
+    // 恢复「单条移出上下文」的红按钮状态
+    if (typeof refreshClearButtons === 'function') refreshClearButtons();
+    // 恢复压缩/清除分隔线（按 DOM 消息序号插入，分隔线本身不计入 .msg，互不偏移）
+    if (state.clearedDivider != null) insertDividerAfterMsgIndex(state.clearedDivider, '上下文已清除');
+    if (state.compactDivider != null) insertDividerAfterMsgIndex(state.compactDivider, '上下文已压缩');
 
     closeDrawer();
     showEmptyIfEmpty();

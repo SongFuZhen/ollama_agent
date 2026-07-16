@@ -18,12 +18,26 @@
 // ---------- 绑定事件 ----------
 sendBtn.onclick = send;
 inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    const v = inputEl.value.trim();
+    // 内联语义召回：/recall <查询> 直接打开召回弹框，不进入对话流
+    if (v.startsWith('/recall') && v.length > 7) {
+      e.preventDefault();
+      inputEl.value = '';
+      if (typeof showRecall === 'function') showRecall(v.slice(7).trim());
+      return;
+    }
+    e.preventDefault(); send();
+  }
 });
 
 // 初始化面板提示和按钮状态
 updatePanelHint();
 renderSessionState();
+// 主动拉取一次 git 分支，避免状态栏一直显示 git:—（直到首次交互才刷新）
+if (typeof fetchGitBranch === 'function' && typeof effectiveRoot === 'function') {
+  fetchGitBranch(effectiveRoot());
+}
 
 // 状态栏：点击弹出详情弹框
 if (ssMoreEl) {
@@ -59,7 +73,7 @@ async function loadUserInfo() {
     if (res.ok) {
       const data = await res.json();
       if (userNameEl) {
-        const name = data.hostname || data.username || '用户';
+        const name = data.username || data.hostname || '用户';
         userNameEl.textContent = name;
         userNameEl.title = name;
       }

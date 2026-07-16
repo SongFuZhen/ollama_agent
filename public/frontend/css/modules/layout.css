@@ -180,12 +180,6 @@
   align-items: center;
 }
 
-.session-actions .divider {
-  width: 1px;
-  height: 16px;
-  background: var(--simpui-input-border);
-}
-
 #new-chat {
   min-width: 88px;
 }

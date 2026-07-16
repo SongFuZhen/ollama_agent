@@ -82,8 +82,10 @@
 }
 
 /* 复制按钮：复用 simpui .lightbtn（无边框、link 风格、随主题变色） */
-.copy {
+.copy.lightbtn {
   gap: 4px;
+  padding-left: 0;
+  padding-right: 0;
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -204,7 +206,6 @@
   padding: var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--accent);
   border-radius: var(--radius);
   overflow-x: auto;
   font-size: 13px;
@@ -377,19 +378,11 @@
   text-transform: uppercase;
 }
 
-/* Context actions in answer footer */
-.answer-footer .context-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
-.context-clear {
-  gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+.context-clear.lightbtn {
+  padding-left: 0;
+  padding-right: 0;
   color: var(--simpui-text-light);
-  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
 }
 
 .context-clear:hover {
@@ -403,25 +396,49 @@
 }
 
 .context-clear-icon {
-  width: 1em;
-  height: 1em;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
+  color: var(--simpui-text-light);
 }
 
-/* Cleared state for context clear button */
-.context-clear.cleared {
-  color: var(--success);
-  background: var(--success-dim);
-  cursor: not-allowed;
-  opacity: 0.8;
+/* 单条消息「已移出上下文」：清除按钮变红（再次点击恢复） */
+.context-clear.red {
+  color: var(--danger);
+  background: var(--danger-dim);
 }
 
-.context-clear.cleared:hover {
-  color: var(--success);
-  background: var(--success-dim);
+.context-clear.red:hover {
+  color: var(--danger);
+  background: var(--danger-dim);
 }
 
-/* Status bar context cleared warning */
-#ss-context-text.context-cleared-warning {
-  color: var(--warning) !important;
+/* 单条消息上的「上下文已清除」红色标记 */
+.context-cleared-flag {
+  display: block;
+  margin-top: 2px;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* /clear 后的上下文断点分割线 */
+.context-clear-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.context-clear-divider::before,
+.context-clear-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--danger);
+  opacity: 0.4;
 }

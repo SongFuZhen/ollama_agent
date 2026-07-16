@@ -24,26 +24,12 @@ function mountSession() {
   }
   if (state.bootDone) syncUrl();
   messagesEl.appendChild(state.session);
-  // 事件委托：点击「清除上下文」按钮
+  // 事件委托：点击「清除上下文」按钮（持久：把该条消息移出上下文，再次点击恢复）
   state.session.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action="clear-context"]');
     if (!btn) return;
-    state.conversationCleared = true;
-    state.contextClearedAt = Date.now(); // 捕获时间戳，供持久化使用
-    btn.disabled = true;
-    btn.innerHTML = `
-      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
-        <path d="M3 6h18"></path>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        <line x1="10" y1="11" x2="10" y2="17"></line>
-        <line x1="14" y1="11" x2="14" y2="17"></line>
-      </svg>
-      <span>上下文已清除</span>
-    `;
-    btn.classList.add('cleared');
-    btn.title = '已清除：下一条消息将不携带历史记录发送';
-    showSimpuiToast('提示', '已清除上下文，下一条消息将不携带历史记录发送');
+    const msg = btn.closest('.msg');
+    toggleContextExclusion(msg);
   });
   // 同步可编辑的对话名称
   if (convNameEl) {
@@ -56,6 +42,26 @@ function mountSession() {
   renderSessionState();
   showEmptyIfEmpty();
   scrollDown(true);
+}
+
+// 单条消息「移出上下文」：点击切换该消息 mid 是否进入后续发送的 history。
+// 持久排除（红按钮），再次点击恢复；不影响其它消息，也不影响状态栏。
+function toggleContextExclusion(msgEl) {
+  if (!msgEl) return;
+  const mid = msgEl.dataset.mid;
+  if (!mid) return;
+  const btn = msgEl.querySelector('[data-action="clear-context"]');
+  if (state.excludedMids.has(mid)) {
+    state.excludedMids.delete(mid);
+    if (btn) btn.classList.remove('red');
+    showSimpuiToast('提示', '已将该消息重新纳入上下文');
+  } else {
+    state.excludedMids.add(mid);
+    if (btn) btn.classList.add('red');
+    showSimpuiToast('提示', '该消息已移出上下文，后续消息不再携带它');
+  }
+  // 立即落库，确保重开对话仍可见排除状态
+  if (state.conversationId) saveConversation();
 }
 
 let autoScroll = true;
@@ -111,33 +117,36 @@ function effectiveRoot() {
 function updateProjectRootUI() {
   const chip = $('#project-root');
   const hint = $('#sandbox-hint');
-  if (!chip) return;
 
-  const abs = effectiveRoot();
-
-  if (abs) {
-    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(abs)}</span>`;
-    chip.title = '当前会话文件访问限定在此沙箱内：' + abs;
-    if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
-  } else if (browseRoot) {
-    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(browseRoot)}</span><span class="pr-tag">本地浏览</span>`;
-    chip.title = '本地浏览目录（仅用于插入路径，模型读取仍受沙箱限制）';
-    if (hint) hint.textContent = '本会话以「选择目录」浏览本地文件，模型读取受沙箱限制';
-  } else {
-    const fallback = settingsRoot() || serverRootCache || state.serverDefaultRoot || '默认沙箱';
-    chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(fallback)}</span>`;
-    chip.title = '当前会话文件访问限定在此沙箱内';
-    if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
+  // 顶栏项目目录 chip：元素可能不存在（遗留），不存在则跳过其渲染，但不阻断后续逻辑。
+  if (chip) {
+    const abs = effectiveRoot();
+    if (abs) {
+      chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(abs)}</span>`;
+      chip.title = '当前会话文件访问限定在此沙箱内：' + abs;
+      if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
+    } else if (browseRoot) {
+      chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(browseRoot)}</span><span class="pr-tag">本地浏览</span>`;
+      chip.title = '本地浏览目录（仅用于插入路径，模型读取仍受沙箱限制）';
+      if (hint) hint.textContent = '本会话以「选择目录」浏览本地文件，模型读取受沙箱限制';
+    } else {
+      const fallback = settingsRoot() || serverRootCache || state.serverDefaultRoot || '默认沙箱';
+      chip.innerHTML = `<i data-lucide="folder" class="pr-icon"></i><span class="pr-path">${escapeHtml(fallback)}</span>`;
+      chip.title = '当前会话文件访问限定在此沙箱内';
+      if (hint) hint.textContent = '当前会话仅可访问此目录下的文件';
+    }
+    // 重新渲染 Lucide 图标
+    if (window.lucide) lucide.createIcons();
   }
-  // 重新渲染 Lucide 图标
-  if (window.lucide) lucide.createIcons();
+
   // 同步空状态的绑定提示
   if (typeof refreshEmptyRootStatus === 'function') refreshEmptyRootStatus();
   // 同步文件面板：无根显示提示，有根加载目录树
   if (typeof updateFilePanelState === 'function') updateFilePanelState();
   // 同步会话状态栏（模型 / 目录 / 分支）
   renderSessionState();
-  fetchGitBranch(effectiveRoot());
+  // 绑定/切换目录后强制刷新 git 分支（绕过 lastGitRoot 缓存）
+  fetchGitBranch(effectiveRoot(), true);
 }
 
 // ---------- SSE 事件分发 ----------
@@ -393,20 +402,21 @@ let userAborted = false;
 // 历史以结构化数组为权威来源：每轮 user/assistant 提交时 push，发送时直接切片上报，
 // 不再从 #messages 的 .msg 节点文本 scrape，避免渲染结构变化影响上下文收集。
 const HISTORY_LIMIT = 20; // 与后端 validHistory 上限一致，仅保留最近 N 轮
-function pushHistory(role, content) {
+function pushHistory(role, content, mid) {
   if (!content || !content.trim()) return;
-  state.history.push({ role, content: content.trim() });
+  state.history.push({ role, content: content.trim(), mid: mid || null });
   // 仅保留最近 HISTORY_LIMIT 条，避免无限增长
   if (state.history.length > HISTORY_LIMIT) {
     state.history = state.history.slice(state.history.length - HISTORY_LIMIT);
   }
 }
 // 用后端返回的结构化消息（加载历史对话时）重建前端 history
-function loadHistoryFromMessages(messages) {
-  state.history = (messages || [])
+// mids：与渲染顺序对应的消息 id 数组，使「单条移出上下文」在加载后仍然生效
+function loadHistoryFromMessages(messages, mids) {
+  const list = (messages || [])
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content && m.content.trim())
-    .slice(-HISTORY_LIMIT)
-    .map((m) => ({ role: m.role, content: m.content.trim() }));
+    .slice(-HISTORY_LIMIT);
+  state.history = list.map((m, i) => ({ role: m.role, content: m.content.trim(), mid: (mids && mids[i]) || null }));
 }
 
 // ---------- 发送请求（SSE 流式读取） ----------
@@ -453,7 +463,7 @@ async function send(opts = {}) {
     }
   }
 
-  appendUser(text || '（图片）', imgs);
+  const um = appendUser(text || '（图片）', imgs);
   renderSessionState();
   setBusy(true);
 
@@ -468,15 +478,8 @@ async function send(opts = {}) {
 
   // 收集对话历史（结构化，最近 HISTORY_LIMIT 条，不含当前输入）供模型感知上下文。
   // U3：直接读 state.history（权威来源），不再从 DOM .msg 节点 scrape。
-  let history;
-  if (state.conversationCleared) {
-    // 用户点击了「清除上下文」：发送空历史，发送后重置标志（仅影响本次请求）
-    history = [];
-    state.conversationCleared = false;
-    state.contextClearedAt = null; // 重置时间戳（已落库，不再需要）
-  } else {
-    history = state.history.slice(-HISTORY_LIMIT);
-  }
+  // 被「单条移出上下文」的消息（mid 在 excludedMids 中）从上报历史中剔除。
+  let history = state.history.filter((h) => !h.mid || !state.excludedMids.has(h.mid)).slice(-HISTORY_LIMIT);
   // 当前用户输入不计入历史（它是本次请求本身），发送后再作为一轮 user 提交入栈。
   const body = { message: text, images: imgs.map((i) => i.b64), history };
   // 二段式闭环：plan 模式下用户点「确认执行」时，显式声明 execute 跳过自动判定，
@@ -498,8 +501,8 @@ async function send(opts = {}) {
   updateProjectRootUI();
 
   // U3：当前用户输入作为一轮 user 提交入栈（不含在上方发送的 history 内）。
-  // 必须在构造 body 之后调用，确保本次请求不带自己。
-  pushHistory('user', text);
+  // 必须在构造 body 之后调用，确保本次请求不带自己。带 mid 以支持单条移出上下文。
+  pushHistory('user', text, um ? um.dataset.mid : null);
 
   // 创建 AbortController 以支持中止
   requestAborted = false;

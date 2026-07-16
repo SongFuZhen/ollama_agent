@@ -9,6 +9,55 @@ function timeSpan() {
   return t;
 }
 
+// 消息唯一 ID：用于「单条消息移出上下文」的精确排除
+let msgSeq = 0;
+function nextMid() {
+  return 'm' + (++msgSeq);
+}
+
+const COPY_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2-2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+const COPY_DONE_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+// 复制按钮：复用 simpui .lightbtn，点击后短暂显示「已复制」勾选图标
+function makeCopyBtn(text) {
+  const copy = el('button', 'copy lightbtn sm');
+  copy.innerHTML = COPY_ICON;
+  copy.onclick = () => {
+    navigator.clipboard?.writeText(text).then(() => {
+      copy.innerHTML = COPY_DONE_ICON;
+      setTimeout(() => { copy.innerHTML = COPY_ICON; }, 1200);
+    });
+  };
+  return copy;
+}
+
+// 清除上下文按钮（单条移出上下文的开关）：红色表示该消息已从上下文排除
+function makeContextClearBtn() {
+  const btn = el('button', 'copy lightbtn sm context-clear');
+  btn.type = 'button';
+  btn.dataset.action = 'clear-context';
+  btn.title = '清除上下文';
+  btn.setAttribute('aria-label', '清除上下文');
+  btn.innerHTML = `<svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>`;
+  // 若该消息已被排除（重开对话恢复），直接标红
+  const msg = btn.closest('.msg');
+  if (msg && msg.dataset.mid && state.excludedMids && state.excludedMids.has(msg.dataset.mid)) {
+    btn.classList.add('red');
+  }
+  return btn;
+}
+
+// 同步所有「清除上下文」按钮的红色状态（与 state.excludedMids 一致）
+function refreshClearButtons() {
+  document.querySelectorAll('[data-action="clear-context"]').forEach((btn) => {
+    const msg = btn.closest('.msg');
+    const excluded = !!(msg && msg.dataset.mid && state.excludedMids && state.excludedMids.has(msg.dataset.mid));
+    btn.classList.toggle('red', excluded);
+    btn.title = excluded ? '该消息已移出上下文：点击恢复' : '清除上下文';
+    btn.setAttribute('aria-label', btn.title);
+  });
+}
+
 // ---------- 工具图标映射（Lucide PascalCase 名） ----------
 const TOOL_ICONS = {
   read_file: 'FileText',
@@ -276,7 +325,7 @@ function imageSrc(img) {
 }
 
 // 用户气泡
-function appendUser(text, images) {
+function appendUser(text, images, mid) {
   const m = el('div', 'msg user');
   const bubble = el('div', 'bubble');
   bubble.textContent = text || '';
@@ -299,70 +348,43 @@ function appendUser(text, images) {
 
   m.appendChild(bubble);
   
-  // 底部：复制 + 时间
+  // 底部：复制 + 清除上下文 + 时间（复制在清除左侧）
   const footer = el('div', 'user-footer');
-  const copy = el('button', 'copy lightbtn sm');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-  copy.onclick = () => {
-    navigator.clipboard?.writeText(text).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-      setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-      }, 1200);
-    });
-  };
-  footer.appendChild(copy);
+  footer.appendChild(makeCopyBtn(text));
+  footer.appendChild(el('span', 'divider'));
+  footer.appendChild(makeContextClearBtn());
   footer.appendChild(timeSpan());
   
+  m.dataset.mid = mid || nextMid();
   m.appendChild(footer);
   appendToActive(m);
+  return m;
 }
 
 // Agent 最终回答卡片（气泡 + 底部信息）
-function appendAnswer(text) {
+function appendAnswer(text, mid) {
   const m = el('div', 'msg agent answer-card');
+  m.dataset.mid = mid || nextMid();
   const bubble = elMarkdownBubble();
   bubble.innerHTML = renderMarkdown(text);
   bindImagePreview(bubble); // markdown 内图片点击预览
   renderMermaidBlocks(bubble);
 
-  // 底部：模型名 + 时间 + 复制
+  // 底部：模型名 + 时间 + 复制 + 清除上下文
   // 模型名优先使用下拉选中的模型，否则用后端默认
   const footer = el('div', 'answer-footer');
   const modelName = state.currentStreamModel || state.activeModel || state.defaultModel || 'Agent';
   footer.appendChild(el('span', 'role', modelName));
   footer.appendChild(timeSpan());
-  const copy = el('button', 'copy lightbtn sm');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-  copy.onclick = () => {
-    navigator.clipboard?.writeText(text).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-      setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-      }, 1200);
-    });
-  };
-  footer.appendChild(copy);
-
-  // Context actions (clear context button)
-  const ctxActions = el('div', 'context-actions');
-  ctxActions.innerHTML = `
-    <button class="simpui-btn ghost sm context-clear" type="button" data-action="clear-context" title="清除上下文：后续对话不再携带历史记录（本地保留完整记录）" aria-label="清除上下文">
-      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
-        <path d="M3 6h18"></path>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        <line x1="10" y1="11" x2="10" y2="17"></line>
-        <line x1="14" y1="11" x2="14" y2="17"></line>
-      </svg>
-      <span>清除上下文</span>
-    </button>
-  `;
-  footer.appendChild(ctxActions);
+  footer.appendChild(el('span', 'divider'));
+  footer.appendChild(makeCopyBtn(text));
+  footer.appendChild(el('span', 'divider'));
+  footer.appendChild(makeContextClearBtn());
 
   m.appendChild(bubble);
   m.appendChild(footer);
   appendToActive(m);
+  return m;
 }
 
 // 过程步骤（思考链 / 工具调用 / 错误等）
@@ -488,14 +510,15 @@ function clearToolLoading() {
 }
 
 // 确保当前消息容器存在
-function ensureMessageContainer() {
+function ensureMessageContainer(mid) {
   if (state.streamingAnswer) return;
-  
+
   const m = el('div', 'msg agent answer-card');
+  m.dataset.mid = mid || nextMid();
   const steps = el('div', 'steps');  // 思考/工具/步骤容器（独立于气泡）
   const bubble = elMarkdownBubble();
   
-  // 底部：模型名 + 时间 + 统计 + 复制
+  // 底部：模型名 + 时间 + 统计 + 清除上下文 + 复制
   // 模型名优先使用下拉选中的模型，否则用后端默认
   const footer = el('div', 'answer-footer');
   const modelName = state.currentStreamModel || state.activeModel || state.defaultModel || 'Agent';
@@ -503,44 +526,27 @@ function ensureMessageContainer() {
   footer.appendChild(timeSpan());
   const stats = el('span', 'stats');
   footer.appendChild(stats);
-  const copy = el('button', 'copy lightbtn sm');
-  copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+  footer.appendChild(el('span', 'divider'));
+  footer.appendChild(makeContextClearBtn());
+  footer.appendChild(el('span', 'divider'));
+  const copy = makeCopyBtn('');
   footer.appendChild(copy);
-
-  // Context actions（清除上下文按钮）：紧挨复制按钮，跟随流式答案卡片生成。
-  // 注：appendAnswer() 仅在历史回放等路径使用，实际对话走 ensureMessageContainer()，
-  // 故清除按钮必须在此注入，否则对话中不会显示。
-  const ctxActions = el('div', 'context-actions');
-  ctxActions.innerHTML = `
-    <button class="simpui-btn ghost sm context-clear" type="button" data-action="clear-context" title="清除上下文：后续对话不再携带历史记录（本地保留完整记录）" aria-label="清除上下文">
-      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
-        <path d="M3 6h18"></path>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        <line x1="10" y1="11" x2="10" y2="17"></line>
-        <line x1="14" y1="11" x2="14" y2="17"></line>
-      </svg>
-      <span>清除上下文</span>
-    </button>
-  `;
-  footer.appendChild(ctxActions);
 
   m.appendChild(steps);
   m.appendChild(bubble);
   m.appendChild(footer);
   appendToActive(m);
-  
+
   state.streamingAnswer = bubble;
   state.streamingSteps = steps;
   state.streamingText = '';
   state.streamingHead = footer;
-  
+  return m;
+
   copy.onclick = () => {
     navigator.clipboard?.writeText(state.streamingText).then(() => {
-      copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-      setTimeout(() => {
-        copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-      }, 1200);
+      copy.innerHTML = COPY_DONE_ICON;
+      setTimeout(() => { copy.innerHTML = COPY_ICON; }, 1200);
     });
   };
 }
@@ -578,7 +584,11 @@ function finalizeAnswer(content) {
   clearToolLoading();
 
   // U3：最终答案作为一轮 assistant 提交入栈，成为后续请求的结构化历史来源。
-  if (typeof pushHistory === 'function' && content && content.trim()) pushHistory('assistant', content);
+  // 带 mid 以支持单条移出上下文（mid 取自当前答案卡片）。
+  if (typeof pushHistory === 'function' && content && content.trim()) {
+    const card = state.streamingAnswer ? state.streamingAnswer.closest('.msg.agent.answer-card') : null;
+    pushHistory('assistant', content, card ? card.dataset.mid : null);
+  }
 
   // 更新状态栏
   if (typeof renderSessionState === 'function') renderSessionState();

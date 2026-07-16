@@ -100,8 +100,11 @@ $('#new-chat').onclick = () => {
   state.conversationId = generateConvId();
   state.conversationTitle = '';
   state.history = []; // U3：新对话清空结构化历史
-  state.conversationCleared = false; // 重置上下文清除标记
-  state.contextClearedAt = null; // 重置清除时间戳
+  state.conversationCleared = false; // 重置上下文清除标记（遗留兼容字段）
+  state.contextClearedAt = null; // 重置清除时间戳（遗留兼容字段）
+  state.excludedMids = new Set();   // 新对话清空单条移出集合
+  state.compactDivider = null;      // 新对话无压缩分隔线
+  state.clearedDivider = null;      // 新对话无清除分隔线
   setConvName('');
   updateProjectRootUI();
   // 空状态页预填已有 project root

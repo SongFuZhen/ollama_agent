@@ -30,6 +30,9 @@ const state = {
   bootDone: false,          // 启动序列完成
   conversationCleared: false, // 标记用户已点击「清除上下文」
   contextClearedAt: null,     // 上下文清除时间戳（用于持久化提示）
+  excludedMids: new Set(),   // 被「移出上下文」的单个消息 mid 集合（持久排除，直到再次点击）
+  compactDivider: null,      // 压缩分隔线在对话中的插入位置（DOM 消息序号），null 表示未压缩
+  clearedDivider: null,      // 清除分隔线（/clear）的插入位置（DOM 消息序号），null 表示未清除
   history: [],               // 结构化对话历史（用户/助手轮次），作为发后端上下文的权威来源，
                              // 不再依赖从 DOM .msg 节点文本收集（消除渲染结构耦合，U3）
   activeModel: null,         // 当前下拉选中的模型（来自 Ollama 已安装列表）

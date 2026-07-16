@@ -102,12 +102,6 @@
   margin-right: 16px;
 }
 
-.topbar-actions .divider {
-  width: 1px;
-  height: 16px;
-  background: var(--simpui-input-border);
-}
-
 /* 用户下拉菜单 */
 .user-dropdown {
   position: relative;
