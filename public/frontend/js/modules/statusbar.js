@@ -29,31 +29,42 @@ function showEmptyIfEmpty() {
 }
 
 // ---------- 离线诊断 ----------
-// 当 Ollama 连接失败时，点「诊断」直接从浏览器探测配置地址，
-// 区分「主机不可达 / 端口未监听 / 服务返回错误 / 正常」，把真实原因回显给用户。
+// 当 Ollama 连接失败时，点「诊断」走**后端代理**探测配置地址（/api/preflight），
+// 而非浏览器直连 Ollama。原因：浏览器直连 Ollama 的 /api/tags 会被 CORS 拦截
+// （Ollama 默认不返回 CORS 头），即便后端 Node 侧能连通，也会误报「无法建立连接」。
+// 经后端探测可准确区分「主机不可达 / 端口未监听 / 服务异常 / 正常」。
 let _diagnosing = false;
 async function diagnoseOllama() {
   if (_diagnosing) return;
   _diagnosing = true;
   const host = ollamaHost();
   setStatus('error', '诊断中…');
-  showSimpuiToast('Ollama 诊断', '正在探测 ' + host);
+  showSimpuiToast('Ollama 诊断', '正在探测 ' + (host || OLLAMA_HOST));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000); // 8s 超时
   let detail;
   try {
-    const res = await fetch(host.replace(/\/+$/, '') + '/api/tags', { signal: ctrl.signal });
-    if (res.ok) {
-      detail = '✅ 连接正常：' + host + ' 已就绪';
+    // 经后端代理探测，避免浏览器 CORS 误判（与 preflight 同一通道）。
+    const qs = host ? '?ollamaHost=' + encodeURIComponent(host) : '';
+    const res = await fetch('/api/preflight' + qs, { signal: ctrl.signal });
+    if (!res.ok) {
+      detail = '⚠ 诊断接口异常：HTTP ' + res.status;
     } else {
-      detail = '⚠ 服务返回 HTTP ' + res.status + '：地址可达但 Ollama 未正常响应（检查版本/路由）';
+      const d = await res.json();
+      if (d.ollama === 'ok') {
+        const models = Array.isArray(d.models) ? d.models : [];
+        detail = '✅ 连接正常：' + (d.ollamaHost || host) + ' 已就绪，已安装 ' + models.length + ' 个模型' +
+          (models.length ? '（' + models.slice(0, 5).join('、') + (models.length > 5 ? '…' : '') + '）' : '');
+      } else {
+        // 后端已给出真实错误（DNS / 连接被拒 / 超时等），原样回显给用户。
+        const err = (d.error || '未知错误').toString();
+        detail = '❌ 连接失败：' + (d.ollamaHost || host) + '\n' + err +
+          '\n常见原因：① Ollama 未启动；② 仅监听 127.0.0.1（远程需 OLLAMA_HOST=0.0.0.0:11434）；③ 防火墙/跨网段';
+      }
     }
   } catch (e) {
     if (e.name === 'AbortError') {
-      detail = '⏱ 超时（>8s）：' + host + ' 无响应。可能主机不存在、网络隔离或防火墙拦截';
-    } else if (e instanceof TypeError || (e && e.name === 'TypeError')) {
-      // fetch 的 TypeError 通常是 DNS 解析失败或连接被拒（端口未监听）
-      detail = '❌ 无法建立连接：' + host + '。常见原因：① Ollama 未启动；② 仅监听 127.0.0.1（远程需 OLLAMA_HOST=0.0.0.0:11434）；③ 防火墙/跨网段';
+      detail = '⏱ 诊断超时（>8s）：后端未响应，可能 Node 进程卡死或本应用服务异常';
     } else {
       detail = '❌ 诊断异常：' + (e && e.message ? e.message : String(e));
     }
@@ -61,9 +72,21 @@ async function diagnoseOllama() {
     clearTimeout(timer);
     _diagnosing = false;
   }
+  // 先移除「正在探测」等旧的诊断 toast，再显示结果，避免两个并存。
+  clearDiagToasts();
   showSimpuiToast('Ollama 诊断', detail);
-  // 诊断后顺便重新跑 preflight，刷新状态栏（需后端支持同一地址）
+  // 诊断后重新跑 preflight，刷新状态栏（走同一后端通道，避免 CORS）。
   if (typeof preflight === 'function') preflight();
+}
+
+// 移除状态栏「Ollama 诊断」相关的旧 toast，确保一次诊断只显示一个结果 toast。
+function clearDiagToasts() {
+  const container = document.getElementById('simpui-toast-container');
+  if (!container) return;
+  container.querySelectorAll('.simpui-toast').forEach((t) => {
+    const title = t.querySelector('.simpui-toast-title');
+    if (title && title.textContent === 'Ollama 诊断') t.remove();
+  });
 }
 
 // ---------- 会话状态栏 ----------

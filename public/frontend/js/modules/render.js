@@ -506,7 +506,25 @@ function ensureMessageContainer() {
   const copy = el('button', 'copy lightbtn sm');
   copy.innerHTML = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   footer.appendChild(copy);
-  
+
+  // Context actions（清除上下文按钮）：紧挨复制按钮，跟随流式答案卡片生成。
+  // 注：appendAnswer() 仅在历史回放等路径使用，实际对话走 ensureMessageContainer()，
+  // 故清除按钮必须在此注入，否则对话中不会显示。
+  const ctxActions = el('div', 'context-actions');
+  ctxActions.innerHTML = `
+    <button class="simpui-btn ghost sm context-clear" type="button" data-action="clear-context" title="清除上下文：后续对话不再携带历史记录（本地保留完整记录）" aria-label="清除上下文">
+      <svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+      </svg>
+      <span>清除上下文</span>
+    </button>
+  `;
+  footer.appendChild(ctxActions);
+
   m.appendChild(steps);
   m.appendChild(bubble);
   m.appendChild(footer);

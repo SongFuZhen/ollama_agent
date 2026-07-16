@@ -427,20 +427,17 @@ async function handleFsDirs(req, res) {
 }
 
 // 读取 git 分支名（用于状态栏展示，非 git 仓库返回空）
+// 仅探测用户传入的 root（或默认 PROJECT_ROOT），不回退 process.cwd()——
+// 否则当用户绑定的目录不是 git 仓库时，会错误地显示 server 启动目录的分支。
 function handleGitBranch(req, res) {
   const params = new URL(req.url, 'http://x').searchParams;
   const root = params.get('root') || PROJECT_ROOT;
-  const dirs = [root, process.cwd()];
-  const seen = new Set();
+  if (!root) return sendJSON(res, 200, { branch: '' });
 
-  for (const dir of dirs) {
-    if (!dir || seen.has(dir)) continue;
-    seen.add(dir);
-    const r = spawnSync('git', ['-C', dir, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000, encoding: 'utf8' });
-    if (r.status === 0 && r.stdout) {
-      const branch = r.stdout.trim();
-      if (branch) return sendJSON(res, 200, { branch });
-    }
+  const r = spawnSync('git', ['-C', root, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 3000, encoding: 'utf8' });
+  if (r.status === 0 && r.stdout) {
+    const branch = r.stdout.trim();
+    if (branch) return sendJSON(res, 200, { branch });
   }
   sendJSON(res, 200, { branch: '' });
 }
