@@ -33,7 +33,7 @@ module.exports = {
     switch ((action || 'list').toLowerCase()) {
       case 'add': {
         if (!content || !content.trim()) return '错误：content 不能为空';
-        db.addNote(content.trim());
+        db.addNote({ content: content.trim() });
         return '已保存笔记。';
       }
       case 'list': {
