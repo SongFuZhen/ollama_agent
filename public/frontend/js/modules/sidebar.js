@@ -20,6 +20,10 @@ const noteAddOpen = $('#note-add-open');
 const todoCount = $('#todo-count');
 const noteCount = $('#note-count');
 
+// 缓存当前列表数据，供编辑弹框回填
+let currentTodos = [];
+let currentNotes = [];
+
 // 切换侧栏底部 tab：整视图替换（目录 / 待办 / 笔记 各自独立）
 function switchSidebarTab(tabName) {
   document.querySelectorAll('#sidebar-tabs .tab').forEach((btn) => {
@@ -111,6 +115,7 @@ if (logAutoEl) logAutoEl.onchange = () => { logAutoEl.checked ? startLogAuto() :
 
 function renderTodos(todos) {
   if (!todoList) return;
+  currentTodos = todos;
   if (!todos.length) {
     todoList.innerHTML = '<li class="notes-empty">暂无待办</li>';
   } else {
@@ -121,36 +126,14 @@ function renderTodos(todos) {
         return `
         <li class="todo-item ${t.status === 'done' ? 'done' : ''} ${t.status === 'doing' ? 'doing' : ''}" data-id="${t.id}">
           <input type="checkbox" class="todo-toggle" data-act="toggle" data-id="${t.id}" ${checked} title="切换完成" />
-          <div class="todo-main">
-            <div class="todo-line">
-              <span class="todo-title">${escapeHtml(t.title || '(无标题)')}</span>
-              <span class="pri-badge pri-${pri}">${pri === 'high' ? '高' : pri === 'low' ? '低' : '中'}</span>
-              ${t.due ? `<span class="todo-due" title="截止">📅 ${escapeHtml(t.due)}</span>` : ''}
+          <div class="todo-line">
+            <span class="todo-title">${escapeHtml(t.title || '(无标题)')}</span>
+            <span class="pri-badge pri-${pri}">${pri === 'high' ? '高' : pri === 'low' ? '低' : '中'}</span>
+            ${t.due ? `<span class="todo-due" title="截止">📅 ${escapeHtml(t.due)}</span>` : ''}
+            <span class="todo-actions">
               <button class="todo-edit" data-act="edit" data-id="${t.id}" title="编辑">✎</button>
               <button class="todo-del" data-act="delete" data-id="${t.id}" title="删除">✕</button>
-            </div>
-            ${t.body ? `<div class="todo-body mdit">${renderMarkdown(t.body)}</div>` : ''}
-            <div class="todo-edit-form hidden">
-              <input class="ef-title simpui-input" type="text" value="${escapeHtml(t.title || '')}" placeholder="标题" />
-              <textarea class="ef-body simpui-input" rows="3" placeholder="备注（Markdown）">${escapeHtml(t.body || '')}</textarea>
-              <div class="ef-row">
-                <select class="ef-priority simpui-input">
-                  <option value="high" ${pri === 'high' ? 'selected' : ''}>高</option>
-                  <option value="medium" ${pri === 'medium' ? 'selected' : ''}>中</option>
-                  <option value="low" ${pri === 'low' ? 'selected' : ''}>低</option>
-                </select>
-                <input class="ef-due simpui-input" type="date" value="${t.due ? escapeHtml(t.due) : ''}" />
-                <select class="ef-status simpui-input">
-                  <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>待办</option>
-                  <option value="doing" ${t.status === 'doing' ? 'selected' : ''}>进行中</option>
-                  <option value="done" ${t.status === 'done' ? 'selected' : ''}>完成</option>
-                </select>
-              </div>
-              <div class="ef-actions">
-                <button class="simpui-btn primary sm ef-save" data-act="update" data-id="${t.id}">保存</button>
-                <button class="simpui-btn sm ef-cancel" data-act="cancel" data-id="${t.id}">取消</button>
-              </div>
-            </div>
+            </span>
           </div>
         </li>`;
       })
@@ -170,30 +153,22 @@ function renderTodos(todos) {
 
 function renderNotes(notes) {
   if (!noteList) return;
+  currentNotes = notes;
   if (!notes.length) {
     noteList.innerHTML = '<li class="notes-empty">暂无笔记</li>';
   } else {
     noteList.innerHTML = notes
-      .map(
-        (n) => `
+      .map((n) => {
+        const text = n.title || (n.content || '').split('\n')[0] || '(无内容)';
+        return `
         <li class="note-item" data-id="${n.id}">
-          ${n.title ? `<div class="note-title">${escapeHtml(n.title)}</div>` : ''}
-          <div class="note-body mdit">${renderMarkdown(n.content)}</div>
-          <div class="note-edit-form hidden">
-            <input class="ne-title simpui-input" type="text" value="${escapeHtml(n.title || '')}" placeholder="标题（可选）" />
-            <textarea class="ne-content simpui-input" rows="5" placeholder="Markdown 正文">${escapeHtml(n.content || '')}</textarea>
-            <div class="ne-actions">
-              <button class="simpui-btn primary sm ne-save" data-act="update" data-id="${n.id}">保存</button>
-              <button class="simpui-btn sm ne-cancel" data-act="cancel" data-id="${n.id}">取消</button>
-              <button class="simpui-btn danger sm ne-del" data-act="delete" data-id="${n.id}">删除</button>
-            </div>
-          </div>
-          <div class="note-foot">
-            <span class="note-ts">${fmtTs(n.ts)}</span>
+          <div class="note-line">
+            <span class="note-title">${escapeHtml(text)}</span>
             <button class="note-edit" data-act="edit" data-id="${n.id}" title="编辑">✎</button>
+            <button class="note-del" data-act="delete" data-id="${n.id}" title="删除">✕</button>
           </div>
-        </li>`
-      )
+        </li>`;
+      })
       .join('');
   }
   if (noteCount) noteCount.textContent = notes.length ? `${notes.length} 条` : '';
@@ -250,6 +225,83 @@ async function noteAction(action, id, extra = {}) {
     body: JSON.stringify({ action, id: Number(id), ...extra }),
   });
   loadNotes();
+}
+
+// ---------- 编辑待办 / 笔记 弹框 ----------
+const todoEditModal = $('#todo-edit-modal');
+const todoEditTitle = $('#todo-edit-title');
+const todoEditBody = $('#todo-edit-body');
+const todoEditPriority = $('#todo-edit-priority');
+const todoEditStatus = $('#todo-edit-status');
+const todoEditDue = $('#todo-edit-due');
+const noteEditModal = $('#note-edit-modal');
+const noteEditTitle = $('#note-edit-title');
+const noteEditContent = $('#note-edit-content');
+let editingTodoId = null;
+let editingNoteId = null;
+
+function openTodoEditModal(id) {
+  const t = currentTodos.find((x) => String(x.id) === String(id));
+  if (!t || !todoEditModal) return;
+  editingTodoId = t.id;
+  if (todoEditTitle) todoEditTitle.value = t.title || '';
+  if (todoEditBody) todoEditBody.value = t.body || '';
+  if (todoEditPriority) todoEditPriority.value = t.priority || 'medium';
+  if (todoEditStatus) todoEditStatus.value = t.status || 'todo';
+  if (todoEditDue) todoEditDue.value = t.due || '';
+  todoEditModal.classList.remove('hidden');
+  if (todoEditTitle) todoEditTitle.focus();
+}
+function closeTodoEditModal() {
+  if (todoEditModal) todoEditModal.classList.add('hidden');
+  editingTodoId = null;
+}
+async function saveTodoEdit() {
+  if (editingTodoId == null) return;
+  await todoAction('update', editingTodoId, {
+    title: todoEditTitle ? todoEditTitle.value : '',
+    body: todoEditBody ? todoEditBody.value : '',
+    priority: todoEditPriority ? todoEditPriority.value : 'medium',
+    due: todoEditDue ? (todoEditDue.value || null) : null,
+    status: todoEditStatus ? todoEditStatus.value : 'todo',
+  });
+  closeTodoEditModal();
+}
+function openNoteEditModal(id) {
+  const n = currentNotes.find((x) => String(x.id) === String(id));
+  if (!n || !noteEditModal) return;
+  editingNoteId = n.id;
+  if (noteEditTitle) noteEditTitle.value = n.title || '';
+  if (noteEditContent) noteEditContent.value = n.content || '';
+  noteEditModal.classList.remove('hidden');
+  if (noteEditContent) noteEditContent.focus();
+}
+function closeNoteEditModal() {
+  if (noteEditModal) noteEditModal.classList.add('hidden');
+  editingNoteId = null;
+}
+async function saveNoteEdit() {
+  if (editingNoteId == null) return;
+  await noteAction('update', editingNoteId, {
+    title: noteEditTitle ? noteEditTitle.value : '',
+    content: noteEditContent ? noteEditContent.value : '',
+  });
+  closeNoteEditModal();
+}
+
+if ($('#todo-edit-save')) $('#todo-edit-save').onclick = () => saveTodoEdit();
+if ($('#todo-edit-cancel')) $('#todo-edit-cancel').onclick = closeTodoEditModal;
+if ($('#todo-edit-close')) $('#todo-edit-close').onclick = closeTodoEditModal;
+if (todoEditModal) {
+  todoEditModal.onclick = (e) => { if (e.target === todoEditModal) closeTodoEditModal(); };
+  todoEditModal.onkeydown = (e) => { if (e.key === 'Escape') closeTodoEditModal(); };
+}
+if ($('#note-edit-save')) $('#note-edit-save').onclick = () => saveNoteEdit();
+if ($('#note-edit-cancel')) $('#note-edit-cancel').onclick = closeNoteEditModal;
+if ($('#note-edit-close')) $('#note-edit-close').onclick = closeNoteEditModal;
+if (noteEditModal) {
+  noteEditModal.onclick = (e) => { if (e.target === noteEditModal) closeNoteEditModal(); };
+  noteEditModal.onkeydown = (e) => { if (e.key === 'Escape') closeNoteEditModal(); };
 }
 
 // ---------- 添加待办 / 笔记 弹框 ----------
@@ -316,24 +368,12 @@ if (todoList) {
     if (!btn) return;
     const id = btn.dataset.id;
     const act = btn.dataset.act;
-    const li = btn.closest('.todo-item');
     if (act === 'toggle') {
       todoAction('toggle', id);
     } else if (act === 'delete') {
       todoAction('delete', id);
     } else if (act === 'edit') {
-      li.querySelector('.todo-edit-form').classList.toggle('hidden');
-    } else if (act === 'cancel') {
-      li.querySelector('.todo-edit-form').classList.add('hidden');
-    } else if (act === 'update') {
-      const f = li.querySelector('.todo-edit-form');
-      todoAction('update', id, {
-        title: f.querySelector('.ef-title').value,
-        body: f.querySelector('.ef-body').value,
-        priority: f.querySelector('.ef-priority').value,
-        due: f.querySelector('.ef-due').value || null,
-        status: f.querySelector('.ef-status').value,
-      });
+      openTodoEditModal(id);
     }
   };
 }
@@ -343,19 +383,10 @@ if (noteList) {
     if (!btn) return;
     const id = btn.dataset.id;
     const act = btn.dataset.act;
-    const li = btn.closest('.note-item');
     if (act === 'edit') {
-      li.querySelector('.note-edit-form').classList.toggle('hidden');
-    } else if (act === 'cancel') {
-      li.querySelector('.note-edit-form').classList.add('hidden');
+      openNoteEditModal(id);
     } else if (act === 'delete') {
       noteAction('delete', id);
-    } else if (act === 'update') {
-      const f = li.querySelector('.note-edit-form');
-      noteAction('update', id, {
-        title: f.querySelector('.ne-title').value,
-        content: f.querySelector('.ne-content').value,
-      });
     }
   };
 }

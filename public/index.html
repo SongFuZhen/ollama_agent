@@ -682,6 +682,144 @@
             </div>
         </div>
 
+        <!-- ===== 编辑待办弹窗 ===== -->
+        <div
+            id="todo-edit-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="编辑待办"
+        >
+            <div class="simpui-dialog-panel md">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">编辑待办</h3>
+                    <button
+                        id="todo-edit-close"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="field">
+                        <label for="todo-edit-title">待办标题</label>
+                        <input
+                            id="todo-edit-title"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="待办标题"
+                            maxlength="200"
+                            spellcheck="false"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="todo-edit-body">备注（Markdown）</label>
+                        <textarea
+                            id="todo-edit-body"
+                            class="simpui-input note-add-textarea"
+                            placeholder="备注（Markdown）"
+                            rows="4"
+                            maxlength="20000"
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="todo-edit-priority">优先级</label>
+                            <select id="todo-edit-priority" class="simpui-input">
+                                <option value="high">高</option>
+                                <option value="medium">中</option>
+                                <option value="low">低</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="todo-edit-status">状态</label>
+                            <select id="todo-edit-status" class="simpui-input">
+                                <option value="todo">待办</option>
+                                <option value="doing">进行中</option>
+                                <option value="done">完成</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="todo-edit-due">截止日期</label>
+                            <input id="todo-edit-due" class="simpui-input" type="date" />
+                        </div>
+                    </div>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="todo-edit-cancel" class="simpui-btn" type="button">
+                        取消
+                    </button>
+                    <button
+                        id="todo-edit-save"
+                        class="simpui-btn primary"
+                        type="button"
+                    >
+                        保存
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 编辑笔记弹窗 ===== -->
+        <div
+            id="note-edit-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="编辑笔记"
+        >
+            <div class="simpui-dialog-panel md">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">编辑笔记</h3>
+                    <button
+                        id="note-edit-close"
+                        class="simpui-dialog-close"
+                        aria-label="关闭"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="field">
+                        <label for="note-edit-title">标题（可选）</label>
+                        <input
+                            id="note-edit-title"
+                            class="simpui-input"
+                            type="text"
+                            placeholder="标题（可选）"
+                            maxlength="200"
+                            spellcheck="false"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="note-edit-content">内容</label>
+                        <textarea
+                            id="note-edit-content"
+                            class="simpui-input note-add-textarea"
+                            placeholder="写点什么…（支持 Markdown）"
+                            rows="6"
+                            maxlength="20000"
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+                </div>
+                <div class="simpui-dialog-actions">
+                    <button id="note-edit-cancel" class="simpui-btn" type="button">
+                        取消
+                    </button>
+                    <button
+                        id="note-edit-save"
+                        class="simpui-btn primary"
+                        type="button"
+                    >
+                        保存
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- ===== 添加笔记弹窗 ===== -->
         <div
             id="note-add-modal"

@@ -334,8 +334,9 @@
 .todo-item.done .todo-title { text-decoration: line-through; color: var(--simpui-text-dim); }
 .todo-item.doing .todo-title { color: var(--warning); }
 .todo-main { flex: 1 1 auto; min-width: 0; }
-.todo-line { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.todo-title { flex: 1 1 auto; min-width: 0; word-break: break-word; font-weight: 500; }
+.todo-line { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.todo-title { flex: 0 1 auto; min-width: 0; word-break: break-word; font-weight: 500; }
+.todo-actions { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-1); }
 .todo-toggle { width: 16px; height: 16px; flex: 0 0 auto; cursor: pointer; margin-top: 1px; }
 .todo-due { font-size: 11px; color: var(--simpui-text-dim); font-family: var(--font-mono); white-space: nowrap; }
 .todo-edit, .note-edit {
@@ -365,8 +366,11 @@
 .ef-row .simpui-input { flex: 1; min-width: 60px; }
 .ef-actions, .ne-actions { display: flex; gap: var(--space-2); }
 .ne-actions { justify-content: flex-start; }
-.note-title { font-weight: 600; margin-bottom: 2px; }
-.note-foot { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-1); }
+.note-line { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; }
+.note-title {
+  flex: 1 1 auto; min-width: 0; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0;
+}
 
 /* 笔记/待办正文复用聊天气泡的 markdown 排版（标题/代码块/表格） */
 .todo-body.mdit, .note-body.mdit { font-size: 13px; line-height: 1.55; }
