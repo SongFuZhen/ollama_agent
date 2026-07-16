@@ -1655,9 +1655,6 @@ if (ssMoreEl) {
 // 状态弹框：关闭（按钮 / 点击遮罩 / Esc）
 const stateModalClose = $('#state-modal-close');
 if (stateModalClose) stateModalClose.onclick = closeStateModal;
-// 状态弹框：日志按钮
-const stateModalLogBtn = $('#state-modal-log-btn');
-if (stateModalLogBtn) stateModalLogBtn.onclick = () => { closeStateModal(); openLogDrawer(); };
 const stateModal = $('#state-modal');
 if (stateModal) {
   stateModal.onclick = (e) => { if (e.target === stateModal) closeStateModal(); };
