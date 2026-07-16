@@ -5,6 +5,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-5);
+  background: var(--chat-bg);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -31,6 +32,8 @@
 /* 气泡 */
 .bubble {
   max-width: 80%;
+  max-height: 70vh;
+  overflow-y: auto;
   padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
   font-size: 14px;
@@ -40,21 +43,24 @@
   border: 1px solid transparent;
 }
 
-/* Agent 气泡：次级表面 */
+/* Agent 气泡：更明显的卡面 + 描边 + 常规字重 */
 .msg.agent .bubble,
 .answer-card > .bubble {
-  background: var(--surface-2);
-  border-color: var(--border-soft);
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
   color: var(--simpui-text-dim);
+  font-weight: 400;
 }
 
-/* 用户气泡：强调色 */
+/* 用户气泡：强调色填充 + 同色描边 + 略粗文字 */
 .msg.user .bubble {
   background: var(--accent);
   color: var(--simpui-bg);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
   max-width: 80%;
   width: fit-content;
+  font-weight: 500;
 }
 
 /* 底部信息（模型名 / 时间 / 统计 / 复制） */
@@ -142,10 +148,11 @@
 /* 步骤 / 工具块容器 */
 .steps {
   width: 100%;
+  max-width: 80%;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 /* ---------- Markdown 排版（气泡内） ---------- */
@@ -195,7 +202,7 @@
 .bubble code {
   font-family: var(--font-mono);
   font-size: 13px;
-  background: var(--simpui-focus);
+  background: var(--code-bg);
   padding: 1px 5px;
   border-radius: var(--radius-sm);
 }
@@ -204,7 +211,7 @@
 .bubble pre {
   margin: var(--space-3) 0;
   padding: var(--space-3);
-  background: var(--surface-2);
+  background: var(--code-block-bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   overflow-x: auto;
@@ -402,15 +409,55 @@
   color: var(--simpui-text-light);
 }
 
-/* 单条消息「已移出上下文」：清除按钮变红（再次点击恢复） */
+/* 单条消息「已移出上下文」：清除按钮文字与图标变红（再次点击恢复） */
 .context-clear.red {
   color: var(--danger);
-  background: var(--danger-dim);
+  background: transparent;
+}
+
+.context-clear.red .context-clear-icon {
+  color: var(--danger);
 }
 
 .context-clear.red:hover {
   color: var(--danger);
   background: var(--danger-dim);
+}
+
+/* 已移出上下文且内容超过 3 行的消息：折叠为单行，点击可展开 */
+.msg.collapsed.collapsible > .bubble {
+  max-height: 3em;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+
+/* 展开态：限制最大高度并可滚动，避免超长内容撑爆页面；鼠标仍可点击收起 */
+.msg.collapsed.collapsible > .bubble.expanded-flag {
+  max-height: 60vh;
+  overflow-y: auto;
+  cursor: pointer;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.msg.collapsed.collapsible > .bubble::after {
+  content: '展开';
+  position: sticky;
+  bottom: 0;
+  display: block;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--simpui-text-light);
+  padding-left: 6px;
+  cursor: pointer;
+}
+
+.msg.collapsed.collapsible > .bubble.expanded-flag::after {
+  content: '收起';
 }
 
 /* 单条消息上的「上下文已清除」红色标记 */

@@ -82,7 +82,13 @@
 
   /* 表面 / 边框（simpui 之外补充） */
   --surface-2: #eef1f6;                /* 代码块 / 工具块底色 */
+  --code-block-bg: #eef1f6;           /* 代码块 / 步骤 / 工具块底色（较白卡面略深，呈内嵌感） */
+  --surface-card: #ffffff;             /* Agent 气泡卡面（与页面底色拉开层次） */
+  --chat-bg: #f5f6f8;                  /* 对话外层容器底色（略浅于页面白） */
   --border-soft: #e2e6ee;              /* 分割线 / 边框 */
+  --border-card: #dbe0ea;              /* 卡面描边 */
+  --tool-hover: rgba(8, 145, 178, .06); /* 工具块 hover：极淡 tint，不刺眼 */
+  --code-bg: rgba(0, 0, 0, .05);       /* 行内代码底色（浅） */
   --simpui-input-border: rgba(0, 0, 0, .08);
 
   font-size: 14px;
@@ -104,7 +110,13 @@
 
   /* 表面 / 边框（暗色） */
   --surface-2: #151515;
+  --code-block-bg: #181b22;           /* 代码块背景（暗色，较 surface-2 略亮） */
+  --surface-card: #1c1f27;             /* Agent 气泡卡面（较页面底色略亮） */
+  --chat-bg: #0d0f13;                  /* 对话外层容器底色（略亮于页面黑） */
   --border-soft: #2a2f3a;
+  --border-card: #3a4150;              /* 卡面描边 */
+  --tool-hover: rgba(34, 211, 238, .10); /* 工具块 hover：暗色下极淡 tint */
+  --code-bg: rgba(255, 255, 255, .08);  /* 行内代码底色（暗色浅） */
   --simpui-input-border: rgba(255, 255, 255, .08);
 }
 

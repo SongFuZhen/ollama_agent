@@ -21,30 +21,40 @@ const COPY_DONE_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" s
 // 复制按钮：复用 simpui .lightbtn，点击后短暂显示「已复制」勾选图标
 function makeCopyBtn(text) {
   const copy = el('button', 'copy lightbtn sm');
+  copy.title = '复制';
+  copy.setAttribute('aria-label', '复制');
   copy.innerHTML = COPY_ICON;
   copy.onclick = () => {
     navigator.clipboard?.writeText(text).then(() => {
       copy.innerHTML = COPY_DONE_ICON;
-      setTimeout(() => { copy.innerHTML = COPY_ICON; }, 1200);
+      copy.title = '已复制';
+      setTimeout(() => { copy.innerHTML = COPY_ICON; copy.title = '复制'; }, 1200);
     });
   };
   return copy;
 }
 
-// 清除上下文按钮（单条移出上下文的开关）：红色表示该消息已从上下文排除
+// 清除上下文按钮（单条移出上下文的开关）：按钮变红表示该消息已从上下文排除
 function makeContextClearBtn() {
   const btn = el('button', 'copy lightbtn sm context-clear');
   btn.type = 'button';
   btn.dataset.action = 'clear-context';
-  btn.title = '清除上下文';
-  btn.setAttribute('aria-label', '清除上下文');
-  btn.innerHTML = `<svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>`;
+  btn.innerHTML = `<svg class="context-clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span class="context-clear-label">清除上下文</span>`;
   // 若该消息已被排除（重开对话恢复），直接标红
   const msg = btn.closest('.msg');
-  if (msg && msg.dataset.mid && state.excludedMids && state.excludedMids.has(msg.dataset.mid)) {
-    btn.classList.add('red');
-  }
+  const excluded = !!(msg && msg.dataset.mid && state.excludedMids && state.excludedMids.has(msg.dataset.mid));
+  applyContextClearState(btn, excluded);
   return btn;
+}
+
+// 应用单个「清除上下文」按钮的状态：removed=true 时按钮变红并提示已移除
+function applyContextClearState(btn, removed) {
+  btn.classList.toggle('red', removed);
+  const label = btn.querySelector('.context-clear-label');
+  if (label) label.textContent = removed ? '已移除' : '清除';
+  const tip = removed ? '该消息已移出上下文（不再携带给模型）：点击恢复' : '清除：后续对话不再携带该消息';
+  btn.title = tip;
+  btn.setAttribute('aria-label', tip);
 }
 
 // 同步所有「清除上下文」按钮的红色状态（与 state.excludedMids 一致）
@@ -52,11 +62,55 @@ function refreshClearButtons() {
   document.querySelectorAll('[data-action="clear-context"]').forEach((btn) => {
     const msg = btn.closest('.msg');
     const excluded = !!(msg && msg.dataset.mid && state.excludedMids && state.excludedMids.has(msg.dataset.mid));
-    btn.classList.toggle('red', excluded);
-    btn.title = excluded ? '该消息已移出上下文：点击恢复' : '清除上下文';
-    btn.setAttribute('aria-label', btn.title);
+    applyContextClearState(btn, excluded);
+    applyMsgCollapsed(msg, excluded);
   });
 }
+
+// 气泡内容是否超过约 3 行（超过才需要折叠）
+function isBubbleTall(bubble) {
+  if (!bubble) return false;
+  // 临时解除可能的 clamp，确保测量的是完整内容高度
+  const prevMax = bubble.style.maxHeight;
+  const prevOverflow = bubble.style.overflow;
+  bubble.style.maxHeight = 'none';
+  bubble.style.overflow = 'visible';
+  const cs = getComputedStyle(bubble);
+  const lineH = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.7);
+  const threeLines = lineH * 3 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const tall = bubble.scrollHeight > threeLines + 4;
+  bubble.style.maxHeight = prevMax;
+  bubble.style.overflow = prevOverflow;
+  return tall;
+}
+
+// 已移出上下文的消息：仅当内容超过 3 行才折叠为单行（点击可展开/收起）
+function applyMsgCollapsed(msg, collapsed) {
+  if (!msg) return;
+  msg.classList.toggle('collapsed', !!collapsed);
+  const bubble = msg.querySelector(':scope > .bubble');
+  if (bubble) {
+    bubble.classList.remove('expanded-flag');
+    // 内容较短时不折叠，仅保留红色排除状态
+    msg.classList.toggle('collapsible', !!(collapsed && isBubbleTall(bubble)));
+  }
+}
+
+// 点击已折叠消息的气泡 → 临时展开，再次点击收起（保持 .collapsed，仅切换 expanded-flag）
+function bindMsgCollapseToggle() {
+  if (boundMsgCollapseToggle) return;
+  boundMsgCollapseToggle = true;
+  state.session.addEventListener('click', (e) => {
+    const msg = e.target.closest('.msg.collapsed.collapsible');
+    if (!msg) return;
+    // 点按钮不触发折叠切换
+    if (e.target.closest('button')) return;
+    const bubble = msg.querySelector(':scope > .bubble');
+    if (!bubble) return;
+    bubble.classList.toggle('expanded-flag');
+  });
+}
+let boundMsgCollapseToggle = false;
 
 // ---------- 工具图标映射（Lucide PascalCase 名） ----------
 const TOOL_ICONS = {

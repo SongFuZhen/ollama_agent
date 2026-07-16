@@ -31,6 +31,8 @@ function mountSession() {
     const msg = btn.closest('.msg');
     toggleContextExclusion(msg);
   });
+  // 已移出上下文的消息：点击折叠气泡可展开/收起
+  bindMsgCollapseToggle();
   // 同步可编辑的对话名称
   if (convNameEl) {
     convNameEl.value = state.conversationTitle || '';
@@ -53,11 +55,13 @@ function toggleContextExclusion(msgEl) {
   const btn = msgEl.querySelector('[data-action="clear-context"]');
   if (state.excludedMids.has(mid)) {
     state.excludedMids.delete(mid);
-    if (btn) btn.classList.remove('red');
+    if (btn) applyContextClearState(btn, false);
+    applyMsgCollapsed(msgEl, false);
     showSimpuiToast('提示', '已将该消息重新纳入上下文');
   } else {
     state.excludedMids.add(mid);
-    if (btn) btn.classList.add('red');
+    if (btn) applyContextClearState(btn, true);
+    applyMsgCollapsed(msgEl, true);
     showSimpuiToast('提示', '该消息已移出上下文，后续消息不再携带它');
   }
   // 立即落库，确保重开对话仍可见排除状态
