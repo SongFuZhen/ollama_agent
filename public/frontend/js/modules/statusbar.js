@@ -28,6 +28,44 @@ function showEmptyIfEmpty() {
   emptyEl.style.display = has ? 'none' : 'flex';
 }
 
+// ---------- 离线诊断 ----------
+// 当 Ollama 连接失败时，点「诊断」直接从浏览器探测配置地址，
+// 区分「主机不可达 / 端口未监听 / 服务返回错误 / 正常」，把真实原因回显给用户。
+let _diagnosing = false;
+async function diagnoseOllama() {
+  if (_diagnosing) return;
+  _diagnosing = true;
+  const host = ollamaHost();
+  setStatus('error', '诊断中…');
+  showSimpuiToast('Ollama 诊断', '正在探测 ' + host);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000); // 8s 超时
+  let detail;
+  try {
+    const res = await fetch(host.replace(/\/+$/, '') + '/api/tags', { signal: ctrl.signal });
+    if (res.ok) {
+      detail = '✅ 连接正常：' + host + ' 已就绪';
+    } else {
+      detail = '⚠ 服务返回 HTTP ' + res.status + '：地址可达但 Ollama 未正常响应（检查版本/路由）';
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      detail = '⏱ 超时（>8s）：' + host + ' 无响应。可能主机不存在、网络隔离或防火墙拦截';
+    } else if (e instanceof TypeError || (e && e.name === 'TypeError')) {
+      // fetch 的 TypeError 通常是 DNS 解析失败或连接被拒（端口未监听）
+      detail = '❌ 无法建立连接：' + host + '。常见原因：① Ollama 未启动；② 仅监听 127.0.0.1（远程需 OLLAMA_HOST=0.0.0.0:11434）；③ 防火墙/跨网段';
+    } else {
+      detail = '❌ 诊断异常：' + (e && e.message ? e.message : String(e));
+    }
+  } finally {
+    clearTimeout(timer);
+    _diagnosing = false;
+  }
+  showSimpuiToast('Ollama 诊断', detail);
+  // 诊断后顺便重新跑 preflight，刷新状态栏（需后端支持同一地址）
+  if (typeof preflight === 'function') preflight();
+}
+
 // ---------- 会话状态栏 ----------
 let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
 
@@ -226,3 +264,17 @@ function setActiveModel(model) {
   fetchModelContext();
   renderSessionState();
 }
+
+// ---------- 离线诊断按钮接线 ----------
+// 状态栏「诊断」按钮：直接探测配置的 Ollama 地址并回显真实错误。
+const ollamaDiagnoseBtn = $('#ollama-diagnose');
+if (ollamaDiagnoseBtn) ollamaDiagnoseBtn.onclick = diagnoseOllama;
+// 顶栏离线状态文字也可点击诊断（仅在离线时显示为可点击）。
+if (ollamaStatusEl) {
+  ollamaStatusEl.style.cursor = 'pointer';
+  ollamaStatusEl.title = '点击诊断 Ollama 连接';
+  ollamaStatusEl.onclick = () => {
+    if (typeof diagnoseOllama === 'function') diagnoseOllama();
+  };
+}
+
