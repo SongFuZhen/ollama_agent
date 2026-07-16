@@ -1,6 +1,6 @@
 # Skills 与 Tools 使用指南
 
-本指南讲清 Ason Agent 里几套看似相似、实则不同的「技能 / 工具 / 命令」机制，以及新增的 `@skill` 强制调用语法。
+本指南讲清 Ason Agent 里几套看似相似、实则不同的「技能 / 工具 / 命令」机制，以及 `@命令` 与 `!命令` 两种强制直接调用语法。
 
 ---
 
@@ -114,13 +114,63 @@
 → 显示上一次提交的详情。
 
 ```
+@tree path=src/core
+```
+→ 树状展示 `src/core` 目录层级（默认完整展开，可加 `depth=2` 限深）。
+
+```
+@list_dir path=src
+```
+→ 列出 `src` 目录下的文件与子目录。
+
+```
+@glob pattern=src/**/*.js
+```
+→ 按 glob 模式列出所有 JS 文件。
+
+```
+@search_files pattern=workflow
+```
+→ 按文件名关键字递归搜索含 `workflow` 的文件。
+
+```
+@grep pattern=resolveDirectCall path=src/core
+```
+→ 在 `src/core` 下搜索 `resolveDirectCall` 的所有出现（支持正则）。
+
+```
+@read_lines path=src/core/agent.js start=1 end=50
+```
+→ 只读 `agent.js` 前 50 行（大文件省上下文）。
+
+```
+@count_loc path=src
+```
+→ 统计 `src` 下各语言代码行数/文件数。
+
+```
+@explain_symbol runAgent
+```
+→ 直接在项目里定位 `runAgent` 的定义并解释。
+
+```
+@find_references buildSkillParams
+```
+→ 查找 `buildSkillParams` 的所有引用位置，评估改动影响。
+
+```
 @git_status 顺便用中文总结一下哪些文件需要提交
 ```
 → `@git_status` 先强制执行，后面的自然语言作为附加指令，模型基于真实结果作答。
 
+```
+@unknown_cmd foo
+```
+→ `@` 后不是已知命令时，回退为普通对话并提示完整可用命令列表。
+
 ---
 
-## 二之二、`!命令` 直接执行 shell
+## 三、`!命令` 直接执行 shell
 
 格式：
 
@@ -151,7 +201,7 @@
 
 ---
 
-## 三、前端 slash 命令
+## 四、前端 slash 命令
 
 在输入框键入 `/` 唤起命令面板，可用命令（按功能分组排列）：
 
@@ -183,7 +233,7 @@
 
 ---
 
-## 四、项目结构相关说明
+## 五、项目结构相关说明
 
 ### `skills-lock.json`
 锁定两个**指令型 skill**（frontend-design、ui-ux-pro-max）的 GitHub 来源与内容 SHA-256 哈希，用于版本/完整性校验。当前仓库没有对应的 installer/sync 工具消费它，仅作为锁版本清单保留。
@@ -196,8 +246,8 @@
 
 ---
 
-## 五、给开发者的实现要点
+## 六、给开发者的实现要点
 
-- 可执行 skill 在 `src/skills/index.js` 注册，经 `src/tools/index.js` 合并进 `ALL` 工具集并导出 `SKILL_TOOLS`。
-- `@` 解析逻辑在 `src/core/workflow.js` 的 `resolveSkillCall()`；强制 dispatch 在 `src/core/agent.js` 的 `runAgent()` 入口。
-- 新增一个可执行 skill：在 `src/skills/<分类>/` 下按现有结构加 `SKILL.md` + `<name>.js`（导出 `{name, desc, params, run}`），并在 `src/skills/index.js` 注册即可，无需改 agent 主循环。
+- 可执行 skill 在 `src/skills/index.js` 注册，经 `src/tools/index.js` 合并进 `ALL` 工具集（导出 `SKILL_TOOLS` 仅含 skill 子集）。
+- `@` / `!` 解析逻辑在 `src/core/workflow.js` 的 `resolveDirectCall()`（匹配范围 = `specsFor()` 全部工具/技能，`!` 单独走 bash）；强制 dispatch 在 `src/core/agent.js` 的 `runAgent()` 入口。
+- 新增一个可执行 skill：在 `src/skills/<分类>/` 下按现有结构加 `SKILL.md` + `<name>.js`（导出 `{name, desc, params, run}`），并在 `src/skills/index.js` 注册即可，无需改 agent 主循环。新工具/技能只要进入 `specsFor()`，就能立刻用 `@` 直接调用。
