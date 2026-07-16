@@ -330,10 +330,13 @@
                         <textarea
                             id="input"
                             class="composer-input"
-                            placeholder="请输入消息，可以使用 / 执行命令"
+                            placeholder="请输入消息，可使用 @ 调用工具、! 执行命令、/ 查看命令"
                             rows="1"
                             maxlength="20000"
                         ></textarea>
+                        <span class="composer-mode-badge hidden" id="bash-mode-badge" title="当前以 ! 开头，整行将作为 shell 命令直接执行">
+                            <i data-lucide="terminal"></i> BASH 模式 · 回车直接执行
+                        </span>
                         <span class="char-count" id="char-count"
                             >0 / 20000</span
                         >

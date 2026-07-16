@@ -62,15 +62,29 @@ let cmdPaletteEl = null;
 let cmdActiveIndex = 0;
 let cmdFiltered = [];
 
+// @ 选择面板状态（列出全部 tools + skills，可搜索，选中后填入 @name ）
+let atPaletteEl = null;
+let atActiveIndex = 0;
+let atFiltered = [];
+
+// bash 模式状态（输入以 ! 开头时进入，提示用户整行作为 shell 命令）
+let bashModeOn = false;
+
 function initCommands() {
   const input = $('#input');
   if (!input) return;
   buildPalette();
+  buildAtPalette();
   input.addEventListener('input', onInputChange);
-  input.addEventListener('keydown', onInputKeydown);
+  // keydown 用 capture 阶段注册，确保早于 app.js 的发送监听，
+  // 在面板可见时拦截 Enter/Tab，避免把未完成的 @/! 前缀直接发出去。
+  input.addEventListener('keydown', onInputKeydown, true);
   document.addEventListener('click', (e) => {
     if (cmdPaletteEl && !cmdPaletteEl.contains(e.target) && e.target !== input) {
       hidePalette();
+    }
+    if (atPaletteEl && !atPaletteEl.contains(e.target) && e.target !== input) {
+      hideAtPalette();
     }
   });
 }
@@ -83,9 +97,66 @@ function buildPalette() {
   cmdPaletteEl = wrap;
 }
 
+// 构建 @ 选择面板（复用 slash-menu 样式，独立元素避免冲突）
+function buildAtPalette() {
+  const wrap = el('div', 'slash-menu hidden');
+  wrap.id = 'at-menu';
+  const composer = document.querySelector('.composer');
+  composer.appendChild(wrap);
+  atPaletteEl = wrap;
+}
+
+// 是否处于 bash 模式：输入框以 ! 开头
+function isBashInput(val) {
+  return val.startsWith('!');
+}
+
+// 切换 bash 模式视觉（输入框左边框高亮 + 显示模式徽章）
+function setBashMode(on) {
+  if (on === bashModeOn) return;
+  bashModeOn = on;
+  const input = $('#input');
+  const badge = document.getElementById('bash-mode-badge');
+  if (on) {
+    if (input) input.classList.add('bash-mode');
+    if (badge) badge.classList.remove('hidden');
+  } else {
+    if (input) input.classList.remove('bash-mode');
+    if (badge) badge.classList.add('hidden');
+  }
+}
+
 function onInputChange() {
   const input = $('#input');
   const val = input.value;
+
+  // bash 模式：以 ! 开头，提示用户整行作为 shell 命令，隐藏其他面板
+  if (isBashInput(val)) {
+    setBashMode(true);
+    hidePalette();
+    hideAtPalette();
+    return;
+  }
+  setBashMode(false);
+
+  // @ 选择面板：以 @ 开头且尚未输入空格，列出可调用工具/技能
+  if (val.startsWith('@') && !val.includes(' ')) {
+    const q = val.slice(1).toLowerCase();
+    const tools = Array.isArray(state.tools) ? state.tools : [];
+    atFiltered = tools.filter((t) => t.name.toLowerCase().includes(q));
+    if (atFiltered.length) {
+      atActiveIndex = 0;
+      renderAtPalette();
+      showAtPalette();
+    } else {
+      hideAtPalette();
+    }
+    hidePalette();
+    return;
+  }
+  hideAtPalette();
+
+  // 原有 slash 命令面板
   if (val.startsWith('/') && !val.includes(' ')) {
     const q = val.slice(1).toLowerCase();
     cmdFiltered = SLASH_COMMANDS.filter((c) => c.name.startsWith(q));
@@ -125,6 +196,31 @@ function renderPalette() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// 渲染 @ 选择面板：列出工具/技能，按 kind 标注，可点击或键盘选择
+function renderAtPalette() {
+  atPaletteEl.innerHTML = '';
+  atFiltered.forEach((t, i) => {
+    const item = el('div', 'slash-menu-item' + (i === atActiveIndex ? ' active' : ''));
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', t.kind === 'skill' ? 'sparkles' : 'wrench');
+    icon.className = 'slash-menu-icon';
+    item.appendChild(icon);
+
+    const textWrap = el('div', 'slash-menu-text');
+    textWrap.appendChild(el('span', 'slash-menu-name', '@' + t.name));
+    const desc = t.desc || '';
+    textWrap.appendChild(el('span', 'slash-menu-desc', (t.kind === 'skill' ? '[技能] ' : '[工具] ') + desc));
+    item.appendChild(textWrap);
+
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      selectAtItem(t);
+    });
+    atPaletteEl.appendChild(item);
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 function showPalette() {
   cmdPaletteEl.classList.remove('hidden');
 }
@@ -133,7 +229,47 @@ function hidePalette() {
   if (cmdPaletteEl) cmdPaletteEl.classList.add('hidden');
 }
 
+function showAtPalette() {
+  atPaletteEl.classList.remove('hidden');
+}
+
+function hideAtPalette() {
+  if (atPaletteEl) atPaletteEl.classList.add('hidden');
+}
+
+// 选中 @ 面板中的某项：把输入框填为 @name + 空格，隐藏面板，光标置于末尾
+function selectAtItem(t) {
+  const input = $('#input');
+  if (input) {
+    input.value = '@' + t.name + ' ';
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  }
+  hideAtPalette();
+}
+
 function onInputKeydown(e) {
+  // @ 面板可见时，拦截方向键/Enter/Tab/Esc，并阻止冒泡到 app.js 的发送监听
+  if (atPaletteEl && !atPaletteEl.classList.contains('hidden')) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      atActiveIndex = (atActiveIndex + 1) % atFiltered.length;
+      renderAtPalette();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      atActiveIndex = (atActiveIndex - 1 + atFiltered.length) % atFiltered.length;
+      renderAtPalette();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const t = atFiltered[atActiveIndex];
+      if (t) selectAtItem(t);
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      hideAtPalette();
+    }
+    return;
+  }
   if (!cmdPaletteEl || cmdPaletteEl.classList.contains('hidden')) return;
   if (e.key === 'ArrowDown') {
     e.preventDefault();
