@@ -25,6 +25,12 @@
   color: var(--simpui-text-light);
 }
 
+/* 状态栏中已移出上下文的条数（红色） */
+.ss-removed {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 #ss-model,
 #ss-tools,
 #ss-skills {

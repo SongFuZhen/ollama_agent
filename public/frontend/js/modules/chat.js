@@ -66,6 +66,8 @@ function toggleContextExclusion(msgEl) {
   }
   // 立即落库，确保重开对话仍可见排除状态
   if (state.conversationId) saveConversation();
+  // 同步状态栏消息计数（含已移除条数）
+  renderSessionState();
 }
 
 let autoScroll = true;

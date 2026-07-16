@@ -133,6 +133,7 @@ function renderSessionState() {
   const toolCount = (state.tools || []).filter(t => (t.kind || 'tool') === 'tool').length;
   const skillCount = (state.tools || []).filter(t => t.kind === 'skill').length;
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
+  const removedCount = state.excludedMids ? state.excludedMids.size : 0;
   const avgTtft = state.sessionStats.ttftCount > 0 ? Math.round(state.sessionStats.ttftSum / state.sessionStats.ttftCount) : 0;
   const totalTime = state.sessionStats.totalTimeSum;
 
@@ -149,7 +150,13 @@ function renderSessionState() {
       ssModelEl.title = '点击打开设置';
     }
   }
-  if (ssCharsEl) ssCharsEl.textContent = `${msgCount} 条 | TTFT: ${avgTtft}ms | 总耗时: ${formatElapsed(totalTime)}`;
+  if (ssCharsEl) {
+    const removedPart = removedCount > 0
+      ? ` <span class="ss-removed">（${removedCount}）</span>`
+      : '';
+    ssCharsEl.innerHTML = `${msgCount}${removedPart} 条 | TTFT: ${avgTtft}ms | 总耗时: ${formatElapsed(totalTime)}`;
+    ssCharsEl.title = removedCount > 0 ? `共 ${msgCount} 条，其中 ${removedCount} 条已移出上下文` : `${msgCount} 条消息`;
+  }
   if (ssGitEl) ssGitEl.textContent = 'git:' + (state.gitBranch || '—');
   if (ssDirEl) ssDirEl.textContent = dirName;
   if (ssToolsEl) ssToolsEl.textContent = 'Tools: ' + toolCount;
@@ -201,6 +208,7 @@ function buildStateDetail() {
     ? Object.entries(counts).map(([k, v]) => `  ${k} ×${v}`).join('\n')
     : '  无';
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
+  const removedCount = state.excludedMids ? state.excludedMids.size : 0;
   const ctxTokens = state.sessionStats.contextTokens || 0;
   const ctxLimit = state.sessionStats.contextLimit || 0;
   const ctxLine = ctxLimit > 0
@@ -211,7 +219,7 @@ function buildStateDetail() {
 目录: ${root || '默认沙箱'}${state.gitBranch ? '\n分支: ' + state.gitBranch : ''}
 会话 ID: ${id}
 已用时长: ${elapsed}
-消息数: ${msgCount}
+消息数: ${msgCount}${removedCount > 0 ? `（已移除 ${removedCount}）` : ''}
 ${ctxLine}
 工具调用:
 ${toolLines}`;
