@@ -19,16 +19,18 @@ const COPY_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke
 const COPY_DONE_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
 
 // 复制按钮：复用 simpui .lightbtn，点击后短暂显示「已复制」勾选图标
+const COPY_LABEL = '<span class="copy-text">复制</span>';
+const COPY_DONE_LABEL = '<span class="copy-text">已复制</span>';
 function makeCopyBtn(text) {
   const copy = el('button', 'copy lightbtn sm');
   copy.title = '复制';
   copy.setAttribute('aria-label', '复制');
-  copy.innerHTML = COPY_ICON;
+  copy.innerHTML = COPY_ICON + COPY_LABEL;
   copy.onclick = () => {
     navigator.clipboard?.writeText(text).then(() => {
-      copy.innerHTML = COPY_DONE_ICON;
+      copy.innerHTML = COPY_DONE_ICON + COPY_DONE_LABEL;
       copy.title = '已复制';
-      setTimeout(() => { copy.innerHTML = COPY_ICON; copy.title = '复制'; }, 1200);
+      setTimeout(() => { copy.innerHTML = COPY_ICON + COPY_LABEL; copy.title = '复制'; }, 1200);
     });
   };
   return copy;
@@ -599,8 +601,8 @@ function ensureMessageContainer(mid) {
 
   copy.onclick = () => {
     navigator.clipboard?.writeText(state.streamingText).then(() => {
-      copy.innerHTML = COPY_DONE_ICON;
-      setTimeout(() => { copy.innerHTML = COPY_ICON; }, 1200);
+      copy.innerHTML = COPY_DONE_ICON + COPY_DONE_LABEL;
+      setTimeout(() => { copy.innerHTML = COPY_ICON + COPY_LABEL; }, 1200);
     });
   };
 }

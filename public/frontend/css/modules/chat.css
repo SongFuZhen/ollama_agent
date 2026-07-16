@@ -103,6 +103,15 @@
   color: var(--simpui-text-light);
 }
 
+/* 复制按钮文字（图标后的「复制」/「已复制」标签） */
+.copy-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--simpui-text-light);
+  white-space: nowrap;
+}
+
 /* 用户发送的图片网格（在气泡内部） */
 .msg-images {
   display: grid;
