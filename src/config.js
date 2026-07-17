@@ -9,8 +9,8 @@ const PROJECT_ROOT = process.env.PROJECT_ROOT
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
 
-// 默认对话模型（可通过环境变量 MODEL 覆盖，例如 MODEL=qwen2.5-coder:7b）
-const DEFAULT_MODEL = process.env.MODEL || 'deepseek-r1:8b';
+// 默认对话模型：编码优先首选 qwen2.5-coder:7b；仍可用环境变量覆盖（MODEL=deepseek-r1:8b）
+const DEFAULT_MODEL = process.env.MODEL || 'qwen2.5-coder:7b';
 
 // 模型路由：按任务复杂度匹配不同模型，本地显存有限时让小模型干小活、大模型干大活。
 //   default : 主对话 + 工具调用（强推理）
