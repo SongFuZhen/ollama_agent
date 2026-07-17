@@ -18,6 +18,9 @@ function behaviorRules(hasTemplate = false) {
     '5. 禁止把字符串传给需要数字的参数（如 read_lines 的 start/end、tree 的 depth、repo_map 的 max），类型必须匹配。',
     '6. 文件不存在时，先确认路径拼写或用 list_dir/glob 查找，禁止凭空写文件（除非用户明确要求新建）。'
   );
+  rules.push(
+    '7. 命中任务模板时，必须严格按模板给定的步骤顺序执行，禁止跳步或自创流程；模板未覆盖的环节才允许自由发挥。'
+  );
   return rules.join('\n');
 }
 
