@@ -27,7 +27,7 @@ const MODEL_ROUTING = {
 const MAX_STEPS = Number(process.env.MAX_STEPS) || 8;  // Agent 循环步数上限，防空转；可通过环境变量覆盖
 const JSON_RETRY = 2;         // 工具调用 JSON 解析失败重试次数
 const STEP_TIMEOUT_MS = 90000; // 本地模型响应较慢，适当放宽超时
-const NUM_CTX = Number(process.env.NUM_CTX) || 16384; // context window，agent 循环需较大上下文
+const NUM_CTX = Number(process.env.NUM_CTX) || 8192; // 7B/8B 默认 8K，质量更稳；大显存可 NUM_CTX=16384
 // 采样温度：小模型工具调用要确定性，默认压低到 0.1（可用 TEMP 环境变量覆盖，如 TEMP=0.3）
 const TEMPERATURE = Number(process.env.TEMP) || 0.1;
 const TOP_P = Number(process.env.TOP_P) || 0.9;
