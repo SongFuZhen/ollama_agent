@@ -264,6 +264,97 @@ function handleAskUser(req, res) {
   }).catch((e) => sendJSON(res, 400, { ok: false, msg: e.message }));
 }
 
+// ---------- Toolbox 快捷命令（/api/quick，单轮，不经过 Agent 循环） ----------
+
+// 命令列表（供前端 slash 菜单展示，含用法与参数 schema）
+function handleQuickCommands(res) {
+  const { allCommands } = require('./core/quick/registry');
+  sendJSON(res, 200, {
+    commands: allCommands().map((c) => ({
+      name: c.name,
+      desc: c.desc,
+      category: c.category,
+      usage: c.usage || c.name,
+      params: c.params || {},
+    })),
+  });
+}
+
+// 单命令执行：SSE 流式，事件格式 meta / quick_step / quick_token / quick_done / error
+function handleQuick(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  if (res.socket) res.socket.setNoDelay(true);
+
+  let aborted = false;
+  const abort = new AbortController();
+  // 客户端断开即中止，真正中断 Ollama 生成
+  res.on('close', () => { aborted = true; abort.abort(); });
+
+  const send = (obj) => {
+    if (aborted) return;
+    try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); }
+    catch (e) { aborted = true; }
+  };
+
+  readBody(req).then(async (body) => {
+    const { command, args, model: bodyModel, ollamaHost, projectRoot } = body;
+    if (!command) { send({ type: 'error', msg: '缺少 command' }); res.end(); return; }
+    const model = bodyModel || DEFAULT_MODEL;
+
+    // 解析生效的沙箱根：前端绝对路径优先（校验有效才用），否则回退默认/持久化
+    let effectiveRoot = PROJECT_ROOT;
+    if (projectRoot) {
+      const v = await validateRoot(projectRoot);
+      effectiveRoot = v || (await getProjectRoot());
+    } else {
+      effectiveRoot = await getProjectRoot();
+    }
+
+    const { runQuick } = require('./core/quick/runner');
+    await runQuick(command, args || {}, {
+      model, ollamaHost, projectRoot: effectiveRoot, signal: abort.signal,
+    }, send);
+    if (!aborted) res.end();
+  }).catch((e) => {
+    if (!aborted) { send({ type: 'error', msg: e.message }); res.end(); }
+  });
+}
+
+// 应用 Toolbox 写操作（/comment、/fix 的「应用修改」按钮）：整文件写入沙箱。
+// 仅在用户显式点击按钮时触发，故不做二次确认弹窗；落盘前仍受 safeResolve 沙箱约束。
+async function handleQuickApply(req, res) {
+  try {
+    const { path: p, content, projectRoot } = await readBody(req);
+    if (!p || content == null) return sendJSON(res, 400, { ok: false, msg: '缺少 path 或 content' });
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const write_file = require('./tools/write_file');
+    const r = await write_file.run({ path: p, content: String(content) }, { root });
+    sendJSON(res, 200, { ok: true, msg: r });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
+// 用 Toolbox 生成的 message 直接提交（/commit 的「直接提交」按钮）
+async function handleQuickCommit(req, res) {
+  try {
+    const { message, projectRoot } = await readBody(req);
+    if (!message || !message.trim()) return sendJSON(res, 400, { ok: false, msg: '缺少 commit message' });
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const bash = require('./tools/bash');
+    const r = await bash.run({ command: 'git commit -m ' + JSON.stringify(message) }, { root });
+    sendJSON(res, 200, { ok: true, msg: String(r) });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
 function handlePreflight(res, userHost) {
   const host = userHost || OLLAMA_HOST;
   listModels(host)
@@ -556,6 +647,18 @@ async function handleFile(req, res) {
   }
 }
 
+function handleHealth(res) {
+  const out = { ok: true, ollama: false, model: DEFAULT_MODEL, disk: null, gpu: null };
+  fetch(`${OLLAMA_HOST}/api/tags`)
+    .then((r) => r.json())
+    .then((data) => {
+      out.ollama = true;
+      out.model = data.models?.some((m) => m.name === DEFAULT_MODEL) ? DEFAULT_MODEL : `缺失:${DEFAULT_MODEL}`;
+    })
+    .catch((e) => { out.ok = false; out.error = e.message; })
+    .finally(() => sendJSON(res, 200, out));
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (req.method === 'GET' && url === '/api/preflight') {
@@ -564,6 +667,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
   if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
+  if (req.method === 'GET' && url === '/api/health') return handleHealth(res);
   if (req.method === 'GET' && url === '/api/templates') return handleTemplates(res);
   if (req.method === 'GET' && url === '/api/metrics') return handleMetricsGet(res);
   if (req.method === 'POST' && url === '/api/metrics') return handleMetricsPost(req, res);
@@ -580,6 +684,10 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url === '/api/compact') return handleCompact(req, res);
   if (req.method === 'POST' && url === '/api/confirm') return handleConfirm(req, res);
   if (req.method === 'POST' && url === '/api/ask-user') return handleAskUser(req, res);
+  if (req.method === 'GET' && url === '/api/quick/commands') return handleQuickCommands(res);
+  if (req.method === 'POST' && url === '/api/quick') return handleQuick(req, res);
+  if (req.method === 'POST' && url === '/api/quick/apply') return handleQuickApply(req, res);
+  if (req.method === 'POST' && url === '/api/quick/commit') return handleQuickCommit(req, res);
   if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
   if (req.method === 'GET' && url === '/api/fs/dirs') return handleFsDirs(req, res);
   if (req.method === 'GET' && url === '/api/fs/read') return handleFsRead(req, res);
