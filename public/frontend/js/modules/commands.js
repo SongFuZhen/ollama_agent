@@ -74,6 +74,59 @@ let cmdPaletteEl = null;
 let cmdActiveIndex = 0;
 let cmdFiltered = [];
 
+// Toolbox 命令图标映射（按命令名）
+const QUICK_ICONS = {
+  explain: 'book-open',
+  commit: 'git-commit',
+  comment: 'message-square-plus',
+  review: 'scan-search',
+  error: 'triangle-alert',
+  test: 'flask-conical',
+  regex: 'regex',
+  fix: 'wrench',
+};
+
+// Toolbox 命令是否已装入 slash 菜单（避免重复）
+let toolboxLoaded = false;
+
+// 把后端 Toolbox 命令装入 slash 菜单：选中后把「/name 」填入输入框，用户补参数。
+function loadToolboxCommands() {
+  if (toolboxLoaded) return;
+  if (typeof loadQuickCommands !== 'function') return;
+  loadQuickCommands().then((cmds) => {
+    if (toolboxLoaded || !cmds || !cmds.length) return;
+    cmds.forEach((c) => {
+      SLASH_COMMANDS.push({
+        name: c.name,
+        desc: c.desc,
+        icon: QUICK_ICONS[c.name] || 'zap',
+        tag: '工具箱',
+        toolbox: true,
+        usage: c.usage || c.name,
+        run: () => fillToolboxCommand(c.name),
+      });
+    });
+    toolboxLoaded = true;
+    // 若菜单当前可见（用户在输入中），立即重渲染以显示新项
+    if (cmdPaletteEl && !cmdPaletteEl.classList.contains('hidden')) {
+      cmdActiveIndex = 0;
+      renderPalette();
+    }
+  }).catch(() => {});
+}
+
+// 选中 Toolbox 命令：把「/name 」填入输入框并聚焦，等待用户补参数。
+function fillToolboxCommand(name) {
+  const input = $('#input');
+  if (input) {
+    input.value = '/' + name + ' ';
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+    autoResizeInput();
+  }
+}
+
 // @ 选择面板状态（列出全部 tools + skills，可搜索，选中后填入 @name ）
 let atPaletteEl = null;
 let atActiveIndex = 0;
@@ -87,6 +140,7 @@ function initCommands() {
   if (!input) return;
   buildPalette();
   buildAtPalette();
+  loadToolboxCommands();
   input.addEventListener('input', onInputChange);
   // keydown 用 capture 阶段注册，确保早于 app.js 的发送监听，
   // 在面板可见时拦截 Enter/Tab，避免把未完成的 @/! 前缀直接发出去。
@@ -197,6 +251,7 @@ function renderPalette() {
     const textWrap = el('div', 'slash-menu-text');
     textWrap.appendChild(el('span', 'slash-menu-name', '/' + c.name));
     textWrap.appendChild(el('span', 'slash-menu-desc', c.desc));
+    if (c.tag) textWrap.appendChild(el('span', 'slash-menu-tag', c.tag));
     item.appendChild(textWrap);
 
     item.addEventListener('mousedown', (e) => {
@@ -617,8 +672,8 @@ window.showRecall = showRecall;
 /* ----------------------------- */
 /* 任务模板（/template）          */
 /* ----------------------------- */
-// 打开模板选择弹框：列出后端 templates，点击后把 `/template <name> ` 填入输入框，
-// 用户补上具体任务后发送，后端按模板注入"建议路径"。也是关键词自动匹配的手动入口。
+// 打开模板选择弹框：以 Tab 栏列出后端 templates，点击某个 Tab 切换展示其详情；
+// 点击「使用」按钮把 `/template <name> ` 填入输入框。命中关键词时也会自动注入。
 async function showTemplates() {
   let modal = $('#template-modal');
   if (!modal) {
@@ -633,8 +688,11 @@ async function showTemplates() {
           <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
         </div>
         <div class="simpui-dialog-body">
-          <p class="template-hint">选中模板后，输入框将填入「/template 名称 」，再补上你的具体任务发送即可。命中关键词时也会自动注入。</p>
-          <div id="template-list" class="template-list"></div>
+          <p class="template-hint">选择上方 Tab 查看各模板详情，点击「使用」把命令填入输入框，再补上你的具体任务发送即可。命中关键词时也会自动注入。</p>
+          <div class="template-tabs" id="template-tabs"></div>
+          <div class="template-detail" id="template-detail">
+            <div class="recall-loading">加载中…</div>
+          </div>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -642,44 +700,73 @@ async function showTemplates() {
     modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
   }
   modal.classList.remove('hidden');
-  const list = modal.querySelector('#template-list');
-  list.innerHTML = '<div class="recall-loading">加载中…</div>';
+  const tabs = modal.querySelector('#template-tabs');
+  const detail = modal.querySelector('#template-detail');
+  tabs.innerHTML = '<div class="recall-loading">加载中…</div>';
+  detail.innerHTML = '';
   try {
     const r = await fetch('/api/templates');
     const d = await r.json();
     const tpls = Array.isArray(d.templates) ? d.templates : [];
-    if (!tpls.length) { list.innerHTML = '<div class="recall-empty">暂无模板</div>'; return; }
-    list.innerHTML = '';
-    tpls.forEach((t) => {
-      const card = el('div', 'template-card clickable');
-      const head = el('div', 'template-card-head');
-      head.appendChild(el('div', 'template-card-title', t.title));
-      head.appendChild(el('code', 'template-card-name', t.name));
-      card.appendChild(head);
-      const kw = el('div', 'template-card-kw');
-      (t.keywords || []).slice(0, 6).forEach((k) => kw.appendChild(el('code', 'cmd-param', k)));
-      card.appendChild(kw);
-      if (t.body) {
-        const body = el('div', 'template-card-body');
-        body.textContent = t.body;
-        card.appendChild(body);
-      }
-      card.addEventListener('click', () => {
-        const input = $('#input');
-        if (input) {
-          input.value = '/template ' + t.name + ' ';
-          input.focus();
-          autoResizeInput();
-          const len = input.value.length;
-          input.setSelectionRange(len, len);
-        }
-        modal.classList.add('hidden');
+    if (!tpls.length) {
+      tabs.innerHTML = '<div class="recall-empty">暂无模板</div>';
+      detail.innerHTML = '';
+      return;
+    }
+    // 构建 Tab 栏
+    tabs.innerHTML = '';
+    const tabEls = [];
+    tpls.forEach((t, i) => {
+      const tab = el('button', 'template-tab' + (i === 0 ? ' active' : ''), t.title || t.name);
+      tab.dataset.idx = String(i);
+      tab.addEventListener('click', () => {
+        tabEls.forEach((x) => x.classList.remove('active'));
+        tab.classList.add('active');
+        renderTemplateDetail(detail, t);
       });
-      list.appendChild(card);
+      tabs.appendChild(tab);
+      tabEls.push(tab);
     });
+    // 默认展示第一个
+    renderTemplateDetail(detail, tpls[0]);
   } catch (e) {
-    list.innerHTML = '<div class="recall-empty">加载失败</div>';
+    tabs.innerHTML = '<div class="recall-empty">加载失败</div>';
+    detail.innerHTML = '';
   }
+}
+
+// 渲染选中模板的详情面板
+function renderTemplateDetail(detail, t) {
+  detail.innerHTML = '';
+  const head = el('div', 'template-detail-head');
+  head.appendChild(el('div', 'template-detail-title', t.title || t.name));
+  head.appendChild(el('code', 'template-card-name', t.name));
+  detail.appendChild(head);
+
+  const kw = el('div', 'template-card-kw');
+  (t.keywords || []).slice(0, 6).forEach((k) => kw.appendChild(el('code', 'cmd-param', k)));
+  detail.appendChild(kw);
+
+  if (t.body) {
+    const body = el('div', 'template-card-body');
+    body.textContent = t.body;
+    detail.appendChild(body);
+  }
+
+  const useBtn = el('button', 'simpui-btn primary sm template-use-btn', '使用此模板');
+  useBtn.addEventListener('click', () => {
+    const input = $('#input');
+    if (input) {
+      input.value = '/template ' + t.name + ' ';
+      input.focus();
+      if (typeof autoResizeInput === 'function') autoResizeInput();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+    const modal = $('#template-modal');
+    if (modal) modal.classList.add('hidden');
+  });
+  detail.appendChild(useBtn);
 }
 
 /* ----------------------------- */

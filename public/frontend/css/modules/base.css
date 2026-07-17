@@ -74,6 +74,7 @@
 
   /* 语义状态色 */
   --danger: #dc2626;
+  --danger-dim: rgba(220, 38, 38, .12);    /* 错误态淡底色 / ring */
   --success: #198754;
   --warning: #b45309;
   --warning-dim: rgba(180, 83, 9, .12);
@@ -91,7 +92,33 @@
   --code-bg: rgba(0, 0, 0, .05);       /* 行内代码底色（浅） */
   --simpui-input-border: rgba(0, 0, 0, .08);
 
+  /* 补全组件层（input.css / select.css）引用但未定义的变量。
+     优先映射 simpui 已有变量（--simpui-bg / --simpui-focus / --simpui-input-border /
+     --simpui-text-dim / --simpui-heading-color），simpui 未提供的再自定义。
+     焦点主色用 --accent，与全局主色一致。 */
+  --chalk: var(--simpui-heading-color);      /* 输入框主文字色（simpui 已有） */
+  --mist: var(--simpui-text-dim);            /* placeholder / hover 边框 / 箭头（simpui 已有） */
+  --err: var(--danger);                      /* 错误态（项目语义色） */
+  --err-dim: var(--danger-dim);              /* 错误态淡 ring（自定义，见下） */
+  --volt: var(--accent);                     /* focus 主色（统一为品牌蓝） */
+  --volt-dim: var(--accent-dim);             /* focus ring（与全局一致） */
+  --panel: var(--simpui-bg);                 /* 输入框 / 下拉背景（simpui 已有） */
+  --panel-2: var(--simpui-focus);            /* hover / 子项背景（simpui 已有灰底） */
+  --panel-3: var(--simpui-input-border);     /* 边框（simpui 已有） */
+  --font-body: var(--font-mono);             /* 组件字体（项目全局等宽字体） */
+  --shadow: var(--simpui-shadow, 0 2px 8px rgba(0, 0, 0, .12)); /* 浮层阴影（simpui 优先，回退自定义） */
+  --foreground: var(--simpui-heading-color); /* 主文字色别名 */
+  --on-primary: #fff;                        /* 主色按钮上的文字色（深/浅主色均适配） */
+
   font-size: 14px;
+}
+
+/* 浅色主题下，simpui 原生 primary 按钮默认硬编码 #0d6efd，与项目 --primary 不一致，
+   此处接管为 --primary，保证 light/dark 下主色统一 */
+.simpui-btn.primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
 .dark {
@@ -118,6 +145,9 @@
   --tool-hover: rgba(34, 211, 238, .10); /* 工具块 hover：暗色下极淡 tint */
   --code-bg: rgba(255, 255, 255, .08);  /* 行内代码底色（暗色浅） */
   --simpui-input-border: rgba(255, 255, 255, .08);
+  /* 暗色下补充语义变量（与浅色同源，取值适配深色） */
+  --danger-dim: rgba(248, 113, 113, .20);
+  --shadow: 0 2px 10px rgba(0, 0, 0, .45);   /* 暗色浮层阴影更深 */
 }
 
 /* Reset */

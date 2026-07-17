@@ -98,8 +98,8 @@
 }
 
 .select-option.selected {
-  background: var(--volt-dim);
-  color: var(--volt);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .select-option.disabled {

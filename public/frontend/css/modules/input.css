@@ -150,9 +150,12 @@
   transition: background 0.15s;
 }
 
-.slash-menu-item:hover,
-.slash-menu-item.active {
+.slash-menu-item:hover {
   background: var(--simpui-focus);
+}
+.slash-menu-item.active {
+  background: var(--primary);
+  color: #fff;
 }
 
 .slash-menu-icon {

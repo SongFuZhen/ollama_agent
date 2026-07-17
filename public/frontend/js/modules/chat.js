@@ -439,6 +439,11 @@ async function send(opts = {}) {
 
   const convId = state.conversationId;
 
+  // Toolbox 命令（/explain、/commit …）：单轮走 /api/quick，不经过 Agent 循环
+  if (typeof isQuickCommand === 'function' && !opts.overrideMode && await isQuickCommand(text)) {
+    return runQuickCommand(text);
+  }
+
   const imgs = pendingImages.slice();
   inputEl.value = '';
   autoResizeInput();

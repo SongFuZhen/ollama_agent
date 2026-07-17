@@ -39,4 +39,5 @@ const state = {
   currentStreamModel: null,  // 当前流式会话实际使用的模型（来自 meta 事件）
   installedModels: [],       // Ollama 已安装模型列表（来自 preflight）
   tools: [],                // 后端工具规格（来自 meta 事件，用于 /skills）
+  quickCommands: null,       // Toolbox 命令列表（来自 /api/quick/commands，缓存）
 };

@@ -85,7 +85,7 @@
 }
 
 .debug-icon.error {
-  color: var(--error);
+  color: var(--danger);
 }
 
 /* 弹性空间 */

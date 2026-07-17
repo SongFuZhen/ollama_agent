@@ -454,7 +454,7 @@ body.dark .plan-actions .simpui-btn.secondary:hover {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  background: var(--bg-soft);
+  background: var(--surface-2);
 }
 
 .recall-card-head {
@@ -464,7 +464,7 @@ body.dark .plan-actions .simpui-btn.secondary:hover {
 .recall-card-body {
   font-size: 13px;
   line-height: 1.6;
-  color: var(--simpui-text-color);
+  color: var(--simpui-text-dim);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -659,48 +659,75 @@ body.dark .plan-actions .simpui-btn.secondary:hover {
   .heal-spinner { animation: none; }
 }
 
-/* 任务模板卡片（/template 弹框） */
+/* 任务模板（/template 弹框）—— Tab 布局 */
 .template-hint,
 .metrics-hint { color: var(--simpui-text-dim); font-size: 13px; margin: 0 0 12px; }
-.template-list { display: flex; flex-direction: column; gap: 8px; }
-.template-card {
+
+/* Tab 栏 */
+.template-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 14px;
+}
+.template-tab {
+  appearance: none;
   border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  padding: 10px 12px;
   background: var(--surface-2);
-  transition: border-color .15s, box-shadow .15s;
+  color: var(--simpui-text-dim);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
 }
-.template-card:hover {
+.template-tab:hover {
   border-color: var(--simpui-focus);
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  color: var(--foreground);
 }
-.template-card-head {
+.template-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 详情面板 */
+.template-detail {
+  min-height: 120px;
+}
+.template-detail-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.template-card-title { font-weight: 600; }
-.template-card-name {
+.template-detail-title { font-weight: 600; font-size: 15px; }
+.template-detail .template-card-name {
   font-size: 11px;
   color: var(--simpui-text-dim);
   opacity: .7;
 }
-.template-card-kw { display: flex; flex-wrap: wrap; gap: 4px; }
-.template-card-kw .cmd-param { font-size: 11px; opacity: .8; }
-.template-card-body {
-  margin-top: 8px;
-  padding: 8px 10px;
+.template-detail .template-card-kw { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.template-detail .template-card-kw .cmd-param { font-size: 11px; opacity: .8; }
+.template-detail .template-card-body {
+  margin-top: 4px;
+  padding: 10px 12px;
   border-left: 3px solid var(--border-soft);
+  border-radius: 0 6px 6px 0;
+  background: var(--surface-2);
   font-size: 12px;
   line-height: 1.6;
   color: var(--simpui-text-dim);
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
 }
-.template-card:hover .template-card-body {
-  border-left-color: var(--simpui-focus);
-}
+.template-use-btn { margin-top: 16px; }
 
 /* 优化指标（/metrics 弹框） */
 .metrics-body { display: flex; flex-direction: column; gap: 6px; }
@@ -743,3 +770,29 @@ body.dark .plan-actions .simpui-btn.secondary:hover {
 .plan-risks { padding: 8px 12px; border-top: 1px solid var(--border-soft); }
 .plan-risks-title { font-size: 12px; color: var(--simpui-text-dim); margin-bottom: 4px; }
 .plan-risk { font-size: 12px; color: var(--danger); }
+
+/* ---------- slash 菜单：工具箱标签 ---------- */
+.slash-menu-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  border-radius: 4px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+
+/* ---------- Toolbox 答案卡片动作区 ---------- */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-soft);
+}

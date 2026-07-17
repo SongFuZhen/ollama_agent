@@ -264,7 +264,7 @@ select, textarea {
 }
 
 .dir-picker-err {
-  color: var(--error);
+  color: var(--danger);
 }
 
 .dir-picker-foot {
