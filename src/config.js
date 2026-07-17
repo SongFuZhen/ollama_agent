@@ -41,7 +41,7 @@ const VERIFY_EVERY = 2;       // 执行模式下每 N 步自动跑一次验证�
 const SELF_HEAL = (process.env.SELF_HEAL || 'on') !== 'off'; // 默认开启，SELF_HEAL=off 关闭
 const MAX_HEAL_STEPS = Number(process.env.MAX_HEAL_STEPS) || 3; // 单次验证失败后的最大修复重试步数
 const COMPACT_RECENT_K = 6;    // 压缩时保留最近 K 条消息不摘要
-const COMPACT_THRESHOLD = 0.7; // prompt token 越过 NUM_CTX*该比例时触发压缩
+const COMPACT_THRESHOLD = Number(process.env.COMPACT_THRESHOLD) || 0.6; // 8K 窗口下更早压缩，避免截断早期上下文
 
 // 支持原生 Ollama tools API 的模型（按名称前缀匹配）
 // 注意：大多数社区 tool-calling 模型只是文本输出 JSON，不适合走原生 tools
