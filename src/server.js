@@ -9,7 +9,7 @@ const { runAgent } = require('./core/agent');
 const { listModels, hostParts } = require('./core/ollama');
 const { safeResolve, allSpecs } = require('./tools/index');
 const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = require('./storage/rootstore');
-const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST, COMPACT_RECENT_K } = require('./config');
+const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST, NUM_CTX, COMPACT_RECENT_K } = require('./config');
 const { compactMessages } = require('./core/compact');
 const { resolveMode } = require('./core/workflow');
 const { allTemplates } = require('./core/template-loader');
@@ -385,6 +385,7 @@ function handleConfig(res) {
     projectRoot: PROJECT_ROOT,
     tools: allSpecs(),
     defaultModel: DEFAULT_MODEL,   // 状态栏模型名不再依赖 preflight 往返（离线也可显示）
+    numCtx: NUM_CTX,               // 当前会话实际推理窗口（活跃上下文上限，用于状态栏用量计算）
   });
 }
 

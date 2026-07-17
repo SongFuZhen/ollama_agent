@@ -93,7 +93,7 @@ function clearDiagToasts() {
 let lastGitRoot = null; // 已查询过分支的沙箱根，避免重复请求
 
 function resetSessionStats() {
-  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0, contextTokens: 0, contextLimit: state.sessionStats.contextLimit || 0 };
+  state.sessionStats = { startTs: null, toolCounts: {}, msgCount: 0, ttftSum: 0, ttftCount: 0, totalTimeSum: 0, contextTokens: 0, contextLimit: state.sessionStats.contextLimit || 0, modelContextMax: 0 };
 }
 
 function formatElapsed(ms) {
@@ -116,7 +116,9 @@ async function fetchModelContext() {
     if (!r.ok) return;
     const d = await r.json();
     if (d.contextSize > 0) {
-      state.sessionStats.contextLimit = d.contextSize;
+      state.sessionStats.modelContextMax = d.contextSize;   // 模型原生上限（如 33k）
+      // 活跃窗口优先用后端 NUM_CTX（如 8k），否则回退模型原生上限
+      state.sessionStats.contextLimit = state.numCtx || d.contextSize;
       renderSessionState();
     }
   } catch (e) { /* 忽略 */ }
@@ -165,11 +167,15 @@ function renderSessionState() {
   // 渲染上下文用量条
   renderContextBar();
 
-  // 上下文用量文本：始终显示 token 用量（如 0/131k 0%），清除状态不在此处覆盖
+  // 上下文用量文本：始终显示 token 用量（如 0/8k 0%），清除状态不在此处覆盖
   if (ssContextText) {
     ssContextText.textContent = state.sessionStats.contextLimit > 0
       ? `${formatTokenCount(state.sessionStats.contextTokens || 0)}/${formatTokenCount(state.sessionStats.contextLimit)} ${Math.round((state.sessionStats.contextTokens || 0) / state.sessionStats.contextLimit * 100)}%`
       : (state.sessionStats.contextTokens || 0) > 0 ? formatTokenCount(state.sessionStats.contextTokens || 0) + '/?' : '—';
+    // tooltip 区分活跃窗口与模型原生上限，避免 8k 被误读为 33k
+    ssContextText.title = state.sessionStats.modelContextMax > 0
+      ? `活跃窗口 ${formatTokenCount(state.sessionStats.contextLimit)} / 模型上限 ${formatTokenCount(state.sessionStats.modelContextMax)}`
+      : `活跃窗口 ${formatTokenCount(state.sessionStats.contextLimit)}`;
   }
 }
 
@@ -211,8 +217,9 @@ function buildStateDetail() {
   const removedCount = state.excludedMids ? state.excludedMids.size : 0;
   const ctxTokens = state.sessionStats.contextTokens || 0;
   const ctxLimit = state.sessionStats.contextLimit || 0;
+  const ctxMax = state.sessionStats.modelContextMax || 0;
   const ctxLine = ctxLimit > 0
-    ? `上下文用量: ${formatTokenCount(ctxTokens)} / ${formatTokenCount(ctxLimit)} (${Math.round(ctxTokens / ctxLimit * 100)}%)`
+    ? `上下文用量: ${formatTokenCount(ctxTokens)} / ${formatTokenCount(ctxLimit)} (${Math.round(ctxTokens / ctxLimit * 100)}%)${ctxMax > 0 && ctxMax !== ctxLimit ? `  [模型上限 ${formatTokenCount(ctxMax)}]` : ''}`
     : `上下文用量: ${ctxTokens > 0 ? formatTokenCount(ctxTokens) : '—'}`;
 
   return `模型: ${model}
@@ -290,6 +297,7 @@ function setActiveModel(model) {
   // 切换模型时重置上下文统计并查询新模型的 context window
   state.sessionStats.contextTokens = 0;
   state.sessionStats.contextLimit = 0;
+  state.sessionStats.modelContextMax = 0;
   fetchModelContext();
   renderSessionState();
 }

@@ -148,6 +148,7 @@ async function loadConfig() {
     const d = await r.json();
     state.defaultModel = d.defaultModel || null;
     state.tools = Array.isArray(d.tools) ? d.tools : [];
+    state.numCtx = d.numCtx || null;   // 活跃推理窗口（8K），优先作为上下文上限
   } catch (e) { console.error('loadConfig failed', e); }
 }
 

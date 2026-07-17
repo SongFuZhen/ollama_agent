@@ -16,6 +16,7 @@ const state = {
   currentProjectRoot: null, // 当前对话绑定的项目目录（绝对路径）
   serverDefaultRoot: null,  // 服务端默认沙箱根（兜底显示）
   defaultModel: null,       // 后端默认模型
+  numCtx: null,             // 后端配置的活跃推理窗口（NUM_CTX，如 8192）
   gitBranch: '',            // 当前沙箱目录的 git 分支（无则为空）
   sessionStats: {           // 会话状态栏统计
     startTs: null,          // 会话起始时间（毫秒）
@@ -25,7 +26,8 @@ const state = {
     ttftCount: 0,           // TTFT 样本数
     totalTimeSum: 0,        // 总耗时累计毫秒
     contextTokens: 0,       // 最近一次 prompt_eval_count（上下文用量）
-    contextLimit: 0,        // 模型 context window 大小（0=未知）
+    contextLimit: 0,        // 活跃上下文上限（优先用 numCtx，未知时回退模型原生上限）
+    modelContextMax: 0,     // 模型原生 context window 上限（如 32768），仅作副标题/tooltip
   },
   bootDone: false,          // 启动序列完成
   conversationCleared: false, // 标记用户已点击「清除上下文」
