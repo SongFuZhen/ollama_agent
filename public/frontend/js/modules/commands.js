@@ -56,6 +56,18 @@ const SLASH_COMMANDS = [
     icon: 'search',
     run: () => showRecall(),
   },
+  {
+    name: 'template',
+    desc: '使用任务模板（固化高频任务步骤）',
+    icon: 'list-tree',
+    run: showTemplates,
+  },
+  {
+    name: 'metrics',
+    desc: '查看优化指标（埋点）',
+    icon: 'activity',
+    run: showMetrics,
+  },
 ];
 
 let cmdPaletteEl = null;
@@ -291,6 +303,7 @@ function onInputKeydown(e) {
 function runCommand(cmd) {
   const input = $('#input');
   input.value = '';
+  autoResizeInput(); // 同步字数统计与高度（input 事件不会因直接赋值触发）
   hidePalette();
   cmd.run();
 }
@@ -464,13 +477,17 @@ function clearChat() {
   showSimpuiToast('已清空上下文', '之前的对话不再作为上下文，后续消息从空白开始');
 }
 
-// /compress：把中间旧历史摘要化，降低后续上下文 token 占用
+// /compress：把中间旧历史摘要化，降低后续上下文 token 占用。
+// 优先走模型摘要；模型不可用（离线）时直接本地硬截断旧历史，保证手动压缩一定生效。
 async function compressContext() {
   const history = state.history || [];
-  if (history.length <= 6) {
+  const RECENT_K = 6;
+  if (history.length <= RECENT_K) {
     showSimpuiToast('提示', '上下文较短，暂无需压缩');
     return;
   }
+
+  let compacted = null;
   try {
     const r = await fetch('/api/compact', {
       method: 'POST',
@@ -482,34 +499,37 @@ async function compressContext() {
       }),
     });
     const d = await r.json();
-    if (d && d.ok && d.compacted && Array.isArray(d.history)) {
-      // compactMessages 把中间段合成一条 system 摘要；前端转为 user 消息，
-      // 使后续发送仍能被后端 validHistory 保留进上下文
-      state.history = d.history.map((h) =>
-        h.role === 'system'
-          ? { role: 'user', content: h.content, mid: nextMid() }
-          : { role: h.role, content: h.content, mid: h.mid || null }
-      );
-      // 记录压缩分隔线位置（按 DOM 消息序号，避免 state.history 被 HISTORY_LIMIT 截断导致错位）。
-      // state.history 是 DOM 消息的尾部，保留最近 6 条，分隔线落在它们之前。
-      const totalMsgs = state.session ? state.session.querySelectorAll('.msg').length : 0;
-      state.compactDivider = totalMsgs > 6 ? (totalMsgs - 7) : null;
-      const session = state.session;
-      if (session) {
-        const div = el('div', 'context-clear-divider');
-        div.textContent = '上下文已压缩';
-        session.appendChild(div);
-      }
-      if (typeof scrollDown === 'function') scrollDown(true);
-      // 立即落库，确保重开对话仍可见压缩状态与压缩后的历史
-      if (state.conversationId) saveConversation();
-      showSimpuiToast('已压缩', '中间历史已摘要化，后续消息携带压缩后的上下文');
-    } else {
-      showSimpuiToast('提示', '上下文较短或压缩失败，未做处理');
-    }
+    if (d && d.ok && d.compacted && Array.isArray(d.history)) compacted = d.history;
   } catch (e) {
-    showSimpuiToast('错误', '压缩失败: ' + (e.message || e));
+    // 离线/异常：走本地兜底，直接丢弃中间旧历史
   }
+
+  // 模型摘要不可用：本地硬截断，保留最近 RECENT_K 条，直接压缩上下文
+  if (!compacted) {
+    compacted = history.slice(-RECENT_K).map((h) => ({ role: h.role, content: h.content }));
+  }
+
+  // compactMessages 把中间段合成一条 system 摘要；前端转为 user 消息，
+  // 使后续发送仍能被后端 validHistory 保留进上下文
+  state.history = compacted.map((h) =>
+    h.role === 'system'
+      ? { role: 'user', content: h.content, mid: nextMid() }
+      : { role: h.role, content: h.content, mid: h.mid || null }
+  );
+  // 记录压缩分隔线位置（按 DOM 消息序号，避免 state.history 被 HISTORY_LIMIT 截断导致错位）。
+  // state.history 是 DOM 消息的尾部，保留最近 6 条，分隔线落在它们之前。
+  const totalMsgs = state.session ? state.session.querySelectorAll('.msg').length : 0;
+  state.compactDivider = totalMsgs > 6 ? (totalMsgs - 7) : null;
+  const session = state.session;
+  if (session) {
+    const div = el('div', 'context-clear-divider');
+    div.textContent = '上下文已压缩';
+    session.appendChild(div);
+  }
+  if (typeof scrollDown === 'function') scrollDown(true);
+  // 立即落库，确保重开对话仍可见压缩状态与压缩后的历史
+  if (state.conversationId) saveConversation();
+  showSimpuiToast('已压缩', '中间历史已压缩，后续消息携带压缩后的上下文');
 }
 
 // 导出供状态栏点击使用
@@ -593,3 +613,117 @@ async function runRecall(query, modal) {
 }
 
 window.showRecall = showRecall;
+
+/* ----------------------------- */
+/* 任务模板（/template）          */
+/* ----------------------------- */
+// 打开模板选择弹框：列出后端 templates，点击后把 `/template <name> ` 填入输入框，
+// 用户补上具体任务后发送，后端按模板注入"建议路径"。也是关键词自动匹配的手动入口。
+async function showTemplates() {
+  let modal = $('#template-modal');
+  if (!modal) {
+    modal = el('div', 'simpui-dialog-backdrop hidden');
+    modal.id = 'template-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML = `
+      <div class="simpui-dialog-panel md">
+        <div class="simpui-dialog-header">
+          <h3 class="simpui-dialog-title">任务模板</h3>
+          <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+        </div>
+        <div class="simpui-dialog-body">
+          <p class="template-hint">选中模板后，输入框将填入「/template 名称 」，再补上你的具体任务发送即可。命中关键词时也会自动注入。</p>
+          <div id="template-list" class="template-list"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
+  }
+  modal.classList.remove('hidden');
+  const list = modal.querySelector('#template-list');
+  list.innerHTML = '<div class="recall-loading">加载中…</div>';
+  try {
+    const r = await fetch('/api/templates');
+    const d = await r.json();
+    const tpls = Array.isArray(d.templates) ? d.templates : [];
+    if (!tpls.length) { list.innerHTML = '<div class="recall-empty">暂无模板</div>'; return; }
+    list.innerHTML = '';
+    tpls.forEach((t) => {
+      const card = el('div', 'template-card clickable');
+      card.appendChild(el('div', 'template-card-title', t.title));
+      const kw = el('div', 'template-card-kw');
+      (t.keywords || []).slice(0, 6).forEach((k) => kw.appendChild(el('code', 'cmd-param', k)));
+      card.appendChild(kw);
+      card.addEventListener('click', () => {
+        const input = $('#input');
+        if (input) {
+          input.value = '/template ' + t.name + ' ';
+          input.focus();
+          autoResizeInput();
+          const len = input.value.length;
+          input.setSelectionRange(len, len);
+        }
+        modal.classList.add('hidden');
+      });
+      list.appendChild(card);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="recall-empty">加载失败</div>';
+  }
+}
+
+/* ----------------------------- */
+/* 优化指标（/metrics）           */
+/* ----------------------------- */
+async function showMetrics() {
+  let modal = $('#metrics-modal');
+  if (!modal) {
+    modal = el('div', 'simpui-dialog-backdrop hidden');
+    modal.id = 'metrics-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML = `
+      <div class="simpui-dialog-panel md">
+        <div class="simpui-dialog-header">
+          <h3 class="simpui-dialog-title">优化指标</h3>
+          <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+        </div>
+        <div class="simpui-dialog-body">
+          <p class="metrics-hint">量化 7B 小模型优化效果（详见 docs/optimization-plan.md）。数值为进程级累计。</p>
+          <div id="metrics-body" class="metrics-body"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
+  }
+  modal.classList.remove('hidden');
+  const body = modal.querySelector('#metrics-body');
+  body.innerHTML = '<div class="recall-loading">加载中…</div>';
+  try {
+    const r = await fetch('/api/metrics');
+    const m = await r.json();
+    const rows = [
+      ['JSON 解析失败率', (m.json_parse_failure_rate * 100).toFixed(1) + '%', '目标 < 5%'],
+      ['总工具调用次数', m.total_calls, '—'],
+      ['JSON 解析失败次数', m.json_parse_failures, '—'],
+      ['重复工具调用次数', m.repeat_tool_calls, '目标占比 < 10%'],
+      ['自愈触发次数', m.self_heal_triggered, '目标占比 < 20%'],
+      ['上下文压缩触发次数', m.context_compact_triggered, '目标占比 < 30%'],
+      ['任务成功率', (m.task_success_rate * 100).toFixed(1) + '%', '目标 > 80%'],
+      ['模板命中次数', m.template_hit || 0, '—'],
+    ];
+    body.innerHTML = '';
+    rows.forEach(([label, val, target]) => {
+      const row = el('div', 'metrics-row');
+      row.appendChild(el('span', 'metrics-label', label));
+      row.appendChild(el('span', 'metrics-val', String(val)));
+      row.appendChild(el('span', 'metrics-target', target));
+      body.appendChild(row);
+    });
+  } catch (e) {
+    body.innerHTML = '<div class="recall-empty">加载失败</div>';
+  }
+}

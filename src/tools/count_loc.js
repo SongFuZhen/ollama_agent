@@ -38,7 +38,7 @@ async function scan(dir, root, stats) {
 
 module.exports = {
   name: 'count_loc',
-  desc: '递归统计沙箱内代码行数/文件数（按扩展名汇总，区分空行与注释行）；想了解项目规模或各语言占比时用',
+  desc: '递归统计沙箱内代码行数/文件数（按扩展名汇总，区分空行与注释行）；想了解项目规模或各语言占比时用。注意：本工具已内置递归遍历，传入目录即可一次性统计其下所有文件，无需先调用 list_dir / tree 探路。',
   params: { path: '相对项目根的目标目录，默认根目录' },
   needConfirm: false,
 

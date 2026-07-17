@@ -20,6 +20,8 @@
 - `resolveDirectCall` 匹配范围由仅 skill 扩大到 `specsFor()` 全部工具/技能；`buildSkillParams` 新增通用参数映射。
 - 前端 `onInputKeydown` 改用 capture 阶段注册，面板可见时拦截 Enter/Tab，避免把未完成的 `@xxx` 误发送。
 - 输入框 placeholder 更新为提示三种语法（`@` 调用工具、`!` 执行命令、`/` 查看命令）。
+- **`list_dir` / `tree` 重复检测 key 改为 `action + 路径参数`**（`src/core/agent.js`）：原实现仅按 action 名去重，弱模型"逐层下钻不同路径"时 key 不重复、`repeatCount` 被 reset，往往耗光 `MAX_STEPS` 才收尾；现把 `path`/`dir`/`target` 并入 key，不同路径的连续下钻也会更早触发 step 2 警告与 step 3 强制收尾。非 REPEAT_PRONE 工具仍按 `action + JSON(params)` 精确去重。
+- **`count_loc` 工具描述补充提示**：显式说明本工具已内置递归遍历，传入目录即可一次性统计其下所有文件，**无需先调用 `list_dir` / `tree` 探路**，从源头减少弱模型"先列目录再统计"的多余步数消耗。
 
 ### Fixed
 - 修正文档第六节点过时描述（`resolveSkillCall` → `resolveDirectCall`，匹配范围更正为全部工具/技能）。

@@ -190,7 +190,8 @@ function handleEvent(ev) {
       // 工具调用，追加到当前消息容器；标签明确显示正在跑哪个工具
       toggleThinking(true, '执行工具：' + ev.action + phaseStep(ev.step));
       ensureMessageContainer();
-      appendToolCall(ev.action, ev.params, null, ev.root || effectiveRoot() || '');
+      // @ 直接调用（step=0）跳过参数 JSON 卡片，仅展示结果，避免冗余
+      appendToolCall(ev.action, ev.params, null, ev.root || effectiveRoot() || '', ev.step === 0);
       // 累计工具调用次数到状态栏
       state.sessionStats.toolCounts[ev.action] = (state.sessionStats.toolCounts[ev.action] || 0) + 1;
       renderSessionState();
@@ -287,7 +288,7 @@ function handleEvent(ev) {
       // 规划模式最终返回的执行计划：渲染为答案卡片，并追加「确认执行」按钮
       // 形成二段式闭环——用户确认后以 mode:'execute' 重发原始消息（history 自动含本计划）。
       toggleThinking(false);
-      finalizeAnswer(ev.content, true);
+      finalizeAnswer(ev.content, ev.plan);
       appendPlanActions();
       break;
 

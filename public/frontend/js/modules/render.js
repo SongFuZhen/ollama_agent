@@ -21,6 +21,23 @@ const COPY_DONE_ICON = `<svg class="copy-icon" viewBox="0 0 24 24" fill="none" s
 // 复制按钮：复用 simpui .lightbtn，点击后短暂显示「已复制」勾选图标
 const COPY_LABEL = '<span class="copy-text">复制</span>';
 const COPY_DONE_LABEL = '<span class="copy-text">已复制</span>';
+
+// grep 命中高亮：用已知的搜索 pattern 在结果文本中就地包裹 <mark>。
+// 直接在客户端根据 pattern 高亮，避免把控制字符写进工具结果（否则会污染模型上下文 / 历史显示乱码）。
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function highlightGrep(text, pattern) {
+  if (!text) return '（无输出）';
+  let html = escapeHtml(text);
+  if (pattern) {
+    let re = null;
+    try { re = new RegExp(pattern, 'gi'); } catch (e) { re = null; }
+    if (re) html = html.replace(re, (m) => '<mark class="grep-hit">' + m + '</mark>');
+  }
+  return html;
+}
+
 function makeCopyBtn(text) {
   const copy = el('button', 'copy lightbtn sm');
   copy.title = '复制';
@@ -34,6 +51,38 @@ function makeCopyBtn(text) {
     });
   };
   return copy;
+}
+
+// 代码块专用复制按钮：点击只复制该段代码（getText 取 code 文本）
+function makeCodeCopyBtn(getText) {
+  const copy = el('button', 'copy lightbtn sm code-copy-btn');
+  copy.type = 'button';
+  copy.title = '复制代码';
+  copy.setAttribute('aria-label', '复制代码');
+  copy.innerHTML = COPY_ICON + COPY_LABEL;
+  copy.onclick = () => {
+    const text = typeof getText === 'function' ? getText() : '';
+    navigator.clipboard?.writeText(text).then(() => {
+      copy.innerHTML = COPY_DONE_ICON + COPY_DONE_LABEL;
+      copy.title = '已复制';
+      setTimeout(() => { copy.innerHTML = COPY_ICON + COPY_LABEL; copy.title = '复制代码'; }, 1200);
+    });
+  };
+  return copy;
+}
+
+// 为气泡内每个代码块（pre.hljs）包裹 .code-block 并挂独立复制按钮，仅复制该段代码。
+// 已在 .code-block 内的 pre 跳过，避免流式重渲染时重复包裹。
+function addCodeCopyButtons(root) {
+  if (!root) return;
+  root.querySelectorAll('pre.hljs').forEach((pre) => {
+    if (pre.parentElement && pre.parentElement.classList.contains('code-block')) return;
+    const code = pre.querySelector('code');
+    const wrap = el('div', 'code-block');
+    pre.replaceWith(wrap);
+    wrap.appendChild(pre);
+    wrap.appendChild(makeCodeCopyBtn(() => (code ? code.textContent : pre.textContent)));
+  });
 }
 
 // 清除上下文按钮（单条移出上下文的开关）：按钮变红表示该消息已从上下文排除
@@ -425,6 +474,7 @@ function appendAnswer(text, mid) {
   bubble.innerHTML = renderMarkdown(text);
   bindImagePreview(bubble); // markdown 内图片点击预览
   renderMermaidBlocks(bubble);
+  addCodeCopyButtons(bubble);
 
   // 底部：模型名 + 时间 + 复制 + 清除上下文
   // 模型名优先使用下拉选中的模型，否则用后端默认
@@ -487,8 +537,12 @@ function updateThinkContent(text) {
 }
 
 // 工具调用块：可折叠，直接显示结果
-function appendToolCall(action, params, result, root) {
+function appendToolCall(action, params, result, root, skipParams) {
   const toolWrap = el('div', 'tool-block');
+  toolWrap.dataset.action = action; // 供结果渲染时判断是否为 grep（需高亮命中）
+  if (action === 'grep' && params && params.pattern) {
+    toolWrap.dataset.grepPattern = params.pattern; // 供 grep 结果高亮用
+  }
   // 默认折叠；结果仍在加载（执行中）时保持展开，便于观察
   toolWrap.setAttribute('data-collapsed', result === null || result === undefined ? 'false' : 'true');
 
@@ -506,15 +560,22 @@ function appendToolCall(action, params, result, root) {
   const title = el('span', 'tool-name', action);
   header.appendChild(title);
 
-  // 参数显示：同时展示模型传入的参数和当前生效的沙箱根
-  const displayParams = Object.assign({}, params);
-  if (root) displayParams.root = root;
-  const paramsStr = JSON.stringify(displayParams, null, 2);
-  const paramsEl = el('div', 'tool-params', paramsStr);
+  // 参数显示：展示模型传入的参数与生效的沙箱根。
+  // @ 直接调用（skipParams=true）跳过参数 JSON 卡片，避免冗余展示。
+  let paramsEl = null;
+  if (!skipParams) {
+    const displayParams = Object.assign({}, params);
+    if (root) displayParams.root = root;
+    const paramsStr = JSON.stringify(displayParams, null, 2);
+    paramsEl = el('div', 'tool-params', paramsStr);
+  }
 
   // 工具结果：结果未返回前显示加载占位，避免空白块
   const body = el('div', 'tool-result');
-  if (result !== null && result !== undefined && String(result).length > 0) {
+  if (action === 'grep' && result !== null && result !== undefined && String(result).length > 0) {
+    // 已加载的 grep 结果（含历史恢复）同样高亮命中，不污染数据
+    body.innerHTML = highlightGrep(String(result), params && params.pattern);
+  } else if (result !== null && result !== undefined && String(result).length > 0) {
     body.textContent = result;
   } else {
     body.classList.add('loading');
@@ -527,8 +588,9 @@ function appendToolCall(action, params, result, root) {
     toolWrap.setAttribute('data-collapsed', collapsed ? 'false' : 'true');
   };
 
+  // 渲染顺序固定为：工具头 -> 参数 -> 结果
   toolWrap.appendChild(header);
-  toolWrap.appendChild(paramsEl);
+  if (paramsEl) toolWrap.appendChild(paramsEl);
   toolWrap.appendChild(body);
   state.streamingSteps.appendChild(toolWrap);
   scrollDown(true);
@@ -541,17 +603,20 @@ function updateToolResult(result) {
     const lastBlock = toolBlocks[toolBlocks.length - 1];
     const resultEl = lastBlock.querySelector('.tool-result');
     if (resultEl) {
-      setToolResult(resultEl, result);
+      setToolResult(resultEl, result, lastBlock.dataset.action, lastBlock.dataset.grepPattern);
     }
   }
 }
 
-// 写入工具结果：空结果也去掉「执行中…」占位，避免结束后仍显示加载态
-function setToolResult(resultEl, result) {
+// 写入工具结果：空结果也去掉「执行中…」占位，避免结束后仍显示加载态。
+// grep 结果走高亮渲染（按 pattern 把命中串换成 <mark>），其余工具原样文本。
+function setToolResult(resultEl, result, action, pattern) {
   resultEl.classList.remove('loading');
   resultEl.innerHTML = '';
   const text = result === null || result === undefined ? '' : String(result);
-  if (text.length === 0) {
+  if (action === 'grep') {
+    resultEl.innerHTML = highlightGrep(text, pattern);
+  } else if (text.length === 0) {
     resultEl.textContent = '（无输出）';
   } else {
     resultEl.textContent = text;
@@ -612,22 +677,31 @@ function appendToken(token) {
   state.streamingText += token;
   state.streamingAnswer.innerHTML = renderMarkdown(state.streamingText);
   bindImagePreview(state.streamingAnswer); // 流式过程中新出现的 img 也绑定
+  addCodeCopyButtons(state.streamingAnswer);
   scrollDown();
 }
 
 // 最终确定答案
-function finalizeAnswer(content) {
+ function finalizeAnswer(content, plan) {
   if (state.streamingAnswer) {
     // 已有流式输出，更新为最终内容
     state.streamingAnswer.innerHTML = renderMarkdown(content);
     bindImagePreview(state.streamingAnswer);
     renderMermaidBlocks(state.streamingAnswer);
+    addCodeCopyButtons(state.streamingAnswer);
   } else {
     // 没有流式输出，创建新的答案元素
     ensureMessageContainer();
     state.streamingAnswer.innerHTML = renderMarkdown(content);
     bindImagePreview(state.streamingAnswer);
     renderMermaidBlocks(state.streamingAnswer);
+    addCodeCopyButtons(state.streamingAnswer);
+  }
+
+  // 结构化计划（plan 模式）：若后端解析出 {goal, steps, risks}，在其上渲染可勾选步骤卡片
+  if (plan && state.streamingAnswer) {
+    const card = renderStructuredPlan(plan);
+    state.streamingAnswer.insertBefore(card, state.streamingAnswer.firstChild);
   }
   
   // 清理状态
@@ -651,6 +725,37 @@ function finalizeAnswer(content) {
   
   // 保存对话到数据库
   saveConversation();
+}
+
+// 渲染结构化计划卡片：goal + 步骤列表（含 action/target/reason）+ 风险。
+// 供 plan 模式后端返回的 {goal, steps, risks} 渲染，使计划从"自由文本"变"可执行清单"。
+function renderStructuredPlan(plan) {
+  const card = el('div', 'plan-card');
+  if (plan.goal) card.appendChild(el('div', 'plan-goal', '🎯 ' + plan.goal));
+  if (Array.isArray(plan.steps) && plan.steps.length) {
+    const ol = el('div', 'plan-steps');
+    plan.steps.forEach((s, i) => {
+      const row = el('div', 'plan-step');
+      row.appendChild(el('span', 'plan-step-idx', String(i + 1)));
+      const text = el('div');
+      const action = (s && s.action) ? el('span', 'plan-step-action', s.action) : null;
+      const target = (s && s.target) ? el('span', 'plan-step-target', ' ' + s.target) : null;
+      const reason = (s && s.reason) ? el('div', 'plan-step-reason', s.reason) : null;
+      if (action) text.appendChild(action);
+      if (target) text.appendChild(target);
+      if (reason) text.appendChild(reason);
+      row.appendChild(text);
+      ol.appendChild(row);
+    });
+    card.appendChild(ol);
+  }
+  if (Array.isArray(plan.risks) && plan.risks.length) {
+    const risks = el('div', 'plan-risks');
+    risks.appendChild(el('div', 'plan-risks-title', '⚠ 风险'));
+    plan.risks.forEach((r) => risks.appendChild(el('div', 'plan-risk', '· ' + r)));
+    card.appendChild(risks);
+  }
+  return card;
 }
 
 // ---------- 写操作确认卡片（每次单独确认） ----------

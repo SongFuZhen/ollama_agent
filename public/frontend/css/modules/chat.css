@@ -40,7 +40,7 @@
   word-break: break-word;
   overflow-wrap: break-word;
   border: 1px solid transparent;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-1) var(--space-4);
 }
 
 /* Agent 气泡：更明显的卡面 + 描边 + 常规字重 */
@@ -232,6 +232,41 @@
   background: transparent;
   padding: 0;
   font-size: 13px;
+}
+
+/* grep 命中高亮（工具结果中的 <mark>） */
+.grep-hit {
+  background: rgba(255, 213, 79, 0.4);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* 代码块容器：相对定位，承载右上角「复制代码」按钮 */
+.code-block {
+  position: relative;
+}
+
+.code-block .code-copy-btn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  padding: 2px 8px;
+  background: var(--code-block-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* 桌面端悬浮显示，触屏端常驻可见（无 hover） */
+.code-block:hover .code-copy-btn {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .code-block .code-copy-btn { opacity: 1; }
 }
 
 /* 表格 — 复用 simpui 令牌，无内置 table 组件，自行编写 */
@@ -482,12 +517,14 @@
 .context-clear-divider {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
   margin: var(--space-4) 0;
-  color: var(--danger);
+  color: var(--simpui-text-light);
   font-size: 11px;
   font-weight: 600;
-  opacity: 0.9;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .context-clear-divider::before,
@@ -495,6 +532,10 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--danger);
+  background: linear-gradient(to right, transparent, var(--simpui-text-light));
   opacity: 0.4;
+}
+
+.context-clear-divider::after {
+  background: linear-gradient(to left, transparent, var(--simpui-text-light));
 }

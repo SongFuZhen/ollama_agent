@@ -12,6 +12,8 @@ const { getProjectRoot, saveProjectRoot, validateRoot, isRootPersisted } = requi
 const { PROJECT_ROOT, PORT, DEFAULT_MODEL, OLLAMA_HOST, COMPACT_RECENT_K } = require('./config');
 const { compactMessages } = require('./core/compact');
 const { resolveMode } = require('./core/workflow');
+const { allTemplates } = require('./core/template-loader');
+const { snapshot: metricsSnapshot, recordTaskSuccess } = require('./core/metrics');
 const db = require('./storage/db');
 const { getDeviceId, getDevice } = require('./device/device');
 const { handleHotreload, startHotwatch } = require('./server/hotreload');
@@ -179,7 +181,8 @@ function handleChat(req, res) {
     catch (e) { aborted = true; }
   };
   readBody(req).then(async (body) => {
-    const { message, images, model: bodyModel, ollamaHost, projectRoot, history, conversationId } = body;
+    const { images, model: bodyModel, ollamaHost, projectRoot, history, conversationId } = body;
+    let message = body.message;
     const model = bodyModel || DEFAULT_MODEL; // 前端可覆盖模型名
     send({ type: 'meta', projectRoot: PROJECT_ROOT, ollamaHost: OLLAMA_HOST, tools: allSpecs(), model });
     if (!message && !(images && images.length)) { send({ type: 'error', msg: '缺少 message 或图片' }); res.end(); return; }
@@ -187,7 +190,21 @@ function handleChat(req, res) {
     // 规划模式入口：WORKFLOW_MODE='auto' 时复杂任务自动进 plan；'/plan ' 前缀或
     // body.mode 显式值可强制覆盖。plan 只调研不改动，最终返回可确认的执行计划
     // （前端据此二次确认再 execute）。body.mode='execute' 用于二段式跳过自动判定。
-    const { mode, planMessage } = resolveMode(message, body.mode);
+    const resolved = resolveMode(message, body.mode);
+    const mode = resolved.mode;
+    let planMessage = resolved.planMessage;
+
+    // /template <name> 显式调用任务模板：剥离前缀，把模板正文作为"建议路径"注入 system prompt
+    let explicitTemplateBody = null;
+    const tplMatch = (message || '').match(/^\/template\s+(\S+)\s*([\s\S]*)$/);
+    if (tplMatch) {
+      const tpl = allTemplates().find((t) => t.name === tplMatch[1]);
+      if (tpl) {
+        explicitTemplateBody = tpl.body;
+        message = tplMatch[2].trim() || message; // 保留模板后附的用户任务；无则回退原消息
+        planMessage = message; // 同步剥离 planMessage 里的 /template 前缀，避免把指令原文发给模型
+      }
+    }
 
     // 解析生效的项目根：前端下发的绝对路径优先（校验有效才用），否则用持久化/默认沙箱
     let effectiveRoot = PROJECT_ROOT;
@@ -220,7 +237,7 @@ function handleChat(req, res) {
         send({ type: 'ask_user_request', id, question });
       });
 
-    runAgent(planMessage, { model, confirm, askUser, images: images || [], ollamaHost, projectRoot: effectiveRoot, history, conversationId, mode, signal: agentAbort.signal }, send)
+    runAgent(planMessage, { model, confirm, askUser, images: images || [], ollamaHost, projectRoot: effectiveRoot, history, conversationId, mode, template: explicitTemplateBody, templateExplicit: !!explicitTemplateBody, signal: agentAbort.signal }, send)
       .catch((e) => { if (!aborted) send({ type: 'error', msg: e.message }); })
       .finally(() => { if (!aborted) res.end(); });
   }).catch((e) => {
@@ -278,6 +295,29 @@ function handleConfig(res) {
     tools: allSpecs(),
     defaultModel: DEFAULT_MODEL,   // 状态栏模型名不再依赖 preflight 往返（离线也可显示）
   });
+}
+
+// 任务模板列表（供前端模板选择 UI）：含名称、标题、命中关键词。
+function handleTemplates(res) {
+  sendJSON(res, 200, {
+    templates: allTemplates().map((t) => ({ name: t.name, title: t.title, keywords: t.keywords })),
+  });
+}
+
+// 运行指标快照（埋点）
+function handleMetricsGet(res) {
+  sendJSON(res, 200, metricsSnapshot());
+}
+
+// 用户标记任务成功/失败，写入埋点
+async function handleMetricsPost(req, res) {
+  try {
+    const { ok } = await parseBody(req);
+    recordTaskSuccess(Boolean(ok));
+    sendJSON(res, 200, { ok: true, snapshot: metricsSnapshot() });
+  } catch (e) {
+    sendJSON(res, 500, { error: e.message });
+  }
 }
 
 // 显式语义召回：/api/recall?query=...&k=5
@@ -524,6 +564,9 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && url === '/api/hotreload') return handleHotreload(req, res);
   if (req.method === 'GET' && url === '/api/config') return handleConfig(res);
+  if (req.method === 'GET' && url === '/api/templates') return handleTemplates(res);
+  if (req.method === 'GET' && url === '/api/metrics') return handleMetricsGet(res);
+  if (req.method === 'POST' && url === '/api/metrics') return handleMetricsPost(req, res);
   if (req.method === 'GET' && url === '/api/recall') return handleRecall(req, res);
   if (req.method === 'GET' && url.startsWith('/api/log')) return handleLog(req, res);
   if (req.method === 'GET' && url === '/api/notes') return sendJSON(res, 200, db.getNotes());

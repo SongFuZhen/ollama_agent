@@ -39,6 +39,7 @@ function chat(model, messages, opts = {}) {
       { host, port, path: '/api/chat', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
       (res) => {
+        res.setEncoding('utf8'); // 跨 chunk 正确重组多字节 UTF-8（避免中文被拆段乱码）
         let data = '';
         res.on('data', (c) => (data += c));
         res.on('end', () => {
@@ -74,6 +75,7 @@ function listModels(ollamaHost) {
   return new Promise((resolve, reject) => {
     const { host, port } = hostParts(ollamaHost);
     const req = http.request({ host, port, path: '/api/tags', method: 'GET' }, (res) => {
+      res.setEncoding('utf8');
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => {
@@ -113,6 +115,7 @@ async function chatStream(model, messages, opts = {}) {
       { host, port, path: '/api/chat', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
       (res) => {
+        res.setEncoding('utf8'); // 跨 chunk 正确重组多字节 UTF-8，避免中文被拆段乱码
         let buffer = '';
         let fullText = '';
 
@@ -227,6 +230,7 @@ function embed(text, opts = {}) {
       { host, port, path: '/api/embeddings', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
       (res) => {
+        res.setEncoding('utf8');
         let data = '';
         res.on('data', (c) => (data += c));
         res.on('end', () => {

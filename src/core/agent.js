@@ -10,6 +10,13 @@ const { buildOllamaTools } = require('../tools/schema');
 const { buildRecallPrompt } = require('../memory/recall');
 const { addMemory } = require('../storage/db');
 const { compactMessages } = require('./compact');
+const { fewShotExamples } = require('./prompts/examples');
+const { behaviorRules } = require('./prompts/behavior');
+const { matchTemplate } = require('./template-loader');
+const { precheck } = require('./precheck');
+const { safeResolve, safeResolveRead, summarizeReadFile } = require('../tools/utils');
+const fsp = require('fs/promises');
+const { recordMetric, recordSteps } = require('./metrics');
 const { MAX_STEPS, JSON_RETRY, NUM_CTX, CTX_RESERVE, TOOL_RESULT_MAX, TRUNCATE_MIN, NATIVE_TOOLS_MODELS, VERIFY_EVERY, SELF_HEAL, MAX_HEAL_STEPS, COMPACT_THRESHOLD, PROJECT_ROOT } = require('../config');
 
 // 规划/执行模式下的工具分类（Plan Mode 仅允许只读工具）
@@ -99,6 +106,12 @@ function stripJSONComments(json) {
   return stripped.replace(/\u0000(\d+)\u0000/g, (_, i) => strings[Number(i)]);
 }
 
+// 判断模型输出是否"本意想调工具但 JSON 坏了"：用于埋点区分"正常纯文本回答"与"工具调用解析失败"。
+function looksLikeToolAttempt(s) {
+  if (typeof s !== 'string' || !s.includes('{')) return false;
+  return /("action"\s*:)|("name"\s*:)/.test(s);
+}
+
 // 宽松 JSON 解析：容忍模型输出里的代码块、多余文本、注释
 // 兼容两种格式：{action,params} 和 {name,parameters}（MFDoom/社区模型）
 function parseToolCall(text) {
@@ -127,19 +140,77 @@ function parseToolCall(text) {
   return null;
 }
 
-function systemPrompt(specs) {
+// 行为硬约束来自 ./prompts/behavior（prompt 与 native 路线共用同一条约束）
+
+function systemPrompt(specs, { examples = true, template, templateExplicit = false } = {}) {
   const specStr = specs
     .map((t) => `- ${t.name}(${Object.keys(t.params).join(', ')}) : ${t.desc}`)
     .join('\n');
   if (!specs.length) return '';
-  return [
+  const parts = [
+    '你是 Ason Agent，一个 AI 编程助手，只在需要时调用工具。',
+    '',
     '可用工具：',
     specStr,
     '',
-    '只有在需要查看文件、搜索代码或执行命令时，才输出JSON调用工具：{"action":"工具名","params":{}}',
-    '普通对话、问候、解释、分析等不需要操作文件的场合，直接用markdown回答，不要调用工具。一次只调一个工具。',
+    behaviorRules(),
+    '',
+    '调用工具时，严格按以下 JSON 输出（不要加多余解释、不要加注释）：',
+    '{"action":"工具名","params":{}}',
     '遇到需要多步、跨文件的大任务时，可调用 delegate 把其中「一步」委派给子代理独立完成（用 tools 参数限定其工具范围），再汇总子代理返回的精简结论；不要试图在主循环里一口气做完所有步骤。',
-  ].join('\n');
+  ];
+  if (template) {
+    // 模板（尤其是 /template 显式下发）要求先调工具取数据再作答；
+    // 此时覆盖通用的「解释/分析不要调工具」规则，避免模型把"解释代码"误解为纯聊天而反问用户。
+    parts.push('',
+      '【任务模板' + (templateExplicit ? ' · 必须执行' : ' · 建议路径') + '】请严格按以下步骤调用工具完成任务：',
+      template);
+    if (templateExplicit) {
+      parts.push(
+        '这是用户通过 /template 显式下发的「必须执行」的指令，不是建议、也不是可选项。',
+        '硬性规则：',
+        '① 禁止反问用户需求；禁止只输出计划/步骤清单而不执行。',
+        '② 目标文件可能已随本消息预读注入上下文（标注「任务相关文件」）；若已提供，直接基于它操作，禁止再用 read_file/read_lines 重复读取该文件。',
+        '③ 严格按模板要求的固定格式输出，不要添加模板未要求的分析性文字（如"这个函数的作用是""该文件实现了"等）。',
+        '④ 步数上限仅 6 步；若已调用约 3 步工具仍未作答，立刻停止调工具，直接基于已有信息输出答案。',
+        '⑤ 工具调用失败也不要停下来问用户，换路径或参数重试一次，仍失败就以已有信息作答。'
+      );
+    } else {
+      parts.push('若模板要求读取/搜索文件，请主动调用工具，不要以「解释/分析」为由跳过工具调用。');
+    }
+  } else {
+    parts.push('普通对话、问候、解释、分析等不需要操作文件的场合，直接用 markdown 回答，不要调用工具。');
+  }
+  if (examples) {
+    const ex = fewShotExamples(specs);
+    if (ex) parts.push('', ex);
+  }
+  return parts.join('\n');
+}
+
+// 显式 /template 命令的兜底：部分弱模型（如 qwen2.5-coder:7b）即使被要求也常常不调用
+// read_file，而是反问用户，导致「没有返回正确内容」。这里从用户输入抽取文件路径并预读，
+// 把内容作为上下文注入，保证即便模型不主动调工具，也能基于真实文件内容作答。
+async function buildTemplateFileContext(userInput, root) {
+  const candidates = new Set();
+  // 匹配「文件: x」「路径 x」后的路径，以及裸写的相对/绝对路径（含扩展名）
+  const re = /(?:文件|路径|文件是|路径是)[:：]\s*(\S+)|(?:\.\.?\/)?[\w./\\-]+\.[a-zA-Z0-9]{1,12}/g;
+  let m;
+  while ((m = re.exec(userInput)) !== null) {
+    const p = (m[1] || m[0]).replace(/^['"]|['"]$/g, '');
+    if (p && !p.startsWith('http')) candidates.add(p);
+  }
+  const blocks = [];
+  const BINARY_EXT = /\.(png|jpe?g|gif|ico|svg|woff2?|ttf|eot|mp3|mp4|zip|tar|gz|pdf|bin)$/i;
+  for (const p of candidates) {
+    if (BINARY_EXT.test(p)) continue; // 二进制文件读成 utf8 只会污染上下文，跳过
+     try {
+       const abs = await safeResolveRead(p, root);
+       const content = await fsp.readFile(abs, 'utf8');
+      blocks.push(`文件 ${p}:\n\`\`\`\n${summarizeReadFile(content)}\n\`\`\``);
+    } catch (e) { /* 路径不存在/解析失败则跳过，交给模型自行处理 */ }
+  }
+  return blocks.length ? blocks.join('\n\n') : null;
 }
 
 // 检测模型是否支持 Ollama 原生 tools API
@@ -159,13 +230,29 @@ function addStepMessages(messages, useNative, text, nativeToolCalls, feedback) {
 }
 
 // 原生 tools 模型的 system prompt（不含工具列表，工具通过 tools 字段传递）
-function nativeSystemPrompt() {
-  return [
+function nativeSystemPrompt(template, templateExplicit = false) {
+  const parts = [
     '你是 Ason Agent，一个 AI 编程助手。',
     '需要读取或操作文件时，使用提供的工具函数。',
     '能直接回答时，用 markdown 格式输出答案。一次只调一个工具。',
     '遇到需要多步、跨文件的大任务时，可调用 delegate 把其中一步委派给子代理独立完成，再汇总其结论。',
-  ].join('\n');
+    '',
+    behaviorRules(),
+  ];
+  if (template) {
+    parts.push('',
+      '【任务模板' + (templateExplicit ? ' · 必须执行' : ' · 建议路径') + '】请严格按以下步骤调用工具完成任务：',
+      template);
+    if (templateExplicit) {
+      parts.push(
+        '这是用户通过 /template 显式下发的任务，不要反问用户需求、不要只给计划，直接按步骤执行。',
+        '目标文件可能已随本消息预读注入上下文（标注「任务相关文件」），若已提供则禁止再用 read_file 重复读取。',
+        '严格按模板要求的固定格式输出，不要添加模板未要求的分析性文字。',
+        '步数上限仅 6 步，已调用约 3 步仍未作答就停止调工具、直接基于已有信息作答。'
+      );
+    }
+  }
+  return parts.join('\n');
 }
 
 // 延迟工具：返回在 ms 毫秒后 resolve 的 promise；signal 已 abort 时立即 reject（ABORTED），
@@ -199,7 +286,7 @@ async function backoffDelay(attempt, { base = 1000, maxMs = 8000, signal } = {})
 
 // 运行 Agent 循环，通过 emit(event) 实时推送过程
 // opts: { model, confirm, images, mode: 'execute'|'plan', conversationId }
-async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools, signal } = {}, emitInput) {
+async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost, projectRoot, history, mode = 'execute', conversationId, allowedTools, signal, template: explicitTemplateBody, templateExplicit = false } = {}, emitInput) {
   const emit = emitInput || (() => {});
   // 取消错误：signal 中断时由 Ollama 层抛出的 ABORTED 错误，用于区分「用户中止」与真实错误
   const isAbort = (e) => e && e.code === 'ABORTED';
@@ -366,6 +453,16 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     ? { role: 'user', content: userInstruction, images: images.slice() }
     : { role: 'user', content: userInstruction };
 
+  // 显式 /template 兜底：预读用户消息里的目标文件，注入上下文，
+  // 避免弱模型不调用 read_file 时「没有返回正确内容」。
+  let templateCtxMsg = null;
+  if (templateExplicit) {
+    try {
+      const ctxText = await buildTemplateFileContext(userInput, toolCtx.root);
+      if (ctxText) templateCtxMsg = { role: 'user', content: '【任务相关文件（已自动读取，供你参考，无需再调用 read_file）】\n' + ctxText };
+    } catch (e) { /* 预读失败不阻断 */ }
+  }
+
   if (images && images.length) {
     console.log('[image] 收到 ' + images.length + ' 张图片');
     images.forEach((img, i) => {
@@ -391,11 +488,24 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
   const directResultMsg = directResult != null
     ? { role: 'user', content: `工具执行结果：\n${directResult.slice(0, TOOL_RESULT_MAX)}` }
     : null;
+  // 任务模板匹配：命中高频任务关键词时，把"建议路径"注入 system prompt，
+  // 把模型自由规划降级为按图索骥（P0-2）。基于原始用户输入匹配，不受直接调用改写影响。
+  let tmpl = null;
+  try {
+    tmpl = matchTemplate(userInput);
+  } catch (e) { /* 模板加载失败不阻断 */ }
+  // 显式模板（/template 命令）优先于关键词自动匹配；Plan Mode 有专属约束不叠加模板路径
+  if (explicitTemplateBody && !isPlan) {
+    tmpl = { name: 'explicit', body: explicitTemplateBody };
+  }
+  const explicitTemplate = !isPlan ? tmpl : null; // Plan Mode 有专属约束，不叠加模板路径
+  if (tmpl) recordMetric('template_hit', { name: tmpl.name });
   let messages = [
-    { role: 'system', content: useNativeTools ? nativeSystemPrompt() : systemPrompt(specs) },
+    { role: 'system', content: useNativeTools ? nativeSystemPrompt(explicitTemplate ? tmpl.body : null, templateExplicit) : systemPrompt(specs, { template: explicitTemplate ? tmpl.body : null, templateExplicit }) },
     ...validHistory,
     ...(directResultMsg ? [directResultMsg] : []),
     userMessage,
+    ...(templateCtxMsg ? [templateCtxMsg] : []),
   ];
   messages = truncateMessages(messages, CTX_RESERVE, lastPromptTokens || null);
 
@@ -403,8 +513,30 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
   if (isPlan) {
     const sys = messages.find((m) => m.role === 'system');
     if (sys) {
-      sys.content += '\n\n[规划模式] 你当前处于只读规划阶段：只能使用只读调研工具（read_file/list_dir/grep/glob/tree/read_lines/search_files/count_loc），严禁调用任何写操作（write_file/edit_file/bash）。请充分调研后，输出一份清晰、可确认的执行计划（分步骤、说明每步意图与预期结果），不要修改任何文件。';
+      sys.content += '\n\n[规划模式] 你当前处于只读规划阶段：只能使用只读调研工具（read_file/list_dir/grep/glob/tree/read_lines/search_files/count_loc），严禁调用任何写操作（write_file/edit_file/bash）。请充分调研后，输出一份清晰、可确认的执行计划。\n请严格按以下 JSON 结构输出计划（不要加额外解释文字，可被程序解析）：\n```json\n{\n  "goal": "用户目标的简短描述",\n  "steps": [\n    {"action": "read_file", "reason": "需要先了解现有实现", "target": "src/x.js"},\n    {"action": "apply_diff", "reason": "修改函数签名", "target": "src/x.js"},\n    {"action": "run_tests", "reason": "验证修改正确"}\n  ],\n  "risks": ["可能影响调用方", "需要同步更新测试"]\n}\n```\nsteps 里的 action 必须是可用工具名；目标文件写在 target。';
     }
+  }
+
+  // 解析结构化计划：从模型规划模式输出中提取 {goal, steps, risks}。
+  // 复用 parseToolCall 的容错思路（容忍代码块/多余文本），仅当含 goal+steps 数组才认。
+  function tryParsePlan(text) {
+    const blocks = [];
+    const fenceRe = /```(?:json)?\s*([\s\S]*?)```/g;
+    let m;
+    while ((m = fenceRe.exec(text)) !== null) blocks.push(m[1]);
+    blocks.push(text);
+    for (const candidate of blocks) {
+      const s = candidate.indexOf('{');
+      const e = candidate.lastIndexOf('}');
+      if (s === -1 || e === -1) continue;
+      try {
+        const obj = JSON.parse(candidate.slice(s, e + 1));
+        if (obj && typeof obj.goal === 'string' && Array.isArray(obj.steps)) {
+          return { goal: obj.goal, steps: obj.steps, risks: Array.isArray(obj.risks) ? obj.risks : [] };
+        }
+      } catch (err) { /* 尝试下一个 */ }
+    }
+    return null;
   }
 
   // 三级记忆注入（L2/L3）：首轮根据用户输入语义召回历史片段，拼进 system。
@@ -423,14 +555,53 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
   let lastAnswer = '';
   let lastCallKey = '';
   let repeatCount = 0;
-  for (let step = 1; step <= MAX_STEPS; step++) {
+
+  // 探索循环检测：连续调用 read/grep/search 类工具且无输出时，
+  // 弱模型容易陷入"每次读到新信息→再 grep→再读"的死循环。
+  // 用独立计数器追踪：连续探索调用达阈值时强制收尾，不依赖参数去重。
+  const EXPLORATION_TOOLS = new Set([
+    'read_file', 'read_lines', 'grep', 'search_files', 'glob',
+    'list_dir', 'tree', 'find_references', 'explain_symbol', 'semantic_grep', 'count_loc',
+  ]);
+  let explorationCount = 0;
+  const EXPLORATION_LIMIT = 4; // 连续探索调用阈值
+
+  // 工作记忆（Working Memory）：每轮循环维护一条 system 消息，记录"已经干了什么"，
+  // 注入给 7B 以减少长任务里重复读文件/重复改同一处的问题（P1-6）。
+  // 永远是 system 角色，truncateMessages / compact 都会保留（不会被截断）。
+  const workingMemory = {
+    read: new Set(),
+    modified: new Set(),
+    issues: [],
+    goal: (userInput || '').slice(0, 120),
+  };
+  function buildWorkingMemoryMsg() {
+    const lines = ['【当前工作状态】'];
+    const readArr = [...workingMemory.read].slice(-10);
+    const modArr = [...workingMemory.modified].slice(-10);
+    if (readArr.length) lines.push('- 已读文件：' + readArr.join(', '));
+    if (modArr.length) lines.push('- 已改文件：' + modArr.join(', '));
+    if (workingMemory.issues.length) lines.push('- 已知问题：' + workingMemory.issues.slice(-5).join('；'));
+    if (workingMemory.goal) lines.push('- 当前目标：' + workingMemory.goal);
+    lines.push('- 未完成步骤：按当前进度继续，不要重复已做的读取/修改');
+    return lines.join('\n');
+  }
+  const workingMemoryMsg = { role: 'system', content: buildWorkingMemoryMsg() };
+  // 插在首条 system（工具列表）之后，作为第二条 system 持久注入
+  messages.splice(1, 0, workingMemoryMsg);
+
+  let step = 0;
+  for (step = 1; step <= MAX_STEPS; step++) {
     if (Date.now() > deadline) {
       emit({ type: 'error', step, msg: `已达整体超时（${WALL_MS / 1000}s），强制收尾` });
       break;
     }
+    // 刷新工作记忆（每步更新，反映已读/已改文件与当前目标）
+    workingMemoryMsg.content = buildWorkingMemoryMsg();
     // 上下文压缩：真实 prompt token 越过阈值时，把中间历史压成摘要，
     // 保住早期上下文（而非 truncateMessages 直接硬丢）。
     if (lastPromptTokens > NUM_CTX * COMPACT_THRESHOLD) {
+      recordMetric('context_compact_triggered');
       try {
         messages = await compactMessages(messages, { model, ollamaHost });
         emit({ type: 'compact', step, msg: '上下文已压缩（中间历史摘要化）' });
@@ -522,9 +693,13 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
 
     // 无工具的场景（如 vision 纯多模态）直接回答，不解析工具调用
     if (!hasTools) {
+      recordSteps(0, { model, template: tmpl ? tmpl.name : null });
       emit({ type: 'answer', content: text.trim() });
       return text.trim();
     }
+
+    // 埋点：每步工具解析尝试计一次 total_calls（JSON 解析失败率分母）
+    recordMetric('total_calls');
 
     // 提取工具调用：原生 tools 路线从 tool_calls 取，失败则回退到文本解析
     let action, params;
@@ -545,9 +720,17 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
           if (think) call = parseToolCall(raw);
         }
         if (!call || !call.action) {
+          if (looksLikeToolAttempt(raw)) recordMetric('json_parse_failures');
           lastAnswer = text.trim();
-          // Plan Mode：最终回答作为可确认的执行计划返回，不进入 execute
-          emit({ type: isPlan ? 'plan' : 'answer', content: lastAnswer });
+          // Plan Mode：最终回答作为可确认的执行计划返回，附结构化解析供前端渲染
+          if (isPlan) {
+            const plan = tryParsePlan(lastAnswer);
+            emit({ type: 'plan', content: lastAnswer, plan: plan || undefined });
+          } else {
+            emit({ type: 'answer', content: lastAnswer });
+          }
+          // 埋点：本轮在此终止，记录收敛步数（非最终循环出口也会命中）
+          recordSteps(step, { model, template: tmpl ? tmpl.name : null });
           return lastAnswer;
         }
         emit({ type: 'thought', step, content: text.trim() });
@@ -566,8 +749,16 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
         }
       }
       if (!call || !call.action) {
+        if (looksLikeToolAttempt(raw)) recordMetric('json_parse_failures');
         lastAnswer = text.trim();
-        emit({ type: 'answer', content: lastAnswer });
+        if (isPlan) {
+          const plan = tryParsePlan(lastAnswer);
+          emit({ type: 'plan', content: lastAnswer, plan: plan || undefined });
+        } else {
+          emit({ type: 'answer', content: lastAnswer });
+        }
+        // 埋点：本轮在此终止，记录收敛步数
+        recordSteps(step, { model, template: tmpl ? tmpl.name : null });
         return lastAnswer;
       }
       emit({ type: 'thought', step, content: text.trim() });
@@ -590,10 +781,17 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     const tool = TOOLS[action];
 
     // 重复调用检测
+    // REPEAT_PRONE 工具（tree/list_dir）常因"逐层下钻不同路径"而被弱模型反复调用，
+    // 若仅按 action 名去重，会漏掉"不同路径的连续下钻"，从而耗光 MAX_STEPS。
+    // 因此这里把路径类参数并入 callKey，使不同路径的下钻也计入重复计数，更早熔断。
     const REPEAT_PRONE = new Set(['tree', 'list_dir']);
-    const callKey = REPEAT_PRONE.has(action)
-      ? action
-      : action + ':' + JSON.stringify(params || {});
+    let callKey;
+    if (REPEAT_PRONE.has(action)) {
+      const dir = params && (params.path || params.dir || params.target || '');
+      callKey = action + ':' + String(dir || '');
+    } else {
+      callKey = action + ':' + JSON.stringify(params || {});
+    }
     if (callKey === lastCallKey) {
       repeatCount += 1;
     } else {
@@ -602,12 +800,29 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     }
     if (repeatCount >= 3) {
       const final = lastAnswer || `（已连续 ${repeatCount} 次调用 ${action}，强制收尾）请基于已获取的数据回答。`;
+      recordMetric('repeat_tool_calls');
+      recordSteps(step, { model, template: tmpl ? tmpl.name : null });
       emit({ type: 'answer', content: final });
       return final;
     }
     if (repeatCount === 2) {
-      addStepMessages(messages, stepUsedNative, text, nativeToolCalls, `你已连续多次调用 ${action}，请停止重复下钻，直接基于已有数据回答，不要再调用该工具。`);
+      recordMetric('repeat_tool_calls');
+      addStepMessages(messages, stepUsedNative, text, nativeToolCalls, `你已连续多次调用 ${action}，请停止重复下钻，直接基于已获取的数据回答，不要再调用该工具。`);
       continue;
+    }
+
+    // 探索循环检测：连续 read/grep 类调用达阈值 → 强制收尾输出
+    if (EXPLORATION_TOOLS.has(action)) {
+      explorationCount += 1;
+    } else {
+      explorationCount = 0; // 非探索类调用（写/执行/委派）重置计数
+    }
+    if (explorationCount >= EXPLORATION_LIMIT) {
+      const final = lastAnswer || `（已连续 ${explorationCount} 次读取/搜索，强制收尾）请基于已获取的全部信息，立即用 markdown 输出分析结论，不要再调工具。`;
+      recordMetric('exploration_loop_detected');
+      recordSteps(step, { model, template: tmpl ? tmpl.name : null });
+      emit({ type: 'answer', content: final });
+      return final;
     }
 
     // 写操作确认（confirm 解析为 {ok, answer}：写工具只看 ok；ask_user 用 answer）
@@ -629,13 +844,30 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
       // ask_user：工具结果即用户回答（而非原样回显问题）
       result = `用户回答：「${String(confirmResp.answer)}」`;
     } else {
-      try {
-        result = await tool.run(params, toolCtx);
-      } catch (e) {
-        result = '工具执行错误: ' + e.message;
+      // 预检（Pre-flight Check）：在真正执行前拦截确定性错误（文件不存在、参数类型错），
+      // 直接把引导性提示作为工具结果回灌，避免工具抛错浪费一步（P0-3）。
+      const pre = await precheck(action, params, toolCtx);
+      if (!pre.ok) {
+        result = '[预检未通过] ' + pre.message;
+        emit({ type: 'tool_precheck', step, action, message: pre.message });
+      } else {
+        try {
+          result = await tool.run(params, toolCtx);
+        } catch (e) {
+          result = '工具执行错误: ' + e.message;
+        }
       }
     }
     const resultStr = String(result);
+    // 维护工作记忆：记录已读/已改文件，供后续步骤注入
+    if (action === 'read_file' || action === 'read_lines') {
+      if (params && params.path) workingMemory.read.add(params.path);
+    } else if (action === 'write_file' || action === 'edit_file' || action === 'apply_diff') {
+      const paths = action === 'apply_diff'
+        ? (String(params.diff || '').match(/\+\+\+ b\/(.+)/g) || []).map((l) => l.replace(/\+\+\+ b\//, '').trim())
+        : (params && params.path ? [params.path] : []);
+      paths.forEach((p) => { if (p) workingMemory.modified.add(p); });
+    }
     emit({ type: 'tool_result', step, action, result: resultStr.slice(0, TOOL_RESULT_MAX) });
 
     addStepMessages(messages, stepUsedNative, text, nativeToolCalls,
@@ -650,6 +882,7 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     if (!isPlan && WRITE.has(action) && step % VERIFY_EVERY === 0) {
       const verdict = await runVerifier(step);
       if (verdict.failed && SELF_HEAL && (MAX_STEPS - step) > 0) {
+        recordMetric('self_heal_triggered', { step });
         await selfHeal(step, verdict);
       }
     }
@@ -661,6 +894,8 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     const reason = Date.now() > deadline ? '超时' : '最大步数 ' + MAX_STEPS;
     finalAnswer = `（已达${reason}，强制收尾）请参考上述工具调用过程，或换用更擅长工具调用的模型。`;
   }
+  // 埋点：记录本轮任务收敛步数（含强制收尾/超时情形）
+  recordSteps(step > MAX_STEPS ? MAX_STEPS : step, { model, template: tmpl ? tmpl.name : null });
   emit({ type: 'answer', content: finalAnswer });
 
   // 三级记忆写入（异步，不阻塞返回）：把本轮 user 提问 + 最终回答存为记忆片段，

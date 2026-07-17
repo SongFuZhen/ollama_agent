@@ -44,6 +44,11 @@ module.exports = {
     const subHost = ctx.ollamaHost;
     const subRoot = ctx.root || ctx.projectRoot;
     const subMode = mode === 'plan' ? 'plan' : 'execute';
+    // 透传 confirm / askUser：子代理若调用需确认的工具（bash / 写操作）时，
+    // 复用主代理的确认通道，避免 runAgent 内 confirm(...) 因 undefined 而抛错。
+    const subConfirm = typeof ctx.confirm === 'function' ? ctx.confirm : () => ({ ok: true });
+    const subAskUser = typeof ctx.askUser === 'function' ? ctx.askUser : () => '';
+    const subSignal = ctx.signal || null;
 
     // 用静默 emit：子代理过程不向前端流式推送（避免主回答里穿插子代理 token），
     // 只取最终返回值。子代理使用空 history + runAgent 内部全新 messages，天然隔离上下文。
@@ -62,6 +67,9 @@ module.exports = {
           mode: subMode,
           // 限定子代理可用工具：通过 specsFor 过滤后注入 system prompt。
           allowedTools: allowed || undefined,
+          confirm: subConfirm,
+          askUser: subAskUser,
+          signal: subSignal,
         },
         silent
       );

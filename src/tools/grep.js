@@ -9,6 +9,7 @@ const { PROJECT_ROOT, safeResolve } = require('./utils');
 const BINARY_EXT = /\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|mp3|mp4|zip|tar|gz)$/i;
 const SKIP_DIRS = new Set(['node_modules']); // .开头的目录也跳过
 
+
 /**
  * 纯函数：递归搜索目录，返回命中行。
  * @param {string} root   搜索根（绝对路径）
@@ -133,7 +134,7 @@ module.exports = {
       return `无效的正则表达式: ${e.message}`;
     }
 
-    const results = await grepDirAggregated(searchDir, regex, { include, maxResults: 1000 });
+    let results = await grepDirAggregated(searchDir, regex, { include, maxResults: 1000 });
 
     if (include) {
       const includeRegex = new RegExp(include.replace(/\*/g, '.*'));
@@ -151,9 +152,9 @@ module.exports = {
       totalMatches += file.count;
       lines.push(`\n📄 ${file.file} (${file.count} 处匹配):`);
 
-      for (const match of file.lines.slice(0, 10)) {
-        lines.push(`  ${match.line}: ${match.content}`);
-      }
+       for (const match of file.lines.slice(0, 10)) {
+         lines.push(`  ${match.line}: ${match.content}`);
+       }
 
       if (file.count > 10) {
         lines.push(`  ... 还有 ${file.count - 10} 处匹配`);

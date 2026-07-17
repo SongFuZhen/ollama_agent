@@ -5,7 +5,7 @@
 // 完全离线：摘要用本地 Ollama chat（与对话同模型）。Ollama 不可用时原样返回（不阻断）。
 
 const { chat } = require('./ollama');
-const { COMPACT_RECENT_K } = require('../config');
+const { COMPACT_RECENT_K, MODEL_ROUTING } = require('../config');
 
 // 把若干条消息渲染成纯文本，供摘要模型消化
 function render(messages) {
@@ -26,7 +26,8 @@ function render(messages) {
  */
 async function compactMessages(messages, opts = {}) {
   const recentK = opts.recentK || COMPACT_RECENT_K;
-  const model = opts.model;
+  // 压缩摘要用专用小模型（compact），不占用主对话模型显存；未显式传 model 时回退路由。
+  const model = opts.model || (MODEL_ROUTING && MODEL_ROUTING.compact);
   const ollamaHost = opts.ollamaHost;
 
   const systems = messages.filter((m) => m.role === 'system');

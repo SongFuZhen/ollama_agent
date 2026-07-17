@@ -220,6 +220,7 @@ async function loadHistoryConversation(convId) {
         // 渲染 Markdown 内容
         if (msg.content) {
           state.streamingAnswer.innerHTML = renderMarkdown(msg.content);
+          addCodeCopyButtons(state.streamingAnswer);
         }
         // 恢复耗时统计（TTFT / 总耗时）
         if (msg.stats && state.streamingHead) {

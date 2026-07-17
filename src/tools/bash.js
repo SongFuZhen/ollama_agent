@@ -2,7 +2,7 @@
 
 const { execSync } = require('child_process');
 const path = require('path');
-const { PROJECT_ROOT } = require('./utils');
+const { PROJECT_ROOT, summarizeBash } = require('./utils');
 const { detectShell, adaptReadonlyCommand } = require('./shell');
 
 const IS_WIN = process.platform === 'win32';
@@ -138,7 +138,7 @@ module.exports = {
       const error = e.message || '';
 
       if (stdout || stderr) {
-        return `退出码: ${e.status}\n${stdout}${stderr}`;
+        return `退出码: ${e.status}\n${summarizeBash(stdout + stderr)}`;
       }
       return `命令执行失败: ${error}`;
     }
