@@ -565,20 +565,23 @@ function appendPlanActions() {
   const card = cards[cards.length - 1];
   if (!card || card.querySelector('.plan-actions')) return; // 防重复追加
   const wrap = el('div', 'plan-actions');
-  const confirm = el('button', 'simpui-btn primary sm', '✅ 确认执行');
+  const confirm = el('button', 'simpui-btn primary sm', '确认执行');
   confirm.onclick = () => {
     wrap.remove();
     send({ overrideMode: 'execute', message: lastUserMessage });
   };
-  const edit = el('button', 'simpui-btn secondary sm', '✏️ 修改后执行');
+  const edit = el('button', 'simpui-btn secondary sm', '修改后执行');
   edit.onclick = () => {
     wrap.remove();
     inputEl.value = lastUserMessage;
     autoResizeInput();
     inputEl.focus();
   };
+  const cancel = el('button', 'simpui-btn sm', '取消');
+  cancel.onclick = () => wrap.remove();
   wrap.appendChild(confirm);
   wrap.appendChild(edit);
+  wrap.appendChild(cancel);
   card.appendChild(wrap);
 }
 

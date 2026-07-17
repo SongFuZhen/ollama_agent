@@ -304,14 +304,76 @@
   justify-content: flex-end;
 }
 
-/* ---------- Plan 模式二段式操作按钮（确认执行 / 修改后执行） ---------- */
+/* 模型提问：可选回答按钮 */
+.ask-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.ask-question {
+  margin-bottom: var(--space-2);
+}
+
+.ask-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* ---------- Plan 模式二段式操作按钮（确认执行 / 修改后执行 / 取消） ---------- */
 .plan-actions {
   margin-top: var(--space-3);
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
-  border-top: 1px dashed var(--border-soft);
   padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.plan-actions .simpui-btn {
+  font-size: 13px;
+  padding: 6px 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.plan-actions .simpui-btn.primary {
+  background: var(--accent, #3b82f6);
+  color: white;
+  border: none;
+}
+
+.plan-actions .simpui-btn.primary:hover {
+  background: var(--accent-hover, #2563eb);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.plan-actions .simpui-btn.secondary {
+  background: var(--surface-2, #f3f4f6);
+  color: var(--simpui-heading-color, #374151);
+  border: 1px solid var(--border-soft, #e5e7eb);
+}
+
+.plan-actions .simpui-btn.secondary:hover {
+  background: var(--border-soft, #e5e7eb);
+  color: var(--simpui-heading-color, #374151);
+  transform: translateY(-1px);
+}
+
+.plan-actions .simpui-btn:not(.primary):not(.secondary) {
+  background: transparent;
+  color: var(--simpui-text-dim, #6b7280);
+  border: 1px solid transparent;
+}
+
+.plan-actions .simpui-btn:not(.primary):not(.secondary):hover {
+  background: var(--surface-2, #f3f4f6);
+  color: var(--simpui-heading-color, #374151);
 }
 
 /* ---------- Dark mode 覆盖 simpui ---------- */
@@ -325,6 +387,28 @@ body.dark .simpui-btn {
 body.dark .simpui-btn:hover:not(:disabled) {
   background: var(--border-soft);
   color: var(--simpui-heading-color);
+}
+
+/* Dark mode plan-actions 按钮样式 */
+body.dark .plan-actions .simpui-btn.primary {
+  background: var(--accent, #3b82f6) !important;
+  color: white !important;
+  border: none !important;
+}
+
+body.dark .plan-actions .simpui-btn.primary:hover {
+  background: var(--accent-hover, #2563eb) !important;
+}
+
+body.dark .plan-actions .simpui-btn.secondary {
+  background: var(--surface-3, #374151) !important;
+  color: var(--simpui-heading-color, #f9fafb) !important;
+  border-color: var(--border-soft, #4b5563) !important;
+}
+
+body.dark .plan-actions .simpui-btn.secondary:hover {
+  background: var(--border-soft, #4b5563) !important;
+  color: var(--simpui-heading-color, #f9fafb) !important;
 }
 
 /* ---------- 命令弹框（/skills、/tools、/models） ---------- */
@@ -584,12 +668,39 @@ body.dark .simpui-btn:hover:not(:disabled) {
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--surface-2);
-  transition: border-color .15s, background .15s;
+  transition: border-color .15s, box-shadow .15s;
 }
-.template-card:hover { border-color: var(--simpui-focus); background: var(--surface-card); }
-.template-card-title { font-weight: 600; margin-bottom: 6px; }
+.template-card:hover {
+  border-color: var(--simpui-focus);
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.template-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.template-card-title { font-weight: 600; }
+.template-card-name {
+  font-size: 11px;
+  color: var(--simpui-text-dim);
+  opacity: .7;
+}
 .template-card-kw { display: flex; flex-wrap: wrap; gap: 4px; }
 .template-card-kw .cmd-param { font-size: 11px; opacity: .8; }
+.template-card-body {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--border-soft);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--simpui-text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.template-card:hover .template-card-body {
+  border-left-color: var(--simpui-focus);
+}
 
 /* 优化指标（/metrics 弹框） */
 .metrics-body { display: flex; flex-direction: column; gap: 6px; }

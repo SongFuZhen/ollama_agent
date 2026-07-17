@@ -153,7 +153,7 @@ function systemPrompt(specs, { examples = true, template, templateExplicit = fal
     '可用工具：',
     specStr,
     '',
-    behaviorRules(),
+    behaviorRules(!!template),
     '',
     '调用工具时，严格按以下 JSON 输出（不要加多余解释、不要加注释）：',
     '{"action":"工具名","params":{}}',
@@ -170,7 +170,7 @@ function systemPrompt(specs, { examples = true, template, templateExplicit = fal
         '这是用户通过 /template 显式下发的「必须执行」的指令，不是建议、也不是可选项。',
         '硬性规则：',
         '① 禁止反问用户需求；禁止只输出计划/步骤清单而不执行。',
-        '② 目标文件可能已随本消息预读注入上下文（标注「任务相关文件」）；若已提供，直接基于它操作，禁止再用 read_file/read_lines 重复读取该文件。',
+        '② 严格按模板要求调用工具（如 read_file、grep 等），不要跳过工具调用步骤。',
         '③ 严格按模板要求的固定格式输出，不要添加模板未要求的分析性文字（如"这个函数的作用是""该文件实现了"等）。',
         '④ 步数上限仅 6 步；若已调用约 3 步工具仍未作答，立刻停止调工具，直接基于已有信息输出答案。',
         '⑤ 工具调用失败也不要停下来问用户，换路径或参数重试一次，仍失败就以已有信息作答。'
@@ -237,7 +237,7 @@ function nativeSystemPrompt(template, templateExplicit = false) {
     '能直接回答时，用 markdown 格式输出答案。一次只调一个工具。',
     '遇到需要多步、跨文件的大任务时，可调用 delegate 把其中一步委派给子代理独立完成，再汇总其结论。',
     '',
-    behaviorRules(),
+    behaviorRules(!!template),
   ];
   if (template) {
     parts.push('',
@@ -246,7 +246,7 @@ function nativeSystemPrompt(template, templateExplicit = false) {
     if (templateExplicit) {
       parts.push(
         '这是用户通过 /template 显式下发的任务，不要反问用户需求、不要只给计划，直接按步骤执行。',
-        '目标文件可能已随本消息预读注入上下文（标注「任务相关文件」），若已提供则禁止再用 read_file 重复读取。',
+        '严格按模板要求调用工具（如 read_file、grep 等），不要跳过工具调用步骤。',
         '严格按模板要求的固定格式输出，不要添加模板未要求的分析性文字。',
         '步数上限仅 6 步，已调用约 3 步仍未作答就停止调工具、直接基于已有信息作答。'
       );
@@ -341,7 +341,7 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
     let raw = '';
     try {
       if (signal && signal.aborted) throw makeAbortError();
-      raw = await chatStream(model, messages, { signal });
+      raw = await chatStream(model, messages, { ...chatOpts, signal });
     } catch (e) {
       if (isAbort(e)) throw e;
       emit({ type: 'verify', step: 0, status: 'heal_error', output: '自愈模型调用失败: ' + e.message });
@@ -459,7 +459,7 @@ async function runAgent(userInput, { model, confirm, askUser, images, ollamaHost
   if (templateExplicit) {
     try {
       const ctxText = await buildTemplateFileContext(userInput, toolCtx.root);
-      if (ctxText) templateCtxMsg = { role: 'user', content: '【任务相关文件（已自动读取，供你参考，无需再调用 read_file）】\n' + ctxText };
+      if (ctxText) templateCtxMsg = { role: 'user', content: '【任务相关文件（已自动读取，供参考）】\n' + ctxText };
     } catch (e) { /* 预读失败不阻断 */ }
   }
 

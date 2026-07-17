@@ -31,7 +31,6 @@
 
 /* 气泡 */
 .bubble {
-  max-width: 80%;
   max-height: 70vh;
   overflow-y: auto;
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);

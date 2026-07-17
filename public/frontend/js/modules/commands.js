@@ -627,7 +627,7 @@ async function showTemplates() {
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.innerHTML = `
-      <div class="simpui-dialog-panel md">
+      <div class="simpui-dialog-panel lg">
         <div class="simpui-dialog-header">
           <h3 class="simpui-dialog-title">任务模板</h3>
           <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
@@ -652,10 +652,18 @@ async function showTemplates() {
     list.innerHTML = '';
     tpls.forEach((t) => {
       const card = el('div', 'template-card clickable');
-      card.appendChild(el('div', 'template-card-title', t.title));
+      const head = el('div', 'template-card-head');
+      head.appendChild(el('div', 'template-card-title', t.title));
+      head.appendChild(el('code', 'template-card-name', t.name));
+      card.appendChild(head);
       const kw = el('div', 'template-card-kw');
       (t.keywords || []).slice(0, 6).forEach((k) => kw.appendChild(el('code', 'cmd-param', k)));
       card.appendChild(kw);
+      if (t.body) {
+        const body = el('div', 'template-card-body');
+        body.textContent = t.body;
+        card.appendChild(body);
+      }
       card.addEventListener('click', () => {
         const input = $('#input');
         if (input) {

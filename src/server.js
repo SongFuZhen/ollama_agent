@@ -300,7 +300,7 @@ function handleConfig(res) {
 // 任务模板列表（供前端模板选择 UI）：含名称、标题、命中关键词。
 function handleTemplates(res) {
   sendJSON(res, 200, {
-    templates: allTemplates().map((t) => ({ name: t.name, title: t.title, keywords: t.keywords })),
+    templates: allTemplates().map((t) => ({ name: t.name, title: t.title, keywords: t.keywords, body: t.body })),
   });
 }
 

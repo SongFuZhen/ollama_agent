@@ -85,6 +85,20 @@ function addCodeCopyButtons(root) {
   });
 }
 
+// 检查气泡高度，超过阈值时添加 wide 类使其变宽
+const BUBBLE_WIDE_THRESHOLD = 300; // 高度超过此值时变宽
+function checkBubbleWide(bubble) {
+  if (!bubble) return;
+  // 延迟检查，确保内容已渲染
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (bubble.scrollHeight > BUBBLE_WIDE_THRESHOLD) {
+        bubble.classList.add('wide');
+      }
+    });
+  });
+}
+
 // 清除上下文按钮（单条移出上下文的开关）：按钮变红表示该消息已从上下文排除
 function makeContextClearBtn() {
   const btn = el('button', 'copy lightbtn sm context-clear');
@@ -475,6 +489,7 @@ function appendAnswer(text, mid) {
   bindImagePreview(bubble); // markdown 内图片点击预览
   renderMermaidBlocks(bubble);
   addCodeCopyButtons(bubble);
+  checkBubbleWide(bubble);
 
   // 底部：模型名 + 时间 + 复制 + 清除上下文
   // 模型名优先使用下拉选中的模型，否则用后端默认
@@ -678,6 +693,7 @@ function appendToken(token) {
   state.streamingAnswer.innerHTML = renderMarkdown(state.streamingText);
   bindImagePreview(state.streamingAnswer); // 流式过程中新出现的 img 也绑定
   addCodeCopyButtons(state.streamingAnswer);
+  checkBubbleWide(state.streamingAnswer);
   scrollDown();
 }
 
@@ -689,6 +705,7 @@ function appendToken(token) {
     bindImagePreview(state.streamingAnswer);
     renderMermaidBlocks(state.streamingAnswer);
     addCodeCopyButtons(state.streamingAnswer);
+    checkBubbleWide(state.streamingAnswer);
   } else {
     // 没有流式输出，创建新的答案元素
     ensureMessageContainer();
@@ -696,6 +713,7 @@ function appendToken(token) {
     bindImagePreview(state.streamingAnswer);
     renderMermaidBlocks(state.streamingAnswer);
     addCodeCopyButtons(state.streamingAnswer);
+    checkBubbleWide(state.streamingAnswer);
   }
 
   // 结构化计划（plan 模式）：若后端解析出 {goal, steps, risks}，在其上渲染可勾选步骤卡片
@@ -877,23 +895,49 @@ function showAskUser(card) {
   head.appendChild(el('span', 'confirm-icon', '❓'));
   head.appendChild(el('span', 'confirm-title', '模型提问'));
   c.appendChild(head);
-  const q = el('div', 'ask-question', question || '');
+
+  // 解析可选回答：提取"（可选回答：A / B / C）"格式
+  let displayQuestion = question || '';
+  let options = [];
+  const optMatch = displayQuestion.match(/（可选回答[：:]\s*(.+?)）/);
+  if (optMatch) {
+    options = optMatch[1].split(/\s*[\/／]\s*/).map(s => s.trim()).filter(Boolean);
+    displayQuestion = displayQuestion.slice(0, optMatch.index).trim();
+  }
+  const q = el('div', 'ask-question', displayQuestion);
   c.appendChild(q);
 
-  const input = el('textarea', 'ask-input');
-  input.placeholder = '输入你的回答…';
-  c.appendChild(input);
-
-  const btns = el('div', 'btns');
-  const send = el('button', 'yes simpui-btn primary sm', '发送回答');
-  send.onclick = () => {
-    const answer = input.value;
+  // 发送回答的函数
+  function sendAnswer(answer) {
     fetch('/api/ask-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, answer }),
     });
     c.remove();
+  }
+
+  // 有可选回答时，渲染为按钮
+  if (options.length > 0) {
+    const optBtns = el('div', 'ask-options');
+    options.forEach(opt => {
+      const btn = el('button', 'simpui-btn secondary sm', opt);
+      btn.onclick = () => sendAnswer(opt);
+      optBtns.appendChild(btn);
+    });
+    c.appendChild(optBtns);
+  }
+
+  // 输入框（用于自定义回答）
+  const input = el('textarea', 'ask-input simpui-textarea');
+  input.placeholder = options.length > 0 ? '或输入自定义回答…' : '输入你的回答…';
+  input.rows = 2;
+  c.appendChild(input);
+
+  const btns = el('div', 'btns');
+  const send = el('button', 'simpui-btn primary sm', '发送回答');
+  send.onclick = () => {
+    if (input.value.trim()) sendAnswer(input.value.trim());
   };
   btns.appendChild(send);
   c.appendChild(btns);
