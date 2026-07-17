@@ -279,9 +279,22 @@ function handleEvent(ev) {
       break;
 
     case 'compact':
-      // 上下文压缩（长任务时触发，此前前端未处理）
+      // 上下文压缩（长任务时触发）：除瞬时提示外，插入一条持久分隔线并记录位置，
+      // 使压缩状态在对话历史中可见、重载后仍可追溯（与手动 /compact 一致）。
       toggleThinking(true, '压缩上下文 · 摘要历史' + phaseStep(ev.step));
       appendStep('system', '↧ ' + (ev.msg || '上下文已压缩'));
+      {
+        const session = state.session;
+        const totalMsgs = session ? session.querySelectorAll('.msg').length : 0;
+        state.compactDivider = totalMsgs > 0 ? totalMsgs - 1 : null;
+        if (session) {
+          const div = el('div', 'context-clear-divider');
+          div.textContent = '上下文已压缩';
+          session.appendChild(div);
+        }
+        if (typeof scrollDown === 'function') scrollDown(true);
+        if (state.conversationId) saveConversation();
+      }
       break;
 
     case 'plan':
