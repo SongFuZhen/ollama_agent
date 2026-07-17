@@ -15,9 +15,12 @@ const DIRECT_CALL_NAMES = specsFor().map((s) => s.name);
 // 每个工具 params schema 的第一个键（主参数名），用于把位置参数填入。
 // 例：read_file 主参数为 path → `@read_file src/x.js` 映射为 { path:'src/x.js' }。
 const TOOL_FIRST_PARAM = {};
+// 每个工具的全部参数名（用于区分「已知参数」与「误写的标签」，把误写标签归并到主参数）。
+const TOOL_PARAM_KEYS = {};
 for (const s of specsFor()) {
   const keys = s.params ? Object.keys(s.params) : [];
   if (keys.length) TOOL_FIRST_PARAM[s.name] = keys[0];
+  TOOL_PARAM_KEYS[s.name] = keys;
 }
 
 // 直接调用解析：把「指定后必须直接调用」固化为输入前缀语法。
@@ -52,22 +55,35 @@ function resolveDirectCall(message) {
   return { type: null };
 }
 
-// 把 @/! 原始参数的 key=value 片段解析为对象，剩余位置参数收集为数组。
+// 把 @/! 原始参数解析为对象，剩余位置参数收集为数组。支持两种命名形式：
+//   - key=value（如 path=src/a.js）
+//   - key: value（标签形式，token 以冒号结尾并消费下一 token，如 文件: ./x.js；
+//     仅当冒号在 token 末尾才识别，避免误伤 C:/x.js 这类含冒号的值）
 // 例："max=5 path=src/a.js 其它" → { max:5, path:'src/a.js' }，positional:['其它']
 function parseArgs(rawArgs) {
   const params = {};
   const positional = [];
   if (!rawArgs) return { params, positional };
-  for (const tok of rawArgs.split(/\s+/)) {
+  const toks = rawArgs.split(/\s+/);
+  for (let i = 0; i < toks.length; i++) {
+    const tok = toks[i];
     const eq = tok.indexOf('=');
     if (eq > 0) {
       const k = tok.slice(0, eq);
       const v = tok.slice(eq + 1);
       // 数字值转为 number，便于 max 等数值参数
       params[k] = /^\d+$/.test(v) ? Number(v) : v;
-    } else {
-      positional.push(tok);
+      continue;
     }
+    // key: value 标签形式（token 以冒号结尾，如 文件:），消费下一 token 作为值
+    if (tok.length > 1 && tok.endsWith(':')) {
+      const k = tok.slice(0, -1);
+      const v = toks[i + 1] !== undefined ? toks[i + 1] : '';
+      i++;
+      params[k] = /^\d+$/.test(v) ? Number(v) : v;
+      continue;
+    }
+    positional.push(tok);
   }
   return { params, positional };
 }
@@ -96,11 +112,19 @@ function buildSkillParams(name, rawArgs) {
       return p;
     }
     default: {
-      // 通用：位置参数填入主参数（若有），其余走 key=value
+      // 通用：位置参数与「误写的标签参数」都归并到主参数（若有）。
+      // 例：@read_file 文件: ./x.js → 识别到 文件 非已知参数 → 值 ./x.js 填入主参数 path。
       const first = TOOL_FIRST_PARAM[name];
-      const p = Object.assign({}, params);
-      if (first && positional.length && !(first in p)) {
-        p[first] = positional.join(' ');
+      const known = TOOL_PARAM_KEYS[name] || [];
+      const p = {};
+      const extras = [];
+      for (const [k, v] of Object.entries(params)) {
+        if (known.includes(k)) p[k] = v;
+        else extras.push(v);
+      }
+      for (const t of positional) extras.push(t);
+      if (first && !(first in p) && extras.length) {
+        p[first] = extras.join(' ');
       }
       return p;
     }

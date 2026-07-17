@@ -304,11 +304,14 @@ function hideAtPalette() {
   if (atPaletteEl) atPaletteEl.classList.add('hidden');
 }
 
-// 选中 @ 面板中的某项：把输入框填为 @name + 空格，隐藏面板，光标置于末尾
+// 选中 @ 面板中的某项：把输入框填为 @name + 主参数提示，隐藏面板，光标置于末尾
 function selectAtItem(t) {
   const input = $('#input');
   if (input) {
-    input.value = '@' + t.name + ' ';
+    // 工具类补全主参数名（如 @read_file path=），降低「参数格式怎么写」的认知负担；
+    // 技能/无参工具仅补空格。
+    const hint = (t && t.kind === 'tool' && t.params) ? Object.keys(t.params)[0] : '';
+    input.value = '@' + t.name + (hint ? ' ' + hint + '=' : ' ');
     input.focus();
     const len = input.value.length;
     input.setSelectionRange(len, len);
