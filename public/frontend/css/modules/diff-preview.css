@@ -1,0 +1,29 @@
+/* diff-preview.css — 编辑结果并排预览（沿用 simpui 对话框令牌与明暗机制） */
+.diff-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.diff-grid pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 52vh;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--simpui-surface-alt, #1b1b1f);
+  color: var(--simpui-text, #e6e6e6);
+}
+
+.diff-old {
+  border-left: 3px solid var(--simpui-danger, #e5484d);
+}
+
+.diff-new {
+  border-left: 3px solid var(--simpui-success, #46a758);
+}

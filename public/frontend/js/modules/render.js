@@ -555,6 +555,7 @@ function updateThinkContent(text) {
 function appendToolCall(action, params, result, root, skipParams) {
   const toolWrap = el('div', 'tool-block');
   toolWrap.dataset.action = action; // 供结果渲染时判断是否为 grep（需高亮命中）
+  if (params && (params.path || params.file)) toolWrap.dataset.filePath = params.path || params.file; // 供 Diff 预览取路径
   if (action === 'grep' && params && params.pattern) {
     toolWrap.dataset.grepPattern = params.pattern; // 供 grep 结果高亮用
   }
@@ -635,6 +636,10 @@ function setToolResult(resultEl, result, action, pattern) {
     resultEl.textContent = '（无输出）';
   } else {
     resultEl.textContent = text;
+    if ((action === 'edit_file' || action === 'apply_diff') && typeof window.DiffPreview === 'object' && text.length) {
+      const fp = resultEl.closest('.tool-block')?.dataset?.filePath || '';
+      window.DiffPreview.show('', text, fp);
+    }
   }
 }
 
