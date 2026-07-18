@@ -11,6 +11,10 @@ module.exports = {
   category: 'write',
   usage: 'comment <path>',
   params: { path: '相对项目根的文件路径' },
+  examples: [
+    '/comment src/utils/format.js',
+    '/comment src/core/quick/runner.js',
+  ],
   async prepare(args, { projectRoot }) {
     const p = args.path;
     if (!p || !p.trim()) return { ok: false, error: '缺少文件路径，用法：comment <path>' };

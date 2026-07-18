@@ -8,6 +8,10 @@ module.exports = {
   category: 'readonly',
   usage: 'regex <需求描述>',
   params: { text: '对正则的需求描述' },
+  examples: [
+    '/regex 匹配中国大陆手机号',
+    '/regex 提取 markdown 中的链接',
+  ],
   async prepare(args) {
     const text = args.text;
     if (!text || !text.trim()) return { ok: false, error: '缺少需求描述，用法：regex <你要匹配什么>' };

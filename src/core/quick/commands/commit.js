@@ -6,10 +6,13 @@ const bash = require('../../../tools/bash');
 
 module.exports = {
   name: 'commit',
-  desc: '根据改动生成 commit message',
+  desc: '根据暂存区改动生成 commit message',
   category: 'readonly',
   usage: 'commit',
   params: {},
+  examples: [
+    '/commit',
+  ],
   async prepare(args, { projectRoot }) {
     let diff;
     try {
@@ -19,7 +22,7 @@ module.exports = {
       return { ok: false, error: '获取 git diff 失败：' + e.message };
     }
     if (!diff || !String(diff).trim()) {
-      return { ok: false, error: '没有检测到改动（git diff 为空），请先 git add 或做出修改' };
+      return { ok: false, error: '暂存区没有改动（git diff --cached 为空），请先 git add 选定文件' };
     }
     if (diff.length > 4000) diff = diff.slice(0, 4000) + '\n...[已截断]';
     return { ok: true, context: diff };

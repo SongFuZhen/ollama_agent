@@ -14,6 +14,10 @@ module.exports = {
     path: '相对项目根的文件路径',
     function: '可选，指定要测试的函数名',
   },
+  examples: [
+    '/test src/utils/parse.js',
+    '/test src/core/ollama.js chat',
+  ],
   async prepare(args, { projectRoot }) {
     const p = args.path;
     if (!p || !p.trim()) return { ok: false, error: '缺少文件路径，用法：test <path> [function]' };

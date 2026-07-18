@@ -10,6 +10,10 @@ module.exports = {
   category: 'readonly',
   usage: 'review <path>',
   params: { path: '相对项目根的文件路径' },
+  examples: [
+    '/review src/core/agent.js',
+    '/review src/tools/bash.js',
+  ],
   async prepare(args, { projectRoot }) {
     const p = args.path;
     if (!p || !p.trim()) return { ok: false, error: '缺少文件路径，用法：review <path>' };

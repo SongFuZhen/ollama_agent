@@ -14,6 +14,10 @@ module.exports = {
     path: '相对项目根的文件路径',
     error: '报错描述或症状',
   },
+  examples: [
+    '/fix src/api/server.js 端口被占用 EADDRINUSE',
+    '/fix src/db/pool.js 连接泄漏导致超时',
+  ],
   async prepare(args, { projectRoot }) {
     const p = args.path;
     if (!p || !p.trim()) return { ok: false, error: '缺少文件路径，用法：fix <path> <报错描述>' };

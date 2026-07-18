@@ -10,6 +10,10 @@ module.exports = {
   category: 'readonly',
   usage: 'explain <path>',
   params: { path: '相对项目根的文件路径' },
+  examples: [
+    '/explain src/core/agent.js',
+    '/explain src/tools/read_file.js',
+  ],
   async prepare(args, { projectRoot }) {
     const p = args.path;
     if (!p || !p.trim()) return { ok: false, error: '缺少文件路径，用法：explain <path>' };

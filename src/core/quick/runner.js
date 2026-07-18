@@ -7,6 +7,7 @@
 
 const { chatStream } = require('../ollama');
 const { findCommand } = require('./registry');
+const { log } = require('../../server/logger');
 
 // 归一化 postProcess 返回值：字符串 → { output, apply:null }
 function normalizePost(out) {
@@ -31,6 +32,9 @@ async function runQuick(cmdName, args, opts, emit) {
   // 元信息（前端据此渲染标题/模型名）
   emit({ type: 'meta', command: cmdName, model, projectRoot });
 
+  const t0 = Date.now();
+  log(`[quick] /${cmdName} 开始`);
+
   // 1. 预处理（读文件/grep/bash 等，可能失败）
   emit({ type: 'quick_step', step: 'prepare', status: 'running' });
   let prep;
@@ -38,6 +42,7 @@ async function runQuick(cmdName, args, opts, emit) {
     prep = await cmd.prepare(args || {}, { projectRoot });
   } catch (e) {
     emit({ type: 'quick_step', step: 'prepare', status: 'error', msg: e.message });
+    log(`[quick] /${cmdName} 预处理失败: ${e.message}`);
     return;
   }
   if (!prep || !prep.ok) {
@@ -64,6 +69,7 @@ async function runQuick(cmdName, args, opts, emit) {
   } catch (e) {
     if (e.code === 'ABORTED') return;
     emit({ type: 'quick_step', step: 'model', status: 'error', msg: e.message });
+    log(`[quick] /${cmdName} 推理失败: ${e.message}`);
     return;
   }
   emit({ type: 'quick_step', step: 'model', status: 'done' });
@@ -86,6 +92,7 @@ async function runQuick(cmdName, args, opts, emit) {
   }
 
   emit({ type: 'quick_done', output: final, apply: apply || undefined });
+  log(`[quick] /${cmdName} 完成 (${Date.now() - t0}ms)${apply ? ' [写操作]' : ''}`);
 }
 
 module.exports = { runQuick, normalizePost };

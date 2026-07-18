@@ -8,6 +8,10 @@ module.exports = {
   category: 'readonly',
   usage: 'error <报错文本>',
   params: { text: '粘贴的报错文本' },
+  examples: [
+    '/error TypeError: Cannot read properties of undefined (reading \'x\')',
+    '/error Segmentation fault (core dumped)',
+  ],
   async prepare(args) {
     const text = args.text;
     if (!text || !text.trim()) return { ok: false, error: '缺少报错文本，用法：error <粘贴的报错>' };
