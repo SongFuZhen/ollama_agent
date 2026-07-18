@@ -6,7 +6,7 @@
 
 > 内网断网环境下的本地 AI 助手。弱模型 + 强约束 + 真数据 = 不瞎编。
 
-一个跑在你自己机器上的本地智能体：模型通过 Ollama 在本地推理，工具调用限制在单一项目目录内，所有回答基于工具返回的真实数据。纯 Node 内置模块，无需 `npm install`，U 盘直拷即跑。
+一个跑在你自己机器上的本地智能体：模型通过 Ollama 在本地推理，工具调用限制在单一项目目录内，所有回答基于工具返回的真实数据。除 `sql.js`（已随仓库 vendored 到 `public/lib`，离线即用）外均为 Node 内置模块，正常克隆后 `npm start` 即可运行，也可用 `scripts/build-offline-pack.sh` 打包成 U 盘直拷的离线部署包。
 
 ---
 
@@ -18,19 +18,20 @@
 - **记忆召回**：基于语义相似度的三级记忆（L1 最近对话 / L2 语义召回 / L3 关联记忆）。
 - **规划模式**：只读调研阶段，限制只读工具，先输出执行计划再确认实施。
 - **验证闭环**：写操作后自动跑测试/lint，验证修改效果。
-- **零依赖**：纯 Node 内置模块 + sql.js/WASM，无需安装依赖，开箱即用。
+- **Toolbox 工具箱**：`/explain` `/review` `/commit` `/fix` 等单轮命令，固定 prompt 走独立通道（不经多步 Agent 循环），弱模型也能稳定产出。
+- **零安装**：除随仓库 vendored 的 `sql.js` 外均为 Node 内置模块，克隆即运行，亦可打包成离线部署包。
 - **过程可见**：思考链、工具调用、验证结果实时展示，可折叠查看。
 - **跨平台**：Windows / macOS / Linux 统一入口，U 盘直拷即跑。
 
 ## 模型
 
-通过设置页面的模型下拉菜单从 Ollama 已安装列表中选取，或通过环境变量 `MODEL` 指定默认模型（缺省 `deepseek-r1:8b`）。对话中途可随时切换。
+通过设置页面的模型下拉菜单从 Ollama 已安装列表中选取，或通过环境变量 `MODEL` 指定默认模型（缺省 `qwen2.5-coder:7b`）。对话中途可随时切换。
 
 ## 快速开始
 
 ```bash
 # 1. 确保 Ollama 已启动且拉好模型
-ollama pull deepseek-r1:8b
+ollama pull qwen2.5-coder:7b
 
 # 2. 启动（无需 npm install，三端通用）
 npm start
@@ -41,7 +42,7 @@ npm start
 http://localhost:3000
 ```
 
-> 三端统一入口：`npm start`（= `node src/server.js`）。无任何原生编译依赖，U 盘直拷到 Windows/macOS/Linux 上 `npm start` 即可运行。
+> 三端统一入口：`npm start`（= `node src/server.js`）。除随仓库 vendored 的 `sql.js` 外无原生编译依赖，U 盘直拷到 Windows/macOS/Linux 上 `npm start` 即可运行；完整离线部署包见 `scripts/build-offline-pack.sh`。
 
 ## 配置
 
@@ -50,9 +51,9 @@ http://localhost:3000
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama 地址，可指向局域网其他机器 |
-| `MODEL` | `deepseek-r1:8b` | 默认对话模型 |
+| `MODEL` | `qwen2.5-coder:7b` | 默认对话模型（编码优先；可用 `MODEL_CODER`/`MODEL_DEBUG`/`MODEL_GENERAL` 分场景覆盖） |
 | `PROJECT_ROOT` | `./workspace` | 沙箱根目录（单目录） |
-| `NUM_CTX` | `16384` | 模型上下文窗口大小 |
+| `NUM_CTX` | `8192` | 模型上下文窗口大小（大显存可设 `16384`） |
 | `AGENT_TIMEOUT_MS` | `90000` | Agent 整体超时（毫秒） |
 | `OLLAMA_TIMEOUT_MS` | `90000` | 单次 Ollama 调用超时（毫秒） |
 | `PORT` | `3000` | 服务端口 |
@@ -131,6 +132,8 @@ http://localhost:3000
 
 **`/命令` — 前端 slash 命令**
 
+常规命令：
+
 | 命令 | 作用 |
 |------|------|
 | `/skills` | 弹出可用技能列表 |
@@ -140,7 +143,22 @@ http://localhost:3000
 | `/clear` | 清空当前对话上下文 |
 | `/compress` | 压缩中间历史以省 token |
 | `/recall` | 语义召回跨会话记忆 |
+| `/template` | 使用任务模板（固化高频任务步骤） |
+| `/metrics` | 查看优化指标（运行埋点） |
 | `/plan` | 进入只读规划模式，返回可确认的执行计划 |
+
+**Toolbox 工具箱命令**（单轮执行，固定 prompt，**不经过 Agent 多步循环**，适合弱模型稳定完成的任务；带「工具箱」标签动态载入 slash 菜单）：
+
+| 命令 | 作用 | 类别 |
+|------|------|------|
+| `/explain <path>` | 解释指定文件的代码 | 只读 |
+| `/review <path>` | 代码审查，列出潜在问题 | 只读 |
+| `/comment <path>` | 为代码添加中文注释 | 写（产出可应用文件） |
+| `/fix <path> <报错>` | 根据报错尝试修复代码 | 写（产出可应用文件） |
+| `/test <path> [fn]` | 为代码生成单元测试 | 只读 |
+| `/commit` | 根据改动生成 commit message | 只读 |
+| `/error <报错文本>` | 解读报错信息 | 只读 |
+| `/regex <需求>` | 根据需求写正则表达式 | 只读 |
 
 > 三套机制对比、`@`/`!` 完整参数与示例见 [docs/skills-and-tools.md](docs/skills-and-tools.md)。
 
@@ -149,19 +167,30 @@ http://localhost:3000
 ```
 ollama_agent/
 ├── src/                              后端源码
-│   ├── server.js                     HTTP 服务 + SSE 对话
+│   ├── server.js                     HTTP 服务入口 + SSE 对话
 │   ├── config.js                     全局配置
 │   ├── core/                         Agent 引擎
 │   │   ├── agent.js                  Agent 主循环（工具调用、推理）
-│   │   ├── ollama.js                 Ollama 调用（含超时）
+│   │   ├── ollama.js                 Ollama 调用（含超时、退避）
 │   │   ├── ollama-tools.js           Ollama 原生 tools API
-│   │   └── compact.js                上下文压缩（摘要化）
+│   │   ├── compact.js                上下文压缩（摘要化）
+│   │   ├── workflow.js               Workflow 模式推导（先规划再执行）
+│   │   ├── precheck.js               工具调用预检查（确定性错误提前拦截）
+│   │   ├── metrics.js                运行指标埋点（data/metrics.jsonl）
+│   │   ├── template-loader.js        任务模板加载（固化高频任务路径）
+│   │   ├── prompts/                  system prompt 与示例
+│   │   └── quick/                    Toolbox 单轮命令（与 Agent 循环隔离）
+│   │       ├── runner.js             命令执行器
+│   │       ├── registry.js           命令注册表（扫描 commands/）
+│   │       └── commands/             comment/commit/error/explain/fix/regex/review/test
 │   ├── tools/                        动作类工具
 │   │   ├── index.js                  工具注册与入口
+│   │   ├── utils.js                  沙箱路径解析等公共工具
 │   │   ├── test/                     run_tests / run_lint
 │   │   └── *.js                      各工具实现
 │   ├── skills/                       技能（分析/查看类）
 │   │   ├── index.js                  技能注册
+│   │   ├── utils.js                  技能公共工具
 │   │   ├── git/                       Git 相关技能
 │   │   └── analyze/                  代码分析技能
 │   ├── storage/                      持久化
@@ -169,8 +198,12 @@ ollama_agent/
 │   │   └── rootstore.js              项目根目录持久化
 │   ├── memory/
 │   │   └── recall.js                 语义记忆召回
-│   └── device/
-│       └── device.js                 设备信息
+│   ├── server/                       服务侧辅助
+│   │   ├── hotreload.js              前端热重载（SSE 通知刷新）
+│   │   └── logger.js                 文件日志 + 轮转（data/agent.log）
+│   ├── device/
+│   │   └── device.js                 设备信息
+│   └── templates/                    任务模板（.md，注入 system prompt）
 │
 ├── public/                           前端静态文件
 │   ├── index.html                    主页面
@@ -202,13 +235,17 @@ ollama_agent/
 │       └── mermaid/                  图表渲染
 │
 ├── workspace/                        沙箱工作目录
-├── data/                             数据库文件
+├── data/                             数据库 / 日志 / 指标文件
 ├── docs/                             文档
 │   ├── agent-design.md               Agent 引擎架构设计
+│   ├── skills-and-tools.md           @/!/slash 命令机制详解
 │   ├── discussions/                  讨论与对比分析
+│   ├── optimization-plan.md          优化效果量化基线
 │   └── superpowers/plans/            实施计划
+├── scripts/
+│   └── build-offline-pack.sh         构建内网离线部署包（源码+模型+安装脚本）
 ├── start.sh / start.bat / start.ps1  跨平台启动脚本
-├── package.json                      无外部依赖
+├── package.json                      依赖 sql.js（已打包进 public/lib，离线即用）
 └── README.md                         本文档
 ```
 
@@ -225,6 +262,11 @@ ollama_agent/
 |---|---|
 | [README-en.md](./README-en.md) | 项目概述与快速开始（英文） |
 | [CLAUDE.md](./CLAUDE.md) | 开发规范与编码标准 |
+| [docs/usage-guide.md](./docs/usage-guide.md) | 新手使用教程（从零上手） |
+| [docs/usage-guide-en.md](./docs/usage-guide-en.md) | Beginner usage tutorial (English) |
 | [docs/agent-design.md](./docs/agent-design.md) | Agent 引擎架构设计 |
+| [docs/skills-and-tools.md](./docs/skills-and-tools.md) | `@`/`!`/slash 命令机制详解 |
+| [docs/optimization-plan.md](./docs/optimization-plan.md) | 优化效果量化基线 |
 | [docs/discussions/](./docs/discussions/) | 讨论与对比分析 |
 | [docs/superpowers/plans/](./docs/superpowers/plans/) | 实施计划 |
+test change
