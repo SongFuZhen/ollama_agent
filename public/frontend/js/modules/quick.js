@@ -192,7 +192,7 @@ function openCommitMsgModal(message) {
     close();
     doQuickCommit(assembleCommitMessage(type, subject, bodyInp ? bodyInp.value : ''));
   };
-  if (cancel) cancel.onclick = () => { close(); appendAnswer('已取消提交。', nextMid()); };
+  if (cancel) cancel.onclick = () => { close(); pendingCommitFiles = []; appendAnswer('已取消提交。', nextMid()); };
   if (copy) copy.onclick = () => {
     const msg = assembleCommitMessage(typeSel.value, subjectInp.value, bodyInp ? bodyInp.value : '');
     navigator.clipboard?.writeText(msg || '').then(() => {});
@@ -574,7 +574,10 @@ async function openCommitFilesPicker() {
   const submitBtn = $('#commit-files-submit');
   if (submitBtn) submitBtn.onclick = submit;
   modal.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => modal.classList.add('hidden'); });
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+  if (!modal._pickerBackdropWired) {
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal._pickerBackdropWired = true;
+  }
 }
 
 // 目录多选：文件路径参数指向目录时，基于 git status 弹出树状复选框选择器（已跟踪在上 / 未跟踪在下）
@@ -676,7 +679,10 @@ async function openQuickDirPicker(cmd, dirPath, def) {
   const submitBtn = $('#quick-dir-submit');
   if (submitBtn) submitBtn.onclick = submit;
   modal.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => modal.classList.add('hidden'); });
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+  if (!modal._pickerBackdropWired) {
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal._pickerBackdropWired = true;
+  }
 }
 
 // ---------- 主入口：执行一个 Toolbox 命令 ----------
@@ -742,6 +748,10 @@ async function runQuickCommand(text, opts = {}) {
 
   // 当前是否已有答案容器（流式 token 用）
   _quickHaveAnswer = false;
+  // 本次命令是否已收到 quick_done（用于失败兜底判断）
+  _quickDone = false;
+  // 最近一次失败步骤的错误信息（失败时回填进气泡）
+  _quickLastError = null;
   // 重置步骤进度与耗时统计
   _quickStepEls = {};
   _quickStepStart = {};
@@ -783,10 +793,15 @@ async function runQuickCommand(text, opts = {}) {
   } finally {
     currentAbortController = null;
     setBusy(false);
-    // 若命令在模型输出中途失败（未走到 quick_done），冲刷已收到的片段并复位状态，
-    // 避免遗留半截答案卡片污染下一次发送。quick_done 已调用 finalize 时 streamingAnswer 为 null，跳过。
+    toggleThinking(false);
+    // 命令在输出中途失败（未走到 quick_done）：若已有模型 token，冲刷已收到的片段；
+    // 若连一个 token 都没有（预处理/推理阶段就已失败），把错误回填进气泡，避免遗留空白答案卡片。
+    // quick_done 已调用 finalize 时 streamingAnswer 为 null，跳过。
     if (state.streamingAnswer) {
-      finalizeAnswer(state.streamingText || '');
+      const text = _quickHaveAnswer
+        ? (state.streamingText || '')
+        : (_quickLastError ? '⚠ 指令执行失败：' + _quickLastError : '⚠ 指令执行失败');
+      finalizeAnswer(text);
     }
   }
 }
@@ -832,6 +847,7 @@ function handleQuickEvent(ev) {
           elStep.textContent = '✗ ' + label + '失败' + (ev.msg ? '：' + ev.msg : '');
           elStep.dataset.status = 'error';
         }
+        _quickLastError = ev.msg || (label + '失败');
         toggleThinking(false);
       }
       break;
@@ -848,6 +864,7 @@ function handleQuickEvent(ev) {
       appendToken(ev.content);
       break;
     case 'quick_done':
+      _quickDone = true;
       state.quickLastOutput = ev.output || '';
       if (ev.apply) state.quickMeta.apply = ev.apply;
       if (!_quickHaveAnswer) {
@@ -877,6 +894,10 @@ function handleQuickEvent(ev) {
 
 // 标记：本次 quick 命令是否已创建答案容器（避免重复 ensureMessageContainer）
 let _quickHaveAnswer = false;
+// 标记：本次命令是否已收到 quick_done（用于失败兜底判断，避免空白答案卡片）
+let _quickDone = false;
+// 最近一次失败步骤的错误信息（失败时回填进气泡）
+let _quickLastError = null;
 
 // 步骤进度与耗时：每个阶段一行，原地更新并显示耗时；模型阶段额外统计 TTFT / 总耗时。
 let _quickStepEls = {};     // phase -> 步骤 DOM 元素

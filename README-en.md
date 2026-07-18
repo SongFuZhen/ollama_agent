@@ -142,10 +142,11 @@ General commands:
 | `/compress` | Compact intermediate history to save tokens |
 | `/recall` | Semantic recall of cross-session memory |
 | `/template` | Use a task template (bakes frequent task steps) |
+| `/quick` | Browse the toolbox (usage/params/examples); click "Use" to fill the command into the input |
 | `/metrics` | Show optimization metrics (runtime instrumentation) |
 | `/plan` | Enter read-only plan mode, return a confirmable execution plan |
 
-**Toolbox commands** (single-turn, fixed prompt — they do **not** go through the multi-step Agent loop, ideal for tasks a weak model completes reliably; loaded into the slash menu with a "toolbox" tag):
+**Toolbox commands** (single-turn, fixed prompt — they do **not** go through the multi-step Agent loop, ideal for tasks a weak model completes reliably; browse them via the `/quick` toolbox panel for usage/params/examples, then click "Use" to fill the command into the input):
 
 | Command | Action | Category |
 |---------|--------|----------|
