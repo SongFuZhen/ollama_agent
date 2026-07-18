@@ -27,6 +27,7 @@ const ssDirEl = $('#ss-dir');
 const ssGitEl = $('#ss-git');
 const ssToolsEl = $('#ss-tools');
 const ssSkillsEl = $('#ss-skills');
+const ssToolboxEl = $('#ss-toolbox');
 const ssMoreEl = $('#ss-more');
 const ssContextFill = $('#ss-context-fill');
 const ssContextText = $('#ss-context-text');
@@ -43,6 +44,11 @@ if (ssToolsEl) {
 if (ssSkillsEl) {
   ssSkillsEl.addEventListener('click', () => {
     if (typeof showSkills === 'function') showSkills();
+  });
+}
+if (ssToolboxEl) {
+  ssToolboxEl.addEventListener('click', () => {
+    if (typeof showToolbox === 'function') showToolbox();
   });
 }
 if (ssModelEl) {

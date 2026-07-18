@@ -72,6 +72,18 @@ const logRefreshBtn = $('#log-refresh');
 const logOpenBtn = $('#log-open');
 let logTimer = null;
 
+// 按行内容判定级别（用于着色与筛选）
+function classifyLogLine(line) {
+  if (/\[error\]/.test(line) || /失败/.test(line) || /->\s*[45]\d\d/.test(line)) return 'error';
+  if (/\[warn\]/.test(line)) return 'warn';
+  if (/\[api\]/.test(line)) return 'api';
+  if (/\[quick\]/.test(line)) return 'quick';
+  return 'info';
+}
+const LOG_BADGE = { error: 'ERR', warn: 'WARN', api: 'API', quick: 'CMD' };
+
+let logFilter = 'all';
+
 async function loadLog() {
   if (!logContent) return;
   try {
@@ -80,12 +92,40 @@ async function loadLog() {
     const raw = data.content || '（暂无日志）';
     logContent.innerHTML = raw
       .split('\n')
-      .map((line) => `<div class="log-line">${escapeHtml(line) || '&nbsp;'}</div>`)
+      .map((line) => {
+        const text = escapeHtml(line) || '&nbsp;';
+        const level = classifyLogLine(line);
+        const badge = LOG_BADGE[level]
+          ? `<span class="log-badge">${LOG_BADGE[level]}</span> `
+          : '';
+        return `<div class="log-line log-lvl-${level}" data-level="${level}">${badge}${text}</div>`;
+      })
       .join('');
+    applyLogFilter();
     logContent.scrollTop = logContent.scrollHeight;
-    if (logMeta) logMeta.textContent = `${data.totalLines} 行`;
+    if (logMeta) {
+      logMeta.textContent = `${data.totalLines} 行` + (logFilter !== 'all' ? ` · 筛选: ${logFilter}` : '');
+    }
   } catch (e) {
-    logContent.innerHTML = `<div class="log-line">日志读取失败: ${escapeHtml(e.message)}</div>`;
+    logContent.innerHTML = `<div class="log-line log-lvl-error" data-level="error">日志读取失败: ${escapeHtml(e.message)}</div>`;
+  }
+}
+// 按当前筛选条件显隐行
+function applyLogFilter() {
+  if (!logContent) return;
+  logContent.querySelectorAll('.log-line').forEach((el) => {
+    el.classList.toggle('hidden', logFilter !== 'all' && el.dataset.level !== logFilter);
+  });
+}
+function setLogFilter(level) {
+  logFilter = level;
+  document.querySelectorAll('#log-filters .log-filter').forEach((b) => {
+    b.classList.toggle('active', b.dataset.filter === level);
+  });
+  applyLogFilter();
+  if (logMeta) {
+    const total = logContent ? logContent.querySelectorAll('.log-line').length : 0;
+    logMeta.textContent = (total ? total + ' 行' : '') + (logFilter !== 'all' ? ` · 筛选: ${logFilter}` : '');
   }
 }
 function startLogAuto() {
@@ -112,6 +152,13 @@ if (logDrawerOverlay) logDrawerOverlay.onclick = closeLogDrawer;
 if (logRefreshBtn) logRefreshBtn.onclick = () => loadLog();
 if (logDownloadBtn) logDownloadBtn.onclick = () => { window.open('/api/log?download=1', '_blank'); };
 if (logAutoEl) logAutoEl.onchange = () => { logAutoEl.checked ? startLogAuto() : stopLogAuto(); };
+const logFiltersEl = $('#log-filters');
+if (logFiltersEl) {
+  logFiltersEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.log-filter');
+    if (btn) setLogFilter(btn.dataset.filter);
+  });
+}
 
 function renderTodos(todos) {
   if (!todoList) return;

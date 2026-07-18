@@ -12,31 +12,13 @@ const COMMAND_ICONS = {
   recall: 'search',
 };
 
-// 指令定义
+// 指令定义（按重要性与使用频率排序：会话/上下文管理 > 快捷指令 > 浏览 > 元信息）
 const SLASH_COMMANDS = [
   {
-    name: 'skills',
-    desc: '查看可用技能',
-    icon: 'sparkles',
-    run: showSkills,
-  },
-  {
-    name: 'tools',
-    desc: '查看可用工具',
-    icon: 'wrench',
-    run: showTools,
-  },
-  {
-    name: 'models',
-    desc: '切换模型',
-    icon: 'cpu',
-    run: showModels,
-  },
-  {
-    name: 'help',
-    desc: '显示所有命令',
-    icon: 'help-circle',
-    run: showHelp,
+    name: 'compact',
+    desc: '压缩上下文（摘要旧历史以省 token）',
+    icon: 'minimize-2',
+    run: compressContext,
   },
   {
     name: 'clear',
@@ -45,16 +27,10 @@ const SLASH_COMMANDS = [
     run: clearChat,
   },
   {
-    name: 'compress',
-    desc: '压缩上下文（摘要旧历史以省 token）',
-    icon: 'minimize-2',
-    run: compressContext,
-  },
-  {
-    name: 'recall',
-    desc: '语义召回历史记忆',
-    icon: 'search',
-    run: () => showRecall(),
+    name: 'quick',
+    desc: '浏览指令集（用法/参数/示例）',
+    icon: 'toolbox',
+    run: showToolbox,
   },
   {
     name: 'template',
@@ -63,10 +39,28 @@ const SLASH_COMMANDS = [
     run: showTemplates,
   },
   {
-    name: 'metrics',
-    desc: '查看优化指标（埋点）',
-    icon: 'activity',
-    run: showMetrics,
+    name: 'models',
+    desc: '切换模型',
+    icon: 'cpu',
+    run: showModels,
+  },
+  {
+    name: 'tools',
+    desc: '查看可用工具',
+    icon: 'wrench',
+    run: showTools,
+  },
+  {
+    name: 'skills',
+    desc: '查看可用技能',
+    icon: 'sparkles',
+    run: showSkills,
+  },
+  {
+    name: 'help',
+    desc: '显示所有命令',
+    icon: 'help-circle',
+    run: showHelp,
   },
 ];
 
@@ -86,33 +80,11 @@ const QUICK_ICONS = {
   fix: 'wrench',
 };
 
-// Toolbox 命令是否已装入 slash 菜单（避免重复）
-let toolboxLoaded = false;
-
-// 把后端 Toolbox 命令装入 slash 菜单：选中后把「/name 」填入输入框，用户补参数。
+// 预加载后端 Toolbox 命令缓存（供 /quick 弹框与 isQuickCommand 检测使用，
+// 不再装入 slash 菜单，避免与状态栏「指令集」入口重复）。
 function loadToolboxCommands() {
-  if (toolboxLoaded) return;
   if (typeof loadQuickCommands !== 'function') return;
-  loadQuickCommands().then((cmds) => {
-    if (toolboxLoaded || !cmds || !cmds.length) return;
-    cmds.forEach((c) => {
-      SLASH_COMMANDS.push({
-        name: c.name,
-        desc: c.desc,
-        icon: QUICK_ICONS[c.name] || 'zap',
-        tag: '工具箱',
-        toolbox: true,
-        usage: c.usage || c.name,
-        run: () => fillToolboxCommand(c.name),
-      });
-    });
-    toolboxLoaded = true;
-    // 若菜单当前可见（用户在输入中），立即重渲染以显示新项
-    if (cmdPaletteEl && !cmdPaletteEl.classList.contains('hidden')) {
-      cmdActiveIndex = 0;
-      renderPalette();
-    }
-  }).catch(() => {});
+  loadQuickCommands().catch(() => {});
 }
 
 // 选中 Toolbox 命令：把「/name 」填入输入框并聚焦，等待用户补参数。
@@ -177,6 +149,25 @@ function isBashInput(val) {
   return val.startsWith('!');
 }
 
+// 定位 caret 左侧、以 sym 开头且位于边界（开头/空白/中文，因中文不加空格）的「词」，
+// 使 @ / 面板在输入任意位置都能触发（如「请 @read_file」「运行 /clear」）。
+// 词内不含空白（到 caret 为止）；sym 可位于词中（左邻为中文时同样视为边界）；
+// 返回 { start, query } 或 null。
+function getActiveToken(val, caret, sym) {
+  // 向左跳过「查询」字符（非空白），得到 caret 左侧的连续非空白段 [i, caret)
+  let i = caret;
+  while (i > 0 && !/\s/.test(val[i - 1])) i--;
+  // 在该段内从右向左找 sym，且其左邻为边界（开头/空白/中文）即为活动词
+  for (let k = caret - 1; k >= i; k--) {
+    if (val[k] === sym) {
+      const before = k - 1 >= 0 ? val[k - 1] : '';
+      const isBoundary = before === '' || /\s/.test(before) || /[一-鿿]/.test(before);
+      if (isBoundary) return { start: k, query: val.slice(k + 1, caret) };
+    }
+  }
+  return null;
+}
+
 // 切换 bash 模式视觉（输入框左边框高亮 + 显示模式徽章）
 function setBashMode(on) {
   if (on === bashModeOn) return;
@@ -195,6 +186,7 @@ function setBashMode(on) {
 function onInputChange() {
   const input = $('#input');
   const val = input.value;
+  const caret = input.selectionStart;
 
   // bash 模式：以 ! 开头，提示用户整行作为 shell 命令，隐藏其他面板
   if (isBashInput(val)) {
@@ -205,9 +197,10 @@ function onInputChange() {
   }
   setBashMode(false);
 
-  // @ 选择面板：以 @ 开头且尚未输入空格，列出可调用工具/技能
-  if (val.startsWith('@') && !val.includes(' ')) {
-    const q = val.slice(1).toLowerCase();
+  // @ 选择面板：输入任意位置的 @xxx 均可触发（符号前为边界：开头/空白/中文）
+  const atTok = getActiveToken(val, caret, '@');
+  if (atTok) {
+    const q = atTok.query.toLowerCase();
     const tools = Array.isArray(state.tools) ? state.tools : [];
     atFiltered = tools.filter((t) => t.name.toLowerCase().includes(q));
     if (atFiltered.length) {
@@ -222,9 +215,10 @@ function onInputChange() {
   }
   hideAtPalette();
 
-  // 原有 slash 命令面板
-  if (val.startsWith('/') && !val.includes(' ')) {
-    const q = val.slice(1).toLowerCase();
+  // 原有 slash 命令面板：同理，任意位置的 /xxx 均可触发
+  const slashTok = getActiveToken(val, caret, '/');
+  if (slashTok) {
+    const q = slashTok.query.toLowerCase();
     cmdFiltered = SLASH_COMMANDS.filter((c) => c.name.startsWith(q));
     if (cmdFiltered.length) {
       cmdActiveIndex = 0;
@@ -233,9 +227,9 @@ function onInputChange() {
     } else {
       hidePalette();
     }
-  } else {
-    hidePalette();
+    return;
   }
+  hidePalette();
 }
 
 function renderPalette() {
@@ -304,17 +298,24 @@ function hideAtPalette() {
   if (atPaletteEl) atPaletteEl.classList.add('hidden');
 }
 
-// 选中 @ 面板中的某项：把输入框填为 @name + 主参数提示，隐藏面板，光标置于末尾
+// 选中 @ 面板中的某项：仅把当前 @xxx 词替换为 @name + 主参数提示，
+// 保留输入框其余内容，光标置于替换末尾
 function selectAtItem(t) {
   const input = $('#input');
   if (input) {
     // 工具类补全主参数名（如 @read_file path=），降低「参数格式怎么写」的认知负担；
     // 技能/无参工具仅补空格。
     const hint = (t && t.kind === 'tool' && t.params) ? Object.keys(t.params)[0] : '';
-    input.value = '@' + t.name + (hint ? ' ' + hint + '=' : ' ');
+    const replacement = '@' + t.name + (hint ? ' ' + hint + '=' : ' ');
+    const caret = input.selectionStart;
+    const tok = getActiveToken(input.value, caret, '@') || { start: 0 };
+    const before = input.value.slice(0, tok.start);
+    const after = input.value.slice(caret);
+    input.value = before + replacement + after;
+    const pos = tok.start + replacement.length;
     input.focus();
-    const len = input.value.length;
-    input.setSelectionRange(len, len);
+    input.setSelectionRange(pos, pos);
+    onInputChange();
   }
   hideAtPalette();
 }
@@ -518,9 +519,12 @@ function showHelp() {
   openListModal('可用命令', rows, { compact: true });
 }
 
-function clearChat() {
+ function clearChat() {
   // /clear：清空结构化历史（之前的对话不再作为上下文），不删除已显示的消息
   state.history = [];
+  // 上下文用量归零并刷新状态栏（活跃窗口上限 8k 由配置决定，保持不变）
+  state.sessionStats.contextTokens = 0;
+  if (typeof renderSessionState === 'function') renderSessionState();
   const session = state.session;
   if (session) {
     const div = el('div', 'context-clear-divider');
@@ -535,7 +539,7 @@ function clearChat() {
   showSimpuiToast('已清空上下文', '之前的对话不再作为上下文，后续消息从空白开始');
 }
 
-// /compress：把中间旧历史摘要化，降低后续上下文 token 占用。
+// /compact：把中间旧历史摘要化，降低后续上下文 token 占用。
 // 优先走模型摘要；模型不可用（离线）时直接本地硬截断旧历史，保证手动压缩一定生效。
 async function compressContext() {
   const history = state.history || [];
@@ -685,7 +689,7 @@ async function showTemplates() {
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.innerHTML = `
-      <div class="simpui-dialog-panel lg">
+      <div class="simpui-dialog-panel xl template-panel">
         <div class="simpui-dialog-header">
           <h3 class="simpui-dialog-title">任务模板</h3>
           <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
@@ -769,12 +773,140 @@ function renderTemplateDetail(detail, t) {
     const modal = $('#template-modal');
     if (modal) modal.classList.add('hidden');
   });
-  detail.appendChild(useBtn);
+  const footer = el('div', 'template-footer');
+  footer.appendChild(useBtn);
+  detail.appendChild(footer);
 }
 
 /* ----------------------------- */
-/* 优化指标（/metrics）           */
+/* 指令集（/quick）               */
 /* ----------------------------- */
+// 打开指令集弹框：以 Tab 栏列出全部 Toolbox 快捷命令，点击某个 Tab 切换展示其用法、
+// 参数与示例；点击「使用」按钮把 `/name ` 填入输入框。
+async function showToolbox() {
+  let modal = $('#toolbox-modal');
+  if (!modal) {
+    modal = el('div', 'simpui-dialog-backdrop hidden');
+    modal.id = 'toolbox-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.innerHTML = `
+      <div class="simpui-dialog-panel xl toolbox-panel">
+        <div class="simpui-dialog-header">
+          <h3 class="simpui-dialog-title">指令集</h3>
+          <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+        </div>
+        <div class="simpui-dialog-body">
+          <p class="toolbox-hint">选择上方 Tab 查看各命令的用法、参数与示例，点击「使用」把命令填入输入框，再补上参数发送即可。</p>
+          <div class="toolbox-tabs" id="toolbox-tabs"></div>
+          <div class="toolbox-detail" id="toolbox-detail">
+            <div class="recall-loading">加载中…</div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.querySelector('.simpui-dialog-close').onclick = () => modal.classList.add('hidden');
+  }
+  modal.classList.remove('hidden');
+  const tabs = modal.querySelector('#toolbox-tabs');
+  const detail = modal.querySelector('#toolbox-detail');
+  tabs.innerHTML = '<div class="recall-loading">加载中…</div>';
+  detail.innerHTML = '';
+  try {
+    const cmds = await loadQuickCommands();
+    if (!cmds || !cmds.length) {
+      tabs.innerHTML = '<div class="recall-empty">暂无指令集</div>';
+      detail.innerHTML = '';
+      return;
+    }
+    tabs.innerHTML = '';
+    const tabEls = [];
+    cmds.forEach((c, i) => {
+      const tab = el('button', 'toolbox-tab' + (i === 0 ? ' active' : ''), '/' + c.name);
+      tab.dataset.idx = String(i);
+      tab.addEventListener('click', () => {
+        tabEls.forEach((x) => x.classList.remove('active'));
+        tab.classList.add('active');
+        renderToolboxDetail(detail, c);
+      });
+      tabs.appendChild(tab);
+      tabEls.push(tab);
+    });
+    renderToolboxDetail(detail, cmds[0]);
+  } catch (e) {
+    tabs.innerHTML = '<div class="recall-empty">加载失败</div>';
+    detail.innerHTML = '';
+  }
+}
+
+// 渲染选中指令集命令的详情面板
+function renderToolboxDetail(detail, c) {
+  detail.innerHTML = '';
+  const head = el('div', 'toolbox-detail-head');
+  head.appendChild(el('div', 'toolbox-detail-title', '/' + c.name));
+  const cat = el('span', 'simpui-badge ' + (c.category === 'write' ? 'danger' : 'info') + ' sm', c.category || 'readonly');
+  head.appendChild(cat);
+  detail.appendChild(head);
+
+  if (c.desc) {
+    detail.appendChild(el('div', 'toolbox-card-desc', c.desc));
+  }
+
+  // 用法
+  const usageWrap = el('div', 'toolbox-field');
+  usageWrap.appendChild(el('div', 'toolbox-field-label', '用法'));
+  usageWrap.appendChild(el('code', 'toolbox-card-usage', c.usage || c.name));
+  detail.appendChild(usageWrap);
+
+  // 参数
+  const params = c.params || {};
+  const paramKeys = Object.keys(params);
+  if (paramKeys.length) {
+    const pWrap = el('div', 'toolbox-field');
+    pWrap.appendChild(el('div', 'toolbox-field-label', '参数'));
+    const pList = el('ul', 'toolbox-params');
+    paramKeys.forEach((k) => {
+      const li = el('li', 'toolbox-param');
+      li.appendChild(el('code', 'toolbox-param-name', k));
+      li.appendChild(el('span', 'toolbox-param-desc', '：' + params[k]));
+      pList.appendChild(li);
+    });
+    pWrap.appendChild(pList);
+    detail.appendChild(pWrap);
+  }
+
+  // 示例
+  const examples = Array.isArray(c.examples) ? c.examples : [];
+  if (examples.length) {
+    const eWrap = el('div', 'toolbox-field');
+    eWrap.appendChild(el('div', 'toolbox-field-label', '示例'));
+    examples.forEach((ex) => eWrap.appendChild(el('code', 'toolbox-card-example', ex)));
+    detail.appendChild(eWrap);
+  }
+
+  const useBtn = el('button', 'simpui-btn primary sm toolbox-use-btn', '使用此命令');
+  useBtn.addEventListener('click', () => {
+    const input = $('#input');
+    if (input) {
+      // 以 usage 的占位符模板填入（如 /explain <path>），用户直接替换占位符即可，无需删改示例
+      let tmpl = '/' + (c.usage || c.name);
+      if (!/[>\]\s]$/.test(tmpl)) tmpl += ' ';
+      input.value = tmpl;
+      input.focus();
+      if (typeof autoResizeInput === 'function') autoResizeInput();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+    const modal = $('#toolbox-modal');
+    if (modal) modal.classList.add('hidden');
+  });
+  const footer = el('div', 'toolbox-footer');
+  footer.appendChild(useBtn);
+  detail.appendChild(footer);
+}
+
+window.showToolbox = showToolbox;
 async function showMetrics() {
   let modal = $('#metrics-modal');
   if (!modal) {

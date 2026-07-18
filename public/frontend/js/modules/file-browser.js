@@ -243,13 +243,12 @@ function updatePanelHint() {
   }
 }
 
-// 点文件：把相对路径插入输入框（供用户发送时引用，或交给模型读取）
-// 本地模式下，路径前缀所选根目录名，便于模型理解
+// 点文件：仅把相对路径填充进输入框（统一 ./ 前缀，明确相对路径语义），
+// 不再附加 @read_file path= 等命令前缀，由用户自行决定如何引用
 function insertPath(rel) {
   if (!inputEl) return;
-  // 统一 ./ 前缀，明确相对路径语义
-  const cur = inputEl.value;
-  inputEl.value = (cur ? cur + ' ' : '') + '文件: ./' + rel;
+  const cur = inputEl.value.trim();
+  inputEl.value = (cur ? cur + ' ' : '') + './' + rel;
   inputEl.focus();
 }
 

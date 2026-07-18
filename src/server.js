@@ -276,6 +276,7 @@ function handleQuickCommands(res) {
       category: c.category,
       usage: c.usage || c.name,
       params: c.params || {},
+      examples: Array.isArray(c.examples) ? c.examples : [],
     })),
   });
 }
@@ -340,16 +341,120 @@ async function handleQuickApply(req, res) {
   }
 }
 
-// 用 Toolbox 生成的 message 直接提交（/commit 的「直接提交」按钮）
+// bash.run 不抛错：命令失败时返回 '退出码: N\n...' / '错误：...' / '命令执行失败' 等字符串。
+// 据此把 git 失败识别为 ok:false，避免误报成功（提交异常却无异常日志）。
+function bashFailed(r) {
+  const s = String(r == null ? '' : r);
+  return s.startsWith('退出码:') || s.startsWith('错误：') || s.startsWith('命令执行失败');
+}
+
+// 用 Toolbox 生成的 message 直接提交（/commit 的「提交」按钮）
+// 仅提交选定文件（git commit -- <files>），避免把未勾选的已暂存文件一并提交。
 async function handleQuickCommit(req, res) {
   try {
-    const { message, projectRoot } = await readBody(req);
+    const { message, files, projectRoot } = await readBody(req);
     if (!message || !message.trim()) return sendJSON(res, 400, { ok: false, msg: '缺少 commit message' });
     let root = PROJECT_ROOT;
     if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
     const bash = require('./tools/bash');
-    const r = await bash.run({ command: 'git commit -m ' + JSON.stringify(message) }, { root });
+    const quotedFiles = files.map((f) => JSON.stringify(String(f))).join(' ');
+    const cmd = (Array.isArray(files) && files.length)
+      ? 'git commit -m ' + JSON.stringify(message) + ' -- ' + quotedFiles
+      : 'git commit -m ' + JSON.stringify(message);
+    const r = await bash.run({ command: cmd }, { root });
+    if (bashFailed(r)) return sendJSON(res, 200, { ok: false, msg: String(r) });
     sendJSON(res, 200, { ok: true, msg: String(r) });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
+// 将选定文件加入暂存区（目录多选提交前的 git add 步骤）
+async function handleQuickStage(req, res) {
+  try {
+    const { files, projectRoot } = await readBody(req);
+    if (!Array.isArray(files) || !files.length) return sendJSON(res, 400, { ok: false, msg: '缺少 files' });
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const bash = require('./tools/bash');
+    const quoted = files.map((f) => JSON.stringify(String(f))).join(' ');
+    const r = await bash.run({ command: 'git add -- ' + quoted }, { root });
+    if (bashFailed(r)) return sendJSON(res, 200, { ok: false, msg: String(r) });
+    sendJSON(res, 200, { ok: true, msg: String(r || '已暂存 ' + files.length + ' 个文件') });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
+// 推送到远程（/push 的「推送」按钮）
+async function handleQuickPush(req, res) {
+  try {
+    const { projectRoot } = await readBody(req);
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const bash = require('./tools/bash');
+    const r = await bash.run({ command: 'git push' }, { root });
+    if (bashFailed(r)) return sendJSON(res, 200, { ok: false, msg: String(r) });
+    sendJSON(res, 200, { ok: true, msg: String(r || '已推送') });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
+// 列出待提交文件：tracked（含 +add -del 统计）与 untracked
+async function handleQuickCommitFiles(req, res) {
+  try {
+    const { projectRoot } = await readBody(req);
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const bash = require('./tools/bash');
+    const NO_OUTPUT = '(命令执行成功，无输出)';
+    const numOut = String(await bash.run({ command: 'git diff --numstat HEAD' }, { root })).trim();
+    // git 无改动时 bash 返回空输出占位串，需过滤，否则会被误解析成一条伪文件
+    const tracked = (numOut && numOut !== NO_OUTPUT)
+      ? numOut.split('\n').filter(Boolean).filter((l) => l.includes('\t')).map((line) => {
+        const [a, d, ...rest] = line.split('\t');
+        let p = rest.join('\t').trim();
+        // git 对含特殊字符的路径会加引号并转义，去掉外层引号恢复原始路径
+        if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) {
+          p = p.slice(1, -1).replace(/\\(.)/g, '$1');
+        }
+        return {
+          path: p,
+          add: a === '-' ? 0 : (parseInt(a, 10) || 0),
+          del: d === '-' ? 0 : (parseInt(d, 10) || 0),
+        };
+      })
+      : [];
+    const untOut = String(await bash.run({ command: 'git ls-files --others --exclude-standard' }, { root })).trim();
+    const untracked = (untOut && untOut !== NO_OUTPUT)
+      ? untOut.split('\n').filter(Boolean).map((p) => p.trim())
+      : [];
+    sendJSON(res, 200, { ok: true, tracked, untracked });
+  } catch (e) {
+    sendJSON(res, 500, { ok: false, msg: e.message });
+  }
+}
+
+// 获取单文件 diff（用于弹框查看修改）
+// tracked 文件用 git diff HEAD；untracked（新增）文件用 git diff --no-index 展示完整内容
+async function handleQuickDiff(req, res) {
+  try {
+    const { path: p, untracked, projectRoot } = await readBody(req);
+    if (!p) return sendJSON(res, 400, { ok: false, msg: '缺少 path' });
+    let root = PROJECT_ROOT;
+    if (projectRoot) { const v = await validateRoot(projectRoot); if (v) root = v; }
+    const bash = require('./tools/bash');
+    const q = JSON.stringify(String(p));
+    if (untracked) {
+      // git diff --no-index 有差异时退出码为 1，bash.run 会带「退出码: N」前缀以字符串形式返回 stdout
+      const r = await bash.run({ command: 'git --no-pager diff --no-index -- /dev/null ' + q }, { root });
+      let diff = String(r).replace(/^退出码:\s*\d+\n/, '').trim();
+      if (!diff || diff === '(命令执行成功，无输出)') diff = '';
+      return sendJSON(res, 200, { ok: true, diff });
+    }
+    const r = await bash.run({ command: 'git diff HEAD -- ' + q }, { root });
+    sendJSON(res, 200, { ok: true, diff: String(r) });
   } catch (e) {
     sendJSON(res, 500, { ok: false, msg: e.message });
   }
@@ -662,6 +767,13 @@ function handleHealth(res) {
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
+  // 运行日志：记录 API 请求耗时与状态码（轮询/静态资源不记，避免刷屏）
+  if (url.startsWith('/api/') && !['/api/health', '/api/hotreload', '/api/preflight', '/api/log'].includes(url)) {
+    const t0 = Date.now();
+    res.on('finish', () => {
+      log(`[api] ${req.method} ${url} -> ${res.statusCode} (${Date.now() - t0}ms)`);
+    });
+  }
   if (req.method === 'GET' && url === '/api/preflight') {
     const ollamaHost = new URL(req.url, 'http://x').searchParams.get('ollamaHost') || '';
     return handlePreflight(res, ollamaHost);
@@ -689,6 +801,10 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url === '/api/quick') return handleQuick(req, res);
   if (req.method === 'POST' && url === '/api/quick/apply') return handleQuickApply(req, res);
   if (req.method === 'POST' && url === '/api/quick/commit') return handleQuickCommit(req, res);
+  if (req.method === 'POST' && url === '/api/quick/stage') return handleQuickStage(req, res);
+  if (req.method === 'POST' && url === '/api/quick/push') return handleQuickPush(req, res);
+  if (req.method === 'POST' && url === '/api/quick/commit-files') return handleQuickCommitFiles(req, res);
+  if (req.method === 'POST' && url === '/api/quick/diff') return handleQuickDiff(req, res);
   if (req.method === 'GET' && url === '/api/fs/list') return handleFsList(req, res);
   if (req.method === 'GET' && url === '/api/fs/dirs') return handleFsDirs(req, res);
   if (req.method === 'GET' && url === '/api/fs/read') return handleFsRead(req, res);

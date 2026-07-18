@@ -384,11 +384,6 @@
                 <!-- 状态栏 -->
                 <div class="status-bar">
                     <div class="status-left">
-                        <span class="status-item status-ready">
-                            <i data-lucide="circle" class="status-dot"></i>
-                            <span>就绪</span>
-                        </span>
-                        <span class="status-sep">|</span>
                         <span class="status-item" id="ss-model"
                             >qwen2.5-coder</span
                         >
@@ -409,6 +404,13 @@
                                 >—</span
                             >
                         </span>
+                        <span class="status-sep">|</span>
+                        <span
+                            class="status-item clickable"
+                            id="ss-toolbox"
+                            title="点击查看指令集"
+                            >指令集</span
+                        >
                         <span class="status-sep">|</span>
                         <span
                             class="status-item clickable"
@@ -503,7 +505,14 @@
                         </button>
                     </div>
                 </div>
-                <div class="log-meta" id="log-meta"></div>
+                <div class="log-filters" id="log-filters">
+                    <span class="log-meta" id="log-meta"></span>
+                    <button class="log-filter active" data-filter="all">全部</button>
+                    <button class="log-filter" data-filter="error">错误</button>
+                    <button class="log-filter" data-filter="warn">警告</button>
+                    <button class="log-filter" data-filter="api">API</button>
+                    <button class="log-filter" data-filter="quick">指令集</button>
+                </div>
                 <pre id="log-content" class="log-content"></pre>
             </div>
         </div>
@@ -615,7 +624,7 @@
             aria-modal="true"
             aria-label="会话状态"
         >
-            <div class="simpui-dialog-panel md">
+            <div class="simpui-dialog-panel lg state-modal-panel">
                 <div class="simpui-dialog-header">
                     <h3 class="simpui-dialog-title">会话状态</h3>
                     <div class="simpui-dialog-header-actions">
@@ -629,6 +638,141 @@
                     </div>
                 </div>
                 <div id="state-modal-body" class="simpui-dialog-body"></div>
+            </div>
+        </div>
+
+        <!-- ===== 指令集目录多选 Drawer ===== -->
+        <div
+            id="quick-dir-modal"
+            class="simpui-dialog-backdrop hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="选择文件"
+        >
+            <div class="simpui-dialog-panel md quick-dir-panel">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title" id="quick-dir-title">选择文件</h3>
+                    <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="quick-dir-listwrap">
+                        <p class="quick-dir-hint" id="quick-dir-hint"></p>
+                        <div id="quick-dir-tree" class="quick-dir-tree"></div>
+                        <div id="quick-dir-extra" class="quick-dir-extra"></div>
+                    </div>
+                    <div class="picker-diffview hidden">
+                        <div class="picker-diffview-bar">
+                            <button type="button" class="simpui-btn ghost sm picker-diff-back">← 返回</button>
+                            <span class="picker-diffview-title"></span>
+                        </div>
+                        <div class="diff-split picker-diff-content"></div>
+                    </div>
+                </div>
+                <div class="quick-dir-footer">
+                    <span id="quick-dir-count" class="quick-dir-count">已选 0 个文件</span>
+                    <div class="quick-dir-actions">
+                        <button class="simpui-btn ghost sm" data-close>取消</button>
+                        <button class="simpui-btn primary sm" id="quick-dir-submit">提交</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 提交文件选择 Drawer ===== -->
+        <div id="commit-files-modal" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="选择提交文件">
+            <div class="simpui-dialog-panel md commit-files-panel">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">选择提交文件</h3>
+                    <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="commit-files-listwrap">
+                        <p class="commit-files-hint">勾选要提交的文件（按目录树展示）；点击文件或眼睛图标可查看 diff。默认范围为当前项目根（./）。</p>
+                        <div class="commit-files-cols">
+                            <div class="commit-files-col">
+                                <div class="commit-files-col-title">未跟踪 (Untracked)</div>
+                                <div id="commit-files-untracked" class="commit-files-list"></div>
+                            </div>
+                            <div class="commit-files-col">
+                                <div class="commit-files-col-title">已跟踪 (Tracked)</div>
+                                <div id="commit-files-tracked" class="commit-files-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="picker-diffview hidden">
+                        <div class="picker-diffview-bar">
+                            <button type="button" class="simpui-btn ghost sm picker-diff-back">← 返回</button>
+                            <span class="picker-diffview-title"></span>
+                        </div>
+                        <div class="diff-split picker-diff-content"></div>
+                    </div>
+                </div>
+                <div class="quick-dir-footer">
+                    <span id="commit-files-count" class="quick-dir-count">已选 0 个文件</span>
+                    <div class="quick-dir-actions">
+                        <button class="simpui-btn ghost sm" data-close>取消</button>
+                        <button class="simpui-btn primary sm" id="commit-files-submit">提交</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 单文件 diff 弹框 ===== -->
+        <div id="diff-modal" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="文件 diff">
+            <div class="simpui-dialog-panel lg diff-panel">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title" id="diff-modal-title">文件 diff</h3>
+                    <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div id="diff-content" class="diff-split">加载中…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 提交信息确认弹框 ===== -->
+        <div id="commit-msg-modal" class="simpui-dialog-backdrop hidden" role="dialog" aria-modal="true" aria-label="确认提交信息">
+            <div class="simpui-dialog-panel commit-msg-panel">
+                <div class="simpui-dialog-header">
+                    <h3 class="simpui-dialog-title">确认提交信息</h3>
+                    <button class="simpui-dialog-close modal-close-btn" aria-label="关闭">✕</button>
+                </div>
+                <div class="simpui-dialog-body">
+                    <div class="commit-msg-form">
+                        <div class="commit-msg-row">
+                            <select id="commit-msg-type" class="simpui-select commit-msg-type" aria-label="提交类型">
+                                <option value="" disabled selected>类型</option>
+                                <option value="feat">feat · 新功能</option>
+                                <option value="fix">fix · 修复缺陷</option>
+                                <option value="docs">docs · 文档</option>
+                                <option value="style">style · 格式调整</option>
+                                <option value="refactor">refactor · 重构</option>
+                                <option value="perf">perf · 性能优化</option>
+                                <option value="test">test · 测试</option>
+                                <option value="build">build · 构建</option>
+                                <option value="ci">ci · 流水线</option>
+                                <option value="chore">chore · 杂务</option>
+                                <option value="revert">revert · 回滚</option>
+                            </select>
+                            <span class="commit-msg-colon">:</span>
+                            <input id="commit-msg-subject" class="simpui-input commit-msg-subject" type="text" maxlength="72" placeholder="简述改动（祈使句·首字母小写·≤50字）" />
+                            <span id="commit-msg-count" class="commit-msg-count">0/50</span>
+                        </div>
+                        <textarea id="commit-msg-body" class="commit-msg-input commit-msg-body" rows="5" spellcheck="false" placeholder="可选：补充说明（为什么改，留空则仅提交主题行）"></textarea>
+                        <div class="commit-msg-preview">
+                            <span class="commit-msg-preview-label">预览</span>
+                            <pre id="commit-msg-preview" class="commit-msg-preview-text"></pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-dir-footer commit-msg-footer">
+                    <span id="commit-msg-tip" class="quick-dir-count">选择类型并填写简述后提交</span>
+                    <div class="quick-dir-actions">
+                        <button class="simpui-btn ghost sm" id="commit-msg-cancel">取消</button>
+                        <button class="simpui-btn secondary sm" id="commit-msg-copy">复制</button>
+                        <button class="simpui-btn primary sm" id="commit-msg-submit">提交</button>
+                    </div>
+                </div>
             </div>
         </div>
 

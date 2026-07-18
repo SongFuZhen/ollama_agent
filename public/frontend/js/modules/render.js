@@ -627,19 +627,30 @@ function updateToolResult(result) {
 // 写入工具结果：空结果也去掉「执行中…」占位，避免结束后仍显示加载态。
 // grep 结果走高亮渲染（按 pattern 把命中串换成 <mark>），其余工具原样文本。
 function setToolResult(resultEl, result, action, pattern) {
-  resultEl.classList.remove('loading');
+  resultEl.classList.remove('loading', 'markdown');
   resultEl.innerHTML = '';
   const text = result === null || result === undefined ? '' : String(result);
+  const fp = resultEl.closest('.tool-block')?.dataset?.filePath || '';
   if (action === 'grep') {
     resultEl.innerHTML = highlightGrep(text, pattern);
-  } else if (text.length === 0) {
+    return;
+  }
+  if (text.length === 0) {
     resultEl.textContent = '（无输出）';
-  } else {
-    resultEl.textContent = text;
-    if ((action === 'edit_file' || action === 'apply_diff') && typeof window.DiffPreview === 'object' && text.length) {
-      const fp = resultEl.closest('.tool-block')?.dataset?.filePath || '';
-      window.DiffPreview.show('', text, fp);
-    }
+    return;
+  }
+  // 读取的是 markdown 类文档时，按 markdown 渲染而非原始 <pre>，避免裸显示
+  if (action === 'read_file' && /\.(md|markdown|mdx)$/i.test(fp)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble ' + (typeof mdEngine === 'function' && mdEngine() === 'markdownit' ? 'mdit' : 'mdx');
+    wrap.innerHTML = renderMarkdown(text);
+    resultEl.classList.add('markdown');
+    resultEl.appendChild(wrap);
+    return;
+  }
+  resultEl.textContent = text;
+  if ((action === 'edit_file' || action === 'apply_diff') && typeof window.DiffPreview === 'object' && text.length) {
+    window.DiffPreview.show('', text, fp);
   }
 }
 

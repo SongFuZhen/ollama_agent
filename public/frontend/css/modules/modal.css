@@ -89,12 +89,70 @@ select, textarea {
 
 /* 会话状态弹框 */
 #state-modal-body {
+  font-size: 13px;
+  color: var(--simpui-text-light);
+}
+.state-detail { display: flex; flex-direction: column; gap: 10px; }
+.state-row { display: flex; align-items: baseline; gap: 10px; }
+.state-row-ctx { align-items: flex-start; }
+.state-key {
+  flex: 0 0 72px;
+  color: var(--simpui-text-dim);
+  font-size: 12px;
+  padding-top: 1px;
+}
+.state-val {
+  flex: 1;
+  min-width: 0;
+  color: var(--simpui-text-light);
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.8;
-  color: var(--simpui-text-light);
-  white-space: pre-line;
+  word-break: break-all;
 }
+.state-ctx { flex: 1; min-width: 0; }
+.state-ctx-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--simpui-text-light);
+  margin-bottom: 5px;
+}
+.state-ctx-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.state-ctx-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .2s;
+}
+.state-ctx-fill.warn { background: var(--danger); }
+.state-section { margin-top: 4px; }
+.state-section-title {
+  font-size: 12px;
+  color: var(--simpui-text-dim);
+  margin-bottom: 8px;
+}
+.state-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.state-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.state-tool-name { color: var(--simpui-text-light); }
+.state-tool-count { color: var(--accent); font-weight: 700; }
+.state-tool-empty { color: var(--simpui-text-dim); font-size: 12px; }
+
+/* 加宽会话状态弹框，工具调用 chip 不拥挤 */
+.state-modal-panel { max-width: 560px; }
 
 /* 共享旋转加载图标 */
 .spin {

@@ -157,6 +157,16 @@
   background: var(--primary);
   color: #fff;
 }
+/* 激活态下子元素显式色会盖掉父级 #fff，需重写为高对比白色，避免描述文字看不清 */
+.slash-menu-item.active .slash-menu-name,
+.slash-menu-item.active .slash-menu-desc,
+.slash-menu-item.active .slash-menu-tag,
+.slash-menu-item.active .slash-menu-icon {
+  color: #fff;
+}
+.slash-menu-item.active .slash-menu-desc {
+  color: rgba(255, 255, 255, 0.85);
+}
 
 .slash-menu-icon {
   width: 14px;

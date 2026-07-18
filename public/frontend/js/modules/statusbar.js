@@ -202,7 +202,7 @@ function formatTokenCount(n) {
   return String(n);
 }
 
-// 组装状态详情文本（用于弹框展示）
+// 组装状态详情（结构化 HTML，用于弹框展示）
 function buildStateDetail() {
   const model = state.activeModel || state.defaultModel || '—';
   const boundAbs = (state.currentProjectRoot && isAbs(state.currentProjectRoot)) ? state.currentProjectRoot : null;
@@ -210,32 +210,72 @@ function buildStateDetail() {
   const id = state.conversationId || '—';
   const elapsed = state.sessionStats.startTs ? formatElapsed(Date.now() - state.sessionStats.startTs) : '0m';
   const counts = state.sessionStats.toolCounts || {};
-  const toolLines = Object.keys(counts).length
-    ? Object.entries(counts).map(([k, v]) => `  ${k} ×${v}`).join('\n')
-    : '  无';
   const msgCount = state.session ? state.session.querySelectorAll('.msg').length : 0;
   const removedCount = state.excludedMids ? state.excludedMids.size : 0;
   const ctxTokens = state.sessionStats.contextTokens || 0;
   const ctxLimit = state.sessionStats.contextLimit || 0;
   const ctxMax = state.sessionStats.modelContextMax || 0;
-  const ctxLine = ctxLimit > 0
-    ? `上下文用量: ${formatTokenCount(ctxTokens)} / ${formatTokenCount(ctxLimit)} (${Math.round(ctxTokens / ctxLimit * 100)}%)${ctxMax > 0 && ctxMax !== ctxLimit ? `  [模型上限 ${formatTokenCount(ctxMax)}]` : ''}`
-    : `上下文用量: ${ctxTokens > 0 ? formatTokenCount(ctxTokens) : '—'}`;
 
-  return `模型: ${model}
-目录: ${root || '默认沙箱'}${state.gitBranch ? '\n分支: ' + state.gitBranch : ''}
-会话 ID: ${id}
-已用时长: ${elapsed}
-消息数: ${msgCount}${removedCount > 0 ? `（已移除 ${removedCount}）` : ''}
-${ctxLine}
-工具调用:
-${toolLines}`;
+  const wrap = el('div', 'state-detail');
+  const addRow = (key, val) => {
+    const row = el('div', 'state-row');
+    row.appendChild(el('span', 'state-key', key));
+    row.appendChild(el('span', 'state-val', val));
+    wrap.appendChild(row);
+  };
+  addRow('模型', model);
+  addRow('目录', root || '默认沙箱');
+  if (state.gitBranch) addRow('分支', state.gitBranch);
+  addRow('会话 ID', id);
+  addRow('已用时长', elapsed);
+  addRow('消息数', String(msgCount) + (removedCount > 0 ? `（已移除 ${removedCount}）` : ''));
+
+  // 上下文用量（带迷你进度条）
+  const ctxPct = ctxLimit > 0 ? Math.round(ctxTokens / ctxLimit * 100) : 0;
+  const ctxRow = el('div', 'state-row state-row-ctx');
+  ctxRow.appendChild(el('span', 'state-key', '上下文用量'));
+  const ctxVal = el('div', 'state-ctx');
+  const ctxText = el('div', 'state-ctx-text',
+    `${formatTokenCount(ctxTokens)} / ${ctxLimit > 0 ? formatTokenCount(ctxLimit) : '—'}` +
+    `${ctxMax > 0 && ctxMax !== ctxLimit ? `  [模型上限 ${formatTokenCount(ctxMax)}]` : ''}  (${ctxPct}%)`);
+  const bar = el('div', 'state-ctx-bar');
+  const fill = el('div', 'state-ctx-fill');
+  fill.style.width = Math.min(100, ctxPct) + '%';
+  if (ctxPct >= 80) fill.classList.add('warn');
+  bar.appendChild(fill);
+  ctxVal.appendChild(ctxText);
+  ctxVal.appendChild(bar);
+  ctxRow.appendChild(ctxVal);
+  wrap.appendChild(ctxRow);
+
+  // 工具调用（chip 形式）
+  const sec = el('div', 'state-section');
+  sec.appendChild(el('div', 'state-section-title', '工具调用'));
+  const tools = el('div', 'state-tools');
+  const keys = Object.keys(counts);
+  if (keys.length) {
+    keys.forEach((k) => {
+      const chip = el('span', 'state-tool');
+      chip.appendChild(el('span', 'state-tool-name', k));
+      chip.appendChild(el('span', 'state-tool-count', '×' + counts[k]));
+      tools.appendChild(chip);
+    });
+  } else {
+    tools.appendChild(el('span', 'state-tool-empty', '无'));
+  }
+  sec.appendChild(tools);
+  wrap.appendChild(sec);
+
+  return wrap;
 }
 
 // 点击状态栏弹出详情
 function openStateModal() {
   const body = $('#state-modal-body');
-  if (body) body.textContent = buildStateDetail();
+  if (body) {
+    body.innerHTML = '';
+    body.appendChild(buildStateDetail());
+  }
   const modal = $('#state-modal');
   if (modal) modal.classList.remove('hidden');
   if (window.lucide) lucide.createIcons();

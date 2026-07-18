@@ -6,7 +6,7 @@
 
 > A local AI assistant for air-gapped intranets. Weak model + strong constraints + real data = no hallucination.
 
-A local agent that runs entirely on your own machine: models infer locally via Ollama, tool calls are confined to a single project directory, and every answer is grounded in real data returned by tools. Built with plain Node built-in modules — no `npm install` needed; copy onto a USB stick and run.
+A local agent that runs entirely on your own machine: models infer locally via Ollama, tool calls are confined to a single project directory, and every answer is grounded in real data returned by tools. Everything is Node built-in modules except `sql.js` (vendored into `public/lib`, works offline). After a normal clone, `npm start` runs it; or package it as a USB-ready offline deploy pack via `scripts/build-offline-pack.sh`.
 
 ---
 
@@ -18,19 +18,20 @@ A local agent that runs entirely on your own machine: models infer locally via O
 - **Memory recall**: three-tier memory based on semantic similarity (L1 recent / L2 semantic recall / L3 associative).
 - **Plan mode**: read-only exploration phase — only read tools allowed, outputs a plan for approval before any changes.
 - **Verification loop**: automatically runs tests/lint after write operations to validate changes.
-- **Zero dependencies**: pure Node built-in modules + sql.js/WASM — no install step, works out of the box.
+- **Toolbox**: single-turn commands like `/explain` `/review` `/commit` `/fix` run through an isolated channel (not the multi-step Agent loop) so even a weak model produces stable output.
+- **Zero install**: everything is Node built-in modules except the vendored `sql.js`; clone and run, or package as an offline deploy pack.
 - **Transparent process**: thinking chains, tool calls, and verification results displayed live and collapsible.
 - **Cross-platform**: unified entry point for Windows / macOS / Linux — copy and run from a USB stick.
 
 ## Model
 
-Select a model from the settings dropdown (populated from your Ollama installed list), or set the `MODEL` environment variable for a default (falls back to `deepseek-r1:8b`). You can switch models mid-conversation.
+Select a model from the settings dropdown (populated from your Ollama installed list), or set the `MODEL` environment variable for a default (falls back to `qwen2.5-coder:7b`). You can switch models mid-conversation.
 
 ## Quick Start
 
 ```bash
 # 1. Make sure Ollama is running and models are pulled
-ollama pull deepseek-r1:8b
+ollama pull qwen2.5-coder:7b
 
 # 2. Start (no npm install needed)
 npm start
@@ -41,7 +42,7 @@ npm start
 http://localhost:3000
 ```
 
-> Unified entry point: `npm start` (= `node src/server.js`). Zero native compilation dependencies — copy the folder to any Windows/macOS/Linux machine and run `npm start`.
+> Unified entry point: `npm start` (= `node src/server.js`). No native compilation dependencies except the vendored `sql.js` — copy the folder to any Windows/macOS/Linux machine and run `npm start`. For a full offline deploy pack, see `scripts/build-offline-pack.sh`.
 
 ## Configuration
 
@@ -50,9 +51,9 @@ http://localhost:3000
 | Variable | Default | Description |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama address; can point to another machine on LAN |
-| `MODEL` | `deepseek-r1:8b` | Default chat model |
+| `MODEL` | `qwen2.5-coder:7b` | Default chat model (coding-first; override per scenario via `MODEL_CODER`/`MODEL_DEBUG`/`MODEL_GENERAL`) |
 | `PROJECT_ROOT` | `./workspace` | Sandbox root directory |
-| `NUM_CTX` | `16384` | Model context window size |
+| `NUM_CTX` | `8192` | Model context window size (set `16384` for more VRAM) |
 | `AGENT_TIMEOUT_MS` | `90000` | Agent overall timeout (ms) |
 | `OLLAMA_TIMEOUT_MS` | `90000` | Single Ollama call timeout (ms) |
 | `PORT` | `3000` | Server port |
@@ -103,24 +104,91 @@ After startup, configure in the settings page (top-right menu):
 | `explain_symbol` | Explain a symbol definition |
 | `find_references` | Find symbol references |
 
+### Command Syntax
+
+Besides natural-language chat, three prefix/slash syntaxes drive tools and skills directly:
+
+**`@command` — force a direct call** (bypasses model reasoning; result is fed to the model to answer)
+
+```
+@<tool or skill name> [args...]
+```
+
+- Args use `key=value` (e.g. `path=src/x.js`, `max=5`); positional args auto-fill the primary param (e.g. `@read_file src/x.js`).
+- Any registered tool or skill can be called; write ops (`write_file`/`edit_file`/`bash` etc.) prompt a second confirmation before running.
+- Examples: `@git_status`, `@git_log max=5`, `@read_file src/core/agent.js`, `@grep pattern=foo path=src`, `@write_file path=/tmp/n.txt content=hi`
+
+**`!command` — run shell directly**
+
+```
+!<shell command>
+```
+
+- Calls the `bash` tool directly, using its confirmation flow (including read-only commands); dangerous commands are blocked by the safety policy.
+- Examples: `!ls -la src/core`, `!git log --oneline -3`, `!npm test`
+- Priority: `!` > `@` > `/plan`.
+
+**`/commands` — Frontend slash commands**
+
+General commands:
+
+| Command | Action |
+|---------|--------|
+| `/skills` | Show list of available skills |
+| `/tools` | Show list of available tools |
+| `/models` | Switch model |
+| `/help` | Show all commands |
+| `/clear` | Clear current conversation context |
+| `/compress` | Compact intermediate history to save tokens |
+| `/recall` | Semantic recall of cross-session memory |
+| `/template` | Use a task template (bakes frequent task steps) |
+| `/metrics` | Show optimization metrics (runtime instrumentation) |
+| `/plan` | Enter read-only plan mode, return a confirmable execution plan |
+
+**Toolbox commands** (single-turn, fixed prompt — they do **not** go through the multi-step Agent loop, ideal for tasks a weak model completes reliably; loaded into the slash menu with a "toolbox" tag):
+
+| Command | Action | Category |
+|---------|--------|----------|
+| `/explain <path>` | Explain the code in a file | readonly |
+| `/review <path>` | Code review, list potential issues | readonly |
+| `/comment <path>` | Add Chinese comments to code | write (produces applicable file) |
+| `/fix <path> <error>` | Attempt to fix code from an error | write (produces applicable file) |
+| `/test <path> [fn]` | Generate unit tests for code | readonly |
+| `/commit` | Generate a commit message from changes | readonly |
+| `/error <error text>` | Interpret an error message | readonly |
+| `/regex <need>` | Write a regex from a requirement | readonly |
+
+> For a comparison of the three mechanisms and full `@`/`!` parameter docs and examples, see [docs/skills-and-tools.md](docs/skills-and-tools.md).
+
 ## Directory Structure
 
 ```
 ollama_agent/
 ├── src/                              Backend source
-│   ├── server.js                     HTTP server + SSE chat
+│   ├── server.js                     HTTP server entry + SSE chat
 │   ├── config.js                     Global configuration
 │   ├── core/                         Agent engine
 │   │   ├── agent.js                  Agent main loop (tool calls, reasoning)
-│   │   ├── ollama.js                 Ollama client (with timeout)
+│   │   ├── ollama.js                 Ollama client (with timeout, backoff)
 │   │   ├── ollama-tools.js           Ollama native tools API
-│   │   └── compact.js                Context compaction (summarization)
+│   │   ├── compact.js                Context compaction (summarization)
+│   │   ├── workflow.js               Workflow mode inference (plan-then-execute)
+│   │   ├── precheck.js               Tool-call pre-flight check (early deterministic error catch)
+│   │   ├── metrics.js                Runtime metrics (data/metrics.jsonl)
+│   │   ├── template-loader.js        Task-template loader (bake frequent task paths)
+│   │   ├── prompts/                  System prompts & examples
+│   │   └── quick/                    Toolbox single-turn commands (isolated from Agent loop)
+│   │       ├── runner.js             Command runner
+│   │       ├── registry.js           Command registry (scans commands/)
+│   │       └── commands/             comment/commit/error/explain/fix/regex/review/test
 │   ├── tools/                        Action tools
 │   │   ├── index.js                  Tool registry & entry
+│   │   ├── utils.js                  Sandbox path resolution & shared helpers
 │   │   ├── test/                     run_tests / run_lint
 │   │   └── *.js                      Individual tool implementations
 │   ├── skills/                       Skills (analysis / inspection)
 │   │   ├── index.js                  Skill registry
+│   │   ├── utils.js                  Shared skill helpers
 │   │   ├── git/                      Git-related skills
 │   │   └── analyze/                  Code analysis skills
 │   ├── storage/                      Persistence
@@ -128,8 +196,12 @@ ollama_agent/
 │   │   └── rootstore.js              Project root persistence
 │   ├── memory/
 │   │   └── recall.js                 Semantic memory recall
-│   └── device/
-│       └── device.js                 Device info
+│   ├── server/                       Server-side helpers
+│   │   ├── hotreload.js              Frontend hot reload (SSE reload notify)
+│   │   └── logger.js                 File logger + rotation (data/agent.log)
+│   ├── device/
+│   │   └── device.js                 Device info
+│   └── templates/                    Task templates (.md, injected into system prompt)
 │
 ├── public/                           Frontend static files
 │   ├── index.html                    Main page
@@ -161,13 +233,17 @@ ollama_agent/
 │       └── mermaid/                  Diagram rendering
 │
 ├── workspace/                        Sandbox working directory
-├── data/                             Database files
+├── data/                             Database / logs / metrics files
 ├── docs/                             Documentation
 │   ├── agent-design.md               Agent engine architecture
+│   ├── skills-and-tools.md           @/!/slash command mechanics explained
 │   ├── discussions/                  Discussions & comparisons
+│   ├── optimization-plan.md          Optimization metrics baseline
 │   └── superpowers/plans/            Implementation plans
+├── scripts/
+│   └── build-offline-pack.sh         Build air-gapped offline deploy pack (source+models+installer)
 ├── start.sh / start.bat / start.ps1  Cross-platform startup scripts
-├── package.json                      No external dependencies
+├── package.json                      Depends on sql.js (bundled into public/lib, runs offline)
 └── README.md                         This document
 ```
 
@@ -184,6 +260,10 @@ ollama_agent/
 |---|---|
 | [README.md](./README.md) | Project overview and quick start (Chinese) |
 | [CLAUDE.md](./CLAUDE.md) | Development conventions and coding standards |
+| [docs/usage-guide.md](./docs/usage-guide.md) | Beginner usage tutorial (Chinese) |
+| [docs/usage-guide-en.md](./docs/usage-guide-en.md) | Beginner usage tutorial (English) |
 | [docs/agent-design.md](./docs/agent-design.md) | Agent engine architecture design |
+| [docs/skills-and-tools.md](./docs/skills-and-tools.md) | `@`/`!`/slash command mechanics explained |
+| [docs/optimization-plan.md](./docs/optimization-plan.md) | Optimization metrics baseline |
 | [docs/discussions/](./docs/discussions/) | Discussions & comparative analysis |
 | [docs/superpowers/plans/](./docs/superpowers/plans/) | Implementation plans |

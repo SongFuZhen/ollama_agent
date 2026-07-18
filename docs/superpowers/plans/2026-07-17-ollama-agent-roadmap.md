@@ -4,7 +4,7 @@
 
 **Goal:** 在 ollama_agent 现有能力之上做增量增强：收口模型与 Prompt、补上编辑 Diff 预览、内网可观测与模板生态，形成可交付的内网产品。所有改动以「新建文件 / 追加式修改」为原则，不删除既有代码。
 
-**Architecture:** 沿用现有零依赖 Node + Ollama 架构；以 `src/core/template-loader.js` + `src/templates/*.md` 为模板内核，以 `src/core/quick/` 为模板化快捷命令，以 `config.js` 的 `MODEL_ROUTING`/`SELF_HEAL`/`WORKFLOW_MODE` 为控制面。本计划不做架构重构，只在既有模块上增量增强，并把「模板库沉淀 + 用户自定义模板」作为战略主线。
+**Architecture:** 沿用现有零依赖 Node + Ollama 架构；以 `src/core/template-loader.js` + `src/templates/*.md` 为模板内核，以 `src/core/quick/` 为模板化单轮命令，以 `config.js` 的 `MODEL_ROUTING`/`SELF_HEAL`/`WORKFLOW_MODE` 为控制面。本计划不做架构重构，只在既有模块上增量增强，并把「模板库沉淀 + 用户自定义模板」作为战略主线。
 
 **Tech Stack:** Node.js 内置模块（零 npm 依赖）、sql.js (WASM)、Ollama REST API（`/api/generate`、`/api/chat`）、simpui（前端 UI）、lucide（图标）。
 
@@ -17,7 +17,7 @@
 - 模型路由：`MODEL_ROUTING`（default/compact/embed/simple），`NUM_CTX`、`TEMPERATURE=0.1`
 - 记忆：`src/memory/recall.js`（L1/L2/L3，embedding 缺失时自动降级关键词召回）、压缩：`src/core/compact.js`
 - 语义检索：`src/tools/semantic_grep.js`（token 重叠实现，不依赖任何 embedding 模型）
-- 快捷命令：`src/core/quick/`（自动扫描 `commands/` 目录注册，无需手动登记）
+- 单轮命令：`src/core/quick/`（自动扫描 `commands/` 目录注册，无需手动登记）
 
 > 本计划仅覆盖上述能力之外的增量。
 
@@ -54,7 +54,7 @@ Phase 3 — 模板生态（战略主线）
 - Create: `src/templates/{code-review,locate-bug,security-audit}.md`（更多内置模板）
 - Modify: `src/core/template-loader.js`（追加扫描用户自定义模板目录，分支式）
 - Create: `public/frontend/js/modules/template-manager.js`（模板管理 UI 新模块）
-- Create: `src/core/quick/commands/{refactor,doc}.js`（新快捷命令，自动被发现）
+- Create: `src/core/quick/commands/{refactor,doc}.js`（新单轮命令，自动被发现）
 
 Phase 4 — 长期
 - Create: `docs/templates-guide.md`（模板编写指南）
@@ -438,7 +438,7 @@ git add src/core/template-loader.js public/frontend/js/modules/template-manager.
 git commit -m "feat: 支持用户自定义模板目录与模板管理 UI"
 ```
 
-### Task 10: 扩展快捷命令
+### Task 10: 扩展单轮命令
 
 **Files:**
 - Create: `src/core/quick/commands/refactor.js`
@@ -447,7 +447,7 @@ git commit -m "feat: 支持用户自定义模板目录与模板管理 UI"
 
 **Interfaces:**
 - 消费：`src/core/quick/registry.js` 自动扫描 `commands/` 目录注册（**无需修改 registry.js**）
-- 产出：两个新快捷命令；命令模块导出 `{ name, desc, category, usage, params, prepare(args,{projectRoot}), prompt(args,context) }`（与 `review.js` 同形）
+- 产出：两个新单轮命令；命令模块导出 `{ name, desc, category, usage, params, prepare(args,{projectRoot}), prompt(args,context) }`（与 `review.js` 同形）
 
 - [ ] **Step 1: 仿照 review.js 新建 refactor.js**
 
@@ -493,7 +493,7 @@ Expected: 数组含 `refactor`、`doc`（以及原有 test/review/...）
 
 ```bash
 git add src/core/quick/commands/refactor.js src/core/quick/commands/doc.js
-git commit -m "feat: 新增 refactor/doc 快捷命令"
+git commit -m "feat: 新增 refactor/doc 单轮命令"
 ```
 
 ### Task 11: 模板编写指南
@@ -525,7 +525,7 @@ git commit -m "docs: 新增模板编写指南"
 
 **2. 占位符扫描：** Task 4/9/10 的 UI 与命令步骤给出了真实文件、simpui 类名、调用契约与验证命令，无「TBD/稍后实现」。语义检索保持 token 重叠实现，未引入 embedding 依赖（明确非占位）。
 
-**3. 类型/命名一致性：** `template-loader.allTemplates()` 在 Task 8/9 验证中复用一致；`behaviorRules(hasTemplate)` 在 Task 3 一致；`DiffPreview.show` 在 Task 4 定义并被 render.js 调用一致；快捷命令导出形状与 `review.js`（`prepare`+`prompt`）在 Task 10 一致；`config` 字段名（DEFAULT_MODEL/NUM_CTX/COMPACT_THRESHOLD/OLLAMA_HOST）与 `config.js` 导出一致。
+**3. 类型/命名一致性：** `template-loader.allTemplates()` 在 Task 8/9 验证中复用一致；`behaviorRules(hasTemplate)` 在 Task 3 一致；`DiffPreview.show` 在 Task 4 定义并被 render.js 调用一致；单轮命令导出形状与 `review.js`（`prepare`+`prompt`）在 Task 10 一致；`config` 字段名（DEFAULT_MODEL/NUM_CTX/COMPACT_THRESHOLD/OLLAMA_HOST）与 `config.js` 导出一致。
 
 **4. 改动原则核对：** 所有 `Modify` 均为追加/分支式（默认单行改动、`rules.push` 追加、路由链加一行 + 新增 handler、loader 加一个扫描目录），无任何删除既有代码；新功能均为新建文件或新建路由处理函数。
 

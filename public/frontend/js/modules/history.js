@@ -212,11 +212,17 @@ async function loadHistoryConversation(convId) {
             state.streamingThink = null;
             state.streamingThinkText = '';
           }
-          if (i < tools.length) {
+           if (i < tools.length) {
             const tool = tools[i];
             appendToolCall(tool.name, tool.params || {}, tool.result || '', state.currentProjectRoot || effectiveRoot() || '');
           }
         }
+        // 恢复过程步骤（指令集等），保留耗时显示
+        (msg.steps || []).forEach(s => {
+          const elStep = appendStep('step', s.text || '');
+          if (s.time) elStep.dataset.time = s.time;
+          if (s.status) elStep.dataset.status = s.status;
+        });
         // 渲染 Markdown 内容
         if (msg.content) {
           state.streamingAnswer.innerHTML = renderMarkdown(msg.content);
